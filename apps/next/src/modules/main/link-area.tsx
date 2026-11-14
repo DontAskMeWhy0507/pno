@@ -16,6 +16,7 @@ import {
 import {
   IconBrain,
   IconCards,
+  IconCube,
   IconGridDots,
   IconLayersSubtract,
   IconLock,
@@ -66,6 +67,11 @@ export const LinkArea = () => {
         icon={<IconLayersSubtract />}
         href={`/${id}/match?intro=true`}
         requireAuth
+      />
+      <Linkable
+        name="Blocks"
+        icon={<IconCube />}
+        href={`/${id}/blocks`}
       />
       <Linkable name="Crossword" icon={<IconGridDots />} comingSoon />
       <Linkable name="Gravity" icon={<IconMeteor />} comingSoon />

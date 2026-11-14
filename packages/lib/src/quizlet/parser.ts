@@ -9,6 +9,13 @@ export interface ParsedQuizletSet {
   terms: ParsedQuizletTerm[];
 }
 
+export interface QuizletExportParseOptions {
+  termDelimiter?: string; // 'tab' | 'comma' | 'custom' | literal char (e.g. '@', '\t', ',')
+  customTermDelimiter?: string;
+  rowDelimiter?: string; // 'newline' | 'semicolon' | 'custom' | literal char (e.g. '\n', ';', '\n\n')
+  customRowDelimiter?: string;
+}
+
 export function cleanHtml(text: string): string {
   if (!text) return "";
   return text
@@ -23,39 +30,136 @@ export function cleanHtml(text: string): string {
     .trim();
 }
 
-export function parseQuizletExportText(text: string): ParsedQuizletTerm[] {
-  const lines = text.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+/**
+ * Smartly parse text exported from Quizlet matching Quizlet's export options:
+ * - Between term and definition: Tab, Comma, Custom (e.g. '@', ' - ', '::')
+ * - Between rows: New line, Semicolon, Custom (e.g. '\n\n', '---')
+ * Supports multi-line card definitions when definitions span multiple lines.
+ */
+export function parseQuizletExportText(
+  text: string,
+  options: QuizletExportParseOptions = {},
+): ParsedQuizletTerm[] {
+  if (!text || !text.trim()) return [];
+
+  // Resolve term delimiter
+  let termDelim = options.termDelimiter || "auto";
+  if (termDelim === "tab") termDelim = "\t";
+  else if (termDelim === "comma") termDelim = ",";
+  else if (termDelim === "custom") {
+    termDelim = options.customTermDelimiter?.trim() || "@";
+  }
+
+  // Resolve row delimiter
+  let rowDelim = options.rowDelimiter || "auto";
+  if (rowDelim === "newline") rowDelim = "\n";
+  else if (rowDelim === "semicolon") rowDelim = ";";
+  else if (rowDelim === "custom") {
+    rowDelim = (options.customRowDelimiter || "\n\n")
+      .replace(/\\n/g, "\n")
+      .replace(/\\t/g, "\t");
+  }
+
+  // Auto-detect term delimiter if requested or still "auto"
+  if (termDelim === "auto") {
+    const atCount = (text.match(/ @/g) || text.match(/@/g) || []).length;
+    const tabCount = (text.match(/\t/g) || []).length;
+    const dashCount = (text.match(/ - /g) || []).length;
+    const commaCount = (text.match(/,/g) || []).length;
+
+    if (atCount > 0 && atCount >= tabCount) {
+      termDelim = "@";
+    } else if (tabCount > 0) {
+      termDelim = "\t";
+    } else if (dashCount > 0) {
+      termDelim = " - ";
+    } else if (commaCount > 0) {
+      termDelim = ",";
+    } else {
+      termDelim = "\t";
+    }
+  }
+
+  // Auto-detect row delimiter if requested
+  if (rowDelim === "auto") {
+    if (text.includes("\n\n") && (text.match(/\n\n/g) || []).length > 1) {
+      rowDelim = "\n\n";
+    } else if (text.includes(";\n") || (text.match(/;/g) || []).length > 2) {
+      rowDelim = ";";
+    } else {
+      rowDelim = "\n";
+    }
+  }
+
   const terms: ParsedQuizletTerm[] = [];
 
-  for (const line of lines) {
-    let word = "";
-    let definition = "";
-
-    if (line.includes("\t")) {
-      const parts = line.split("\t");
-      word = parts[0] || "";
-      definition = parts.slice(1).join("\t");
-    } else if (line.includes(" - ")) {
-      const parts = line.split(" - ");
-      word = parts[0] || "";
-      definition = parts.slice(1).join(" - ");
-    } else if (line.includes(",")) {
-      const parts = line.split(",");
-      word = parts[0] || "";
-      definition = parts.slice(1).join(",");
-    } else {
-      word = line;
-      definition = "";
+  // Branch A: Explicit row delimiter (such as \n\n or semicolon)
+  if (rowDelim !== "\n") {
+    const blocks = text.split(rowDelim).map((b) => b.trim()).filter(Boolean);
+    for (const block of blocks) {
+      const idx = block.indexOf(termDelim);
+      if (idx !== -1) {
+        const word = cleanHtml(block.slice(0, idx));
+        const def = cleanHtml(block.slice(idx + termDelim.length));
+        if (word || def) {
+          terms.push({ word, definition: def });
+        }
+      }
     }
+    return terms;
+  }
 
-    const cleanWord = cleanHtml(word);
-    const cleanDef = cleanHtml(definition);
-    if (cleanWord || cleanDef) {
+  // Branch B: Row delimiter is newline, with multi-line definition continuation support
+  const lines = text.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+  let currentCard: { word: string; definition: string; hasDelim: boolean } | null = null;
+
+  for (const line of lines) {
+    const delimIndex = line.indexOf(termDelim);
+    if (delimIndex !== -1) {
+      // Line contains delimiter: start a new card
+      if (currentCard && (currentCard.word || currentCard.definition)) {
+        terms.push({
+          word: cleanHtml(currentCard.word),
+          definition: cleanHtml(currentCard.definition),
+        });
+      }
+      currentCard = {
+        word: line.slice(0, delimIndex).trim(),
+        definition: line.slice(delimIndex + termDelim.length).trim(),
+        hasDelim: true,
+      };
+    } else {
+      // Line doesn't contain delimiter: it's part of the multiline definition of the current card
+      if (currentCard) {
+        currentCard.definition = currentCard.definition
+          ? `${currentCard.definition}\n${line}`
+          : line;
+      } else {
+        // Line before any delimiter was encountered (e.g. scroll remnant from export modal)
+        // Only keep if no valid cards exist yet
+        currentCard = {
+          word: line,
+          definition: "",
+          hasDelim: false,
+        };
+      }
+    }
+  }
+
+  if (currentCard && (currentCard.word || currentCard.definition)) {
+    // If the only line in the file had no delimiter, include it;
+    // but if we parsed cards with delimiters, drop any leading/trailing orphan line without a delimiter
+    if (terms.length === 0 || currentCard.hasDelim || currentCard.definition) {
       terms.push({
-        word: cleanWord,
-        definition: cleanDef,
+        word: cleanHtml(currentCard.word),
+        definition: cleanHtml(currentCard.definition),
       });
     }
+  }
+
+  // Filter out any leading orphan line that had no delimiter if subsequent cards had delimiters
+  if (terms.length > 1 && terms[0] && !terms[0].definition) {
+    terms.shift();
   }
 
   return terms;

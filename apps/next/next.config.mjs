@@ -181,6 +181,10 @@ let config = {
       destination: "/sets/:id/anki",
     },
     {
+      source: "/:id(c[a-z0-9]{24})/blocks",
+      destination: "/sets/:id/blocks",
+    },
+    {
       source: "/api/anki/media/:path*",
       destination: "/uploads/anki/:path*",
     },

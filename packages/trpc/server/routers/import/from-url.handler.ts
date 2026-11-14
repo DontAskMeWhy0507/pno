@@ -21,7 +21,12 @@ export const fromUrlHandler = async ({ ctx, input }: FromUrlOptions) => {
   const rawText = input.text || (input.url?.includes("\t") || input.url?.includes("\n") ? input.url : "");
 
   if (rawText && rawText.trim()) {
-    terms = parseQuizletExportText(rawText);
+    terms = parseQuizletExportText(rawText, {
+      termDelimiter: input.termDelimiter,
+      customTermDelimiter: input.customTermDelimiter,
+      rowDelimiter: input.rowDelimiter,
+      customRowDelimiter: input.customRowDelimiter,
+    });
     if (!title) {
       title = "Quizlet Imported Set";
     }

@@ -2,18 +2,23 @@ import { useRouter } from "next/router";
 import React from "react";
 
 import { Modal } from "@quenti/components/modal";
+import { parseQuizletExportText } from "@quenti/lib/src/quizlet/parser";
 import { api } from "@quenti/trpc";
 
 import {
+  Badge,
   Box,
   Button,
   ButtonGroup,
   Fade,
+  Flex,
   FormControl,
   FormErrorMessage,
   FormLabel,
   HStack,
   Input,
+  Radio,
+  RadioGroup,
   ScaleFade,
   SlideFade,
   Spinner,
@@ -54,20 +59,12 @@ const spin = keyframes({
 });
 
 const messages = [
-  "Generating witty dialog...",
-  "Spinning the hamster...",
-  "Searching for plot device...",
-  "Updating the Updater...",
-  "Simulating traveling salesman...",
-  "Downloading the Downloader...",
-  "Shovelling coal into the server...",
   "Parsing Quizlet cards...",
-  "Cleaning off Quizlet's cobwebs...",
-  "Feel free to spin in your chair...",
-  "Twiddling thumbs...",
-  "Consulting the manual...",
-  "Optimizing the terms...",
-  "Reheating coffee...",
+  "Formatting terms and definitions...",
+  "Applying study set tags...",
+  "Organizing flashcard deck...",
+  "Creating cards in database...",
+  "Optimizing for active recall...",
 ];
 
 export const ImportFromQuizletModal: React.FC<ImportFromQuizletModalProps> = ({
@@ -78,12 +75,19 @@ export const ImportFromQuizletModal: React.FC<ImportFromQuizletModalProps> = ({
   const { event } = useTelemetry();
   const router = useRouter();
 
+  // Mode: 0 for "Paste Export Text", 1 for "Quizlet Link"
   const [tabIndex, setTabIndex] = React.useState(0);
   const [_url, setUrl] = React.useState("");
   const [rawText, setRawText] = React.useState("");
   const [customTitle, setCustomTitle] = React.useState("");
   const [error, setError] = React.useState("");
   const [importStarted, setImportStarted] = React.useState<number | null>(null);
+
+  // Delimiter controls (matching Quizlet's export/import format)
+  const [termDelimType, setTermDelimType] = React.useState<string>("auto");
+  const [customTermDelim, setCustomTermDelim] = React.useState<string>("@");
+  const [rowDelimType, setRowDelimType] = React.useState<string>("auto");
+  const [customRowDelim, setCustomRowDelim] = React.useState<string>("\\n\\n");
 
   const attemptFormat = (u: string) => {
     const parsed = u.replace(/^(https?:\/\/)?/, "");
@@ -96,26 +100,30 @@ export const ImportFromQuizletModal: React.FC<ImportFromQuizletModalProps> = ({
   };
 
   const url = attemptFormat(_url);
-  const urlIsShare = url
-    .replace("http://", "")
-    .replace("https://", "")
-    .startsWith("quizlet.com/_");
-  const isUrlMode = tabIndex === 0;
+  const isUrlMode = tabIndex === 1;
   const invalidUrl = isUrlMode && !!url && !QUIZLET_IMPORT_REGEXP.test(url);
 
-  // Count detected terms in raw text
-  const detectedTermsCount = React.useMemo(() => {
-    if (!rawText.trim()) return 0;
-    return rawText
-      .split(/\r?\n/)
-      .map((l) => l.trim())
-      .filter((l) => l.length > 0).length;
-  }, [rawText]);
+  // Real-time live preview of parsed cards using the selected delimiters
+  const previewTerms = React.useMemo(() => {
+    if (!rawText.trim()) return [];
+    try {
+      return parseQuizletExportText(rawText, {
+        termDelimiter: termDelimType,
+        customTermDelimiter: customTermDelim,
+        rowDelimiter: rowDelimType,
+        customRowDelimiter: customRowDelim,
+      });
+    } catch {
+      return [];
+    }
+  }, [rawText, termDelimType, customTermDelim, rowDelimType, customRowDelim]);
 
   const errorText = useColorModeValue("red.500", "red.200");
   const spinnerBg = useColorModeValue("gray.200", "gray.600");
-  const helperBoxBg = useColorModeValue("blue.50", "blue.950");
-  const helperBoxBorder = useColorModeValue("blue.200", "blue.800");
+  const cardBorder = useColorModeValue("gray.200", "gray.700");
+  const cardBg = useColorModeValue("gray.50", "gray.750");
+  const subtleText = useColorModeValue("gray.600", "gray.400");
+  const optionBoxBg = useColorModeValue("gray.50", "gray.700");
 
   const fromUrl = api.import.fromUrl.useMutation({
     onSuccess: async (data) => {
@@ -160,7 +168,7 @@ export const ImportFromQuizletModal: React.FC<ImportFromQuizletModalProps> = ({
   });
 
   const isLoading = fromUrl.isLoading;
-  const defaultMessage = "Hang on while we fetch your set...";
+  const defaultMessage = "Hang on while we import your set...";
   const [message, setMessage] = React.useState(defaultMessage);
 
   React.useEffect(() => {
@@ -185,10 +193,8 @@ export const ImportFromQuizletModal: React.FC<ImportFromQuizletModalProps> = ({
     };
   }, [isLoading]);
 
-  const isCloudflareBlocked = error.includes("CLOUDFLARE_BLOCKED");
-
   return (
-    <Modal isOpen={isOpen} onClose={onClose} size="xl" isCentered={false}>
+    <Modal isOpen={isOpen} onClose={onClose} size="2xl" isCentered={false}>
       <Modal.Overlay />
       <Modal.Content
         className={styles.card}
@@ -205,9 +211,10 @@ export const ImportFromQuizletModal: React.FC<ImportFromQuizletModalProps> = ({
             bg: "gray.800",
           }}
           rounded="xl"
+          spacing={0}
         >
-          <Modal.Body>
-            <Modal.Heading>Import from Quizlet</Modal.Heading>
+          <Modal.Body pb={2}>
+            <Modal.Heading mb={3}>Import from Quizlet</Modal.Heading>
 
             <Tabs
               index={tabIndex}
@@ -218,17 +225,191 @@ export const ImportFromQuizletModal: React.FC<ImportFromQuizletModalProps> = ({
               variant="soft-rounded"
               colorScheme="blue"
               size="sm"
-              mb={4}
+              mb={3}
             >
               <TabList>
-                <Tab fontWeight={600}>Quizlet Link</Tab>
-                <Tab fontWeight={600}>Paste Export Text</Tab>
+                <Tab fontWeight={700}>Paste Export Text</Tab>
+                <Tab fontWeight={700}>Quizlet Link</Tab>
               </TabList>
 
               <TabPanels mt={3}>
-                {/* Panel 1: URL import */}
+                {/* Panel 0: Paste Export Text (matching Quizlet's exact export popup) */}
+                <TabPanel p={0}>
+                  <Stack spacing={3}>
+                    {/* Delimiter controls matching Quizlet */}
+                    <Box
+                      p={3}
+                      bg={optionBoxBg}
+                      rounded="lg"
+                      border="1px solid"
+                      borderColor={cardBorder}
+                    >
+                      <Flex direction={{ base: "column", md: "row" }} gap={4}>
+                        {/* Between term and definition */}
+                        <Box flex="1">
+                          <Text fontSize="xs" fontWeight={700} mb={2}>
+                            Between term and definition
+                          </Text>
+                          <RadioGroup
+                            size="sm"
+                            value={termDelimType}
+                            onChange={(val) => setTermDelimType(val)}
+                          >
+                            <Stack spacing={1}>
+                              <Radio value="auto">Auto-detect</Radio>
+                              <Radio value="tab">Tab</Radio>
+                              <Radio value="comma">Comma</Radio>
+                              <HStack spacing={2} align="center">
+                                <Radio value="custom">Custom</Radio>
+                                {termDelimType === "custom" && (
+                                  <Input
+                                    size="xs"
+                                    w="60px"
+                                    value={customTermDelim}
+                                    onChange={(e) =>
+                                      setCustomTermDelim(e.target.value)
+                                    }
+                                    placeholder="@"
+                                    fontFamily="monospace"
+                                  />
+                                )}
+                              </HStack>
+                            </Stack>
+                          </RadioGroup>
+                        </Box>
+
+                        {/* Between rows */}
+                        <Box flex="1">
+                          <Text fontSize="xs" fontWeight={700} mb={2}>
+                            Between rows (cards)
+                          </Text>
+                          <RadioGroup
+                            size="sm"
+                            value={rowDelimType}
+                            onChange={(val) => setRowDelimType(val)}
+                          >
+                            <Stack spacing={1}>
+                              <Radio value="auto">Auto-detect</Radio>
+                              <Radio value="newline">New line</Radio>
+                              <Radio value="semicolon">Semicolon</Radio>
+                              <HStack spacing={2} align="center">
+                                <Radio value="custom">Custom</Radio>
+                                {rowDelimType === "custom" && (
+                                  <Input
+                                    size="xs"
+                                    w="70px"
+                                    value={customRowDelim}
+                                    onChange={(e) =>
+                                      setCustomRowDelim(e.target.value)
+                                    }
+                                    placeholder="\n\n"
+                                    fontFamily="monospace"
+                                  />
+                                )}
+                              </HStack>
+                            </Stack>
+                          </RadioGroup>
+                        </Box>
+                      </Flex>
+                    </Box>
+
+                    {/* Title */}
+                    <FormControl>
+                      <FormLabel fontSize="xs" fontWeight={700} mb={1}>
+                        Set Title (optional)
+                      </FormLabel>
+                      <Input
+                        placeholder="e.g. Vocabulary Unit 1"
+                        size="sm"
+                        rounded="md"
+                        value={customTitle}
+                        onChange={(e) => setCustomTitle(e.target.value)}
+                      />
+                    </FormControl>
+
+                    {/* Textarea for pasted cards */}
+                    <FormControl isInvalid={!!error}>
+                      <Flex justify="space-between" align="center" mb={1}>
+                        <FormLabel fontSize="xs" fontWeight={700} m={0}>
+                          Copy &amp; paste text from Quizlet Export
+                        </FormLabel>
+                        <Badge
+                          colorScheme={previewTerms.length > 0 ? "green" : "gray"}
+                          fontSize="xs"
+                          px={2}
+                          py={0.5}
+                          rounded="full"
+                        >
+                          {previewTerms.length} card
+                          {previewTerms.length !== 1 ? "s" : ""} detected
+                        </Badge>
+                      </Flex>
+                      <Textarea
+                        rows={5}
+                        placeholder={
+                          'escalate @to become or make something become greater or more serious.\n"His financial problems escalated after he became unemployed."\nv./leo thang\n\ndestructive @causing, or able to cause, damage.'
+                        }
+                        fontFamily="monospace"
+                        fontSize="xs"
+                        value={rawText}
+                        onChange={(e) => setRawText(e.target.value)}
+                      />
+                      {error && (
+                        <FormErrorMessage color={errorText} fontWeight={600} mt="2">
+                          {error}
+                        </FormErrorMessage>
+                      )}
+                    </FormControl>
+
+                    {/* Live Preview List */}
+                    {previewTerms.length > 0 && (
+                      <Box>
+                        <Text fontSize="xs" fontWeight={700} mb={1} color={subtleText}>
+                          Preview first {Math.min(previewTerms.length, 3)} of{" "}
+                          {previewTerms.length} cards:
+                        </Text>
+                        <Stack spacing={2} maxH="130px" overflowY="auto" pr={1}>
+                          {previewTerms.slice(0, 5).map((term, i) => (
+                            <Box
+                              key={i}
+                              p={2}
+                              bg={cardBg}
+                              border="1px solid"
+                              borderColor={cardBorder}
+                              rounded="md"
+                              fontSize="xs"
+                            >
+                              <HStack align="start" spacing={3}>
+                                <Badge colorScheme="blue" fontSize="9px">
+                                  #{i + 1}
+                                </Badge>
+                                <Box flex="1">
+                                  <Text fontWeight={700} color="blue.500">
+                                    {term.word || "(Empty Term)"}
+                                  </Text>
+                                  <Text
+                                    whiteSpace="pre-wrap"
+                                    color={subtleText}
+                                    mt={0.5}
+                                  >
+                                    {term.definition || "(Empty Definition)"}
+                                  </Text>
+                                </Box>
+                              </HStack>
+                            </Box>
+                          ))}
+                        </Stack>
+                      </Box>
+                    )}
+                  </Stack>
+                </TabPanel>
+
+                {/* Panel 1: Quizlet Link */}
                 <TabPanel p={0}>
                   <FormControl isInvalid={!!error || invalidUrl}>
+                    <Text fontSize="xs" color={subtleText} mb={2}>
+                      Enter a public Quizlet study set link:
+                    </Text>
                     <Input
                       placeholder="https://quizlet.com/123456789/set-title"
                       variant="flushed"
@@ -243,104 +424,20 @@ export const ImportFromQuizletModal: React.FC<ImportFromQuizletModalProps> = ({
                       value={_url}
                       onChange={(e) => {
                         const val = e.target.value;
-                        // If user pastes tabbed/multiline text into URL field, switch to text tab automatically
-                        if (val.includes("\t") || val.includes("\n")) {
+                        if (val.includes("\t") || val.includes("\n") || val.includes("@")) {
                           setRawText(val);
-                          setTabIndex(1);
+                          setTabIndex(0);
                         } else {
                           setUrl(val);
                         }
                       }}
                     />
-                    {urlIsShare && (
-                      <Text mt="3" fontSize="sm" color="gray.500">
-                        Copy the link directly from your browser&apos;s address bar.
-                      </Text>
-                    )}
-                    {isCloudflareBlocked ? (
-                      <Box
-                        mt={4}
-                        p={3}
-                        bg={helperBoxBg}
-                        border="1px solid"
-                        borderColor={helperBoxBorder}
-                        rounded="lg"
-                      >
-                        <Text fontSize="sm" fontWeight={600} mb={2}>
-                          Quizlet Cloudflare Challenge
-                        </Text>
-                        <Text fontSize="xs" mb={3} color="gray.600" _dark={{ color: "gray.300" }}>
-                          Quizlet is currently blocking direct automated URL requests.
-                          You can copy the cards in Quizlet via <strong>... &gt; Export</strong> and paste them in the &quot;Paste Export Text&quot; tab.
-                        </Text>
-                        <Button
-                          size="xs"
-                          colorScheme="blue"
-                          onClick={() => {
-                            setTabIndex(1);
-                            setError("");
-                          }}
-                        >
-                          Switch to Paste Export Text
-                        </Button>
-                      </Box>
-                    ) : (
-                      error && (
-                        <FormErrorMessage color={errorText} fontWeight={600} mt="3">
-                          {error}
-                        </FormErrorMessage>
-                      )
+                    {error && (
+                      <FormErrorMessage color={errorText} fontWeight={600} mt="3">
+                        {error}
+                      </FormErrorMessage>
                     )}
                   </FormControl>
-                </TabPanel>
-
-                {/* Panel 2: Paste export text */}
-                <TabPanel p={0}>
-                  <Stack spacing={3}>
-                    <Box
-                      p={3}
-                      bg="gray.50"
-                      rounded="lg"
-                      fontSize="xs"
-                      color="gray.600"
-                      _dark={{ bg: "gray.700", color: "gray.300" }}
-                    >
-                      In Quizlet: Click <strong>... &gt; Export &gt; Copy text</strong>, then paste below.
-                      Terms separated by Tab and rows separated by Newline are automatically recognized.
-                    </Box>
-
-                    <FormControl>
-                      <FormLabel fontSize="xs" fontWeight={600} mb={1}>
-                        Set Title (optional)
-                      </FormLabel>
-                      <Input
-                        placeholder="e.g. Spanish Vocabulary Unit 1"
-                        size="sm"
-                        rounded="md"
-                        value={customTitle}
-                        onChange={(e) => setCustomTitle(e.target.value)}
-                      />
-                    </FormControl>
-
-                    <FormControl isInvalid={!!error}>
-                      <FormLabel fontSize="xs" fontWeight={600} mb={1}>
-                        Cards Export Data {detectedTermsCount > 0 && `(${detectedTermsCount} terms detected)`}
-                      </FormLabel>
-                      <Textarea
-                        rows={6}
-                        placeholder={"term 1\tdefinition 1\nterm 2\tdefinition 2\nterm 3\tdefinition 3"}
-                        fontFamily="monospace"
-                        fontSize="xs"
-                        value={rawText}
-                        onChange={(e) => setRawText(e.target.value)}
-                      />
-                      {error && (
-                        <FormErrorMessage color={errorText} fontWeight={600} mt="2">
-                          {error}
-                        </FormErrorMessage>
-                      )}
-                    </FormControl>
-                  </Stack>
                 </TabPanel>
               </TabPanels>
             </Tabs>
@@ -385,7 +482,7 @@ export const ImportFromQuizletModal: React.FC<ImportFromQuizletModalProps> = ({
                     isDisabled={
                       isUrlMode
                         ? !url || invalidUrl
-                        : detectedTermsCount === 0
+                        : previewTerms.length === 0
                     }
                     onClick={async () => {
                       setError("");
@@ -398,11 +495,15 @@ export const ImportFromQuizletModal: React.FC<ImportFromQuizletModalProps> = ({
                         await fromUrl.mutateAsync({
                           text: rawText,
                           title: customTitle.trim() || undefined,
+                          termDelimiter: termDelimType,
+                          customTermDelimiter: customTermDelim,
+                          rowDelimiter: rowDelimType,
+                          customRowDelimiter: customRowDelim,
                         });
                       }
                     }}
                   >
-                    Import
+                    Import {previewTerms.length > 0 && `(${previewTerms.length})`}
                   </Button>
                 </ButtonGroup>
               </Fade>
