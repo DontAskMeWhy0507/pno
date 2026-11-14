@@ -1,4 +1,10 @@
-import { importIntegration } from "../../../integrations";
+import { TRPCError } from "@trpc/server";
+
+import {
+  fetchQuizletSet,
+  parseQuizletExportText,
+} from "@quenti/lib/src/quizlet/parser";
+
 import type { NonNullableUserContext } from "../../lib/types";
 import type { TFromUrlSchema } from "./from-url.schema";
 
@@ -7,16 +13,76 @@ type FromUrlOptions = {
   input: TFromUrlSchema;
 };
 
-type Return = {
-  importFromUrl: (
-    url: string,
-    userId: string,
-  ) => Promise<{ createdSetId: string; title: string; terms: number }>;
-};
-
 export const fromUrlHandler = async ({ ctx, input }: FromUrlOptions) => {
-  const { importFromUrl } = (await importIntegration("quizlet")) as Return;
-  return await importFromUrl(input.url, ctx.session.user.id);
+  const userId = (ctx.session.user as any).id as string;
+  let title = input.title?.trim() || "";
+  let terms: { word: string; definition: string; imageUrl?: string }[] = [];
+
+  const rawText = input.text || (input.url?.includes("\t") || input.url?.includes("\n") ? input.url : "");
+
+  if (rawText && rawText.trim()) {
+    terms = parseQuizletExportText(rawText);
+    if (!title) {
+      title = "Quizlet Imported Set";
+    }
+  } else if (input.url && input.url.trim()) {
+    try {
+      const parsed = await fetchQuizletSet(input.url.trim());
+      title = title || parsed.title || "Quizlet Flashcards";
+      terms = parsed.terms;
+    } catch (err: any) {
+      const msg = err?.message || String(err);
+      throw new TRPCError({
+        code: "BAD_REQUEST",
+        message: msg,
+      });
+    }
+  } else {
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: "Please enter a Quizlet URL or paste exported flashcard text.",
+    });
+  }
+
+  if (terms.length === 0) {
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message:
+        "No flashcard terms could be found or parsed from the provided input.",
+    });
+  }
+
+  const studySet = await ctx.prisma.studySet.create({
+    data: {
+      title: title.slice(0, 255),
+      description: input.url && !rawText
+        ? `Imported from Quizlet (${input.url})`
+        : `Imported from Quizlet (${terms.length} terms)`,
+      userId,
+      created: true,
+      tags: ["quizlet"],
+    },
+  });
+
+  const batchSize = 500;
+  for (let i = 0; i < terms.length; i += batchSize) {
+    const chunk = terms.slice(i, i + batchSize);
+    await ctx.prisma.term.createMany({
+      data: chunk.map((t, idx) => ({
+        word: t.word.slice(0, 1000),
+        definition: t.definition.slice(0, 1000),
+        rank: i + idx,
+        studySetId: studySet.id,
+        assetUrl: t.imageUrl || null,
+      })),
+    });
+  }
+
+  return {
+    createdSetId: studySet.id,
+    title: studySet.title,
+    terms: terms.length,
+  };
 };
 
 export default fromUrlHandler;
