@@ -92,11 +92,7 @@ export const LeaveExamModal: FC<LeaveExamModalProps> = ({
 
           <div className="text-center pt-1">
             <button
-              onClick={() => {
-                if (window.confirm('Are you sure you want to discard your answers for this exam? You will start fresh next time.')) {
-                  onDiscardAndExit();
-                }
-              }}
+              onClick={onDiscardAndExit}
               className="text-[11px] text-slate-400 hover:text-rose-600 transition flex items-center justify-center gap-1 mx-auto"
             >
               <RotateCcw className="w-3 h-3" />

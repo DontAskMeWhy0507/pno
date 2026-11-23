@@ -34,11 +34,16 @@ export function getAllExams(): Exam[] {
     const customList: Exam[] = raw ? JSON.parse(raw) : [];
     const deletedIds = getDeletedExamIds();
 
-    // Combine builtins (sampleExam + importedExamsList + sampleListeningExams + importedListeningExamsList) + custom user exams
+    // Combine builtins (importedExamsList + sampleExam if not duplicate + sampleListeningExams + importedListeningExamsList) + custom user exams
     const allMap = new Map<string, Exam>();
+    const importedTitles = new Set(
+      importedExamsList.map((e) => (e.title || '').trim().toUpperCase())
+    );
 
-    // Add sample reading exam
-    allMap.set(sampleExam.id, sampleExam);
+    // Only add sampleExam if it is not already present in importedExamsList by title
+    if (!importedTitles.has((sampleExam.title || '').trim().toUpperCase())) {
+      allMap.set(sampleExam.id, sampleExam);
+    }
 
     // Add all imported reading exams from static library
     for (const ex of importedExamsList) {
@@ -55,8 +60,11 @@ export function getAllExams(): Exam[] {
       allMap.set(ex.id, ex);
     }
 
-    // Add/overwrite with custom exams from localStorage (saved user exams always take priority)
+    // Add/overwrite with custom exams from localStorage (skip duplicate vol-9-test-1-reading if imported_vol9_test_1 exists)
     for (const ex of customList) {
+      if (ex.id === sampleExam.id && importedTitles.has((sampleExam.title || '').trim().toUpperCase())) {
+        continue;
+      }
       allMap.set(ex.id, ex);
     }
 

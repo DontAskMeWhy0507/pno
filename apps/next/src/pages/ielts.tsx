@@ -14,7 +14,7 @@ const IeltsApp = dynamic(() => import("../modules/ielts/App"), {
 export default function IeltsPage() {
   return (
     <>
-      <HeadSeo title="Thi IELTS 4 Kỹ Năng" />
+      <HeadSeo title="IELTS 4-Skill Practice" />
       <IeltsApp />
     </>
   );

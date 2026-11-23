@@ -26,6 +26,7 @@ import { WritingEditorModal } from './components/admin/WritingEditorModal';
 import { SpeakingEditorModal } from './components/admin/SpeakingEditorModal';
 import { ChevronLeft, ChevronRight, FileText, Headphones } from 'lucide-react';
 import { clearExamProgress, loadExamProgress, saveExamProgress } from './utils/examProgress';
+import { useColorMode, useToast } from '@chakra-ui/react';
 import Navbar from '../../components/navbar';
 import { Footer } from '../../components/footer';
 
@@ -37,6 +38,9 @@ function getExamPath(exam: Exam, partNumber: number): string {
 }
 
 export function App() {
+  const { colorMode } = useColorMode();
+  const toast = useToast();
+
   // Navigation View: 'home' | 'exam' | 'writing' | 'speaking'
   const [currentView, setCurrentView] = useState<View>('home');
 
@@ -110,7 +114,8 @@ export function App() {
   };
 
   const navigateHome = useCallback((replace = false) => {
-    if (currentView === 'exam' && !isCompleted && currentExam?.id) {
+    const wasInExamRoom = currentView !== 'home';
+    if (currentView === 'exam' && !isCompleted && !isReviewMode && currentExam?.id) {
       saveExamProgress(currentExam.id, {
         answers,
         flaggedQuestions,
@@ -121,7 +126,17 @@ export function App() {
     }
     window.history[replace ? 'replaceState' : 'pushState']({}, '', '/ielts');
     setCurrentView('home');
-  }, [activePartNumber, answers, currentExam?.id, currentQuestionNumber, currentView, flaggedQuestions, isCompleted, timeRemaining]);
+    if (wasInExamRoom && !isCompleted && !isReviewMode) {
+      toast({
+        title: 'Progress auto-saved',
+        description: 'You can resume your test anytime from the In Progress section.',
+        status: 'success',
+        duration: 3000,
+        isClosable: true,
+        position: 'bottom-right',
+      });
+    }
+  }, [activePartNumber, answers, currentExam?.id, currentQuestionNumber, currentView, flaggedQuestions, isCompleted, isReviewMode, timeRemaining, toast]);
 
   const navigateExam = useCallback((exam: Exam, partNumber: number, replace = false) => {
     window.history[replace ? 'replaceState' : 'pushState']({}, '', getExamPath(exam, partNumber));
@@ -343,18 +358,30 @@ export function App() {
   // Start taking an exam from Home or Manager
   const handleStartExam = (exam: Exam) => {
     const savedProgress = loadExamProgress(exam.id);
+    const nextAnswers = savedProgress?.answers ?? {};
+    const nextFlags = savedProgress?.flaggedQuestions ?? [];
+    const nextTime = savedProgress?.timeRemaining ?? (exam.durationMinutes || 60) * 60;
+    const savedPart = savedProgress?.activePartNumber;
+    const partNumber = exam.parts.some((part) => part.partNumber === savedPart) ? savedPart! : exam.parts[0]?.partNumber ?? 1;
+    const nextQNum = savedProgress?.currentQuestionNumber ?? exam.parts[0]?.questionGroups.flatMap((group) => group.questions)[0]?.orderNumber ?? 1;
+
     setCurrentExam(exam);
-    setAnswers(savedProgress?.answers ?? {});
-    setFlaggedQuestions(savedProgress?.flaggedQuestions ?? []);
-    setTimeRemaining(savedProgress?.timeRemaining ?? (exam.durationMinutes || 60) * 60);
+    setAnswers(nextAnswers);
+    setFlaggedQuestions(nextFlags);
+    setTimeRemaining(nextTime);
     setIsPaused(false);
     setIsCompleted(false);
     setIsReviewMode(false);
     setScoreReport(null);
-    const savedPart = savedProgress?.activePartNumber;
-    const partNumber = exam.parts.some((part) => part.partNumber === savedPart) ? savedPart! : exam.parts[0]?.partNumber ?? 1;
     setActivePartNumber(partNumber);
-    setCurrentQuestionNumber(savedProgress?.currentQuestionNumber ?? exam.parts[0]?.questionGroups.flatMap((group) => group.questions)[0]?.orderNumber ?? 1);
+    setCurrentQuestionNumber(nextQNum);
+    saveExamProgress(exam.id, {
+      answers: nextAnswers,
+      flaggedQuestions: nextFlags,
+      activePartNumber: partNumber,
+      currentQuestionNumber: nextQNum,
+      timeRemaining: nextTime,
+    });
     navigateExam(exam, partNumber);
   };
 
@@ -386,11 +413,11 @@ export function App() {
 
   return (
     <div
-      className={
+      className={`ielts-root ${colorMode === 'dark' ? 'dark ielts-dark' : 'ielts-light'} ${
         currentView === 'home'
           ? 'min-h-screen w-full flex flex-col bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100 font-sans'
           : 'h-[100dvh] w-full overflow-hidden bg-white text-gray-900 font-sans'
-      }
+      }`}
     >
       {/* 1. HOMEPAGE VIEW (Unified with PNO Navbar & Footer) */}
       {currentView === 'home' && (
@@ -446,8 +473,18 @@ export function App() {
             isPaused={isPaused}
             onTogglePause={() => setIsPaused((prev) => !prev)}
             onOpenTestManager={() => setIsTestManagerOpen(true)}
-            onBackToHome={navigateHome}
-            onOpenLeaveModal={() => setIsLeaveExamModalOpen(true)}
+            onBackToHome={() => {
+              if (!isCompleted && !isReviewMode) {
+                saveExamProgress(currentExam.id, {
+                  answers,
+                  flaggedQuestions,
+                  activePartNumber,
+                  currentQuestionNumber,
+                  timeRemaining,
+                });
+              }
+              navigateHome();
+            }}
             fontSize={fontSize}
             onChangeFontSize={handleUpdateFontSize}
           />

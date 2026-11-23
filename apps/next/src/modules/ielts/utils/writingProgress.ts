@@ -59,13 +59,10 @@ export function getSavedWritingSummary(examId: string): {
   const progress = loadWritingProgress(examId);
   if (!progress) return null;
 
-  const countWords = (text: string) => text.trim() ? text.trim().split(/\s+/).filter(Boolean).length : 0;
+  const countWords = (text: string) =>
+    text.trim() ? text.trim().split(/\s+/).filter(Boolean).length : 0;
   const task1Words = countWords(progress.task1Text);
   const task2Words = countWords(progress.task2Text);
-
-  if (task1Words === 0 && task2Words === 0 && !progress.notesText.trim()) {
-    return null;
-  }
 
   return {
     task1Words,
@@ -74,5 +71,63 @@ export function getSavedWritingSummary(examId: string): {
     lastSavedAt: progress.lastSavedAt || Date.now(),
     activeTaskNum: progress.activeTaskNum || 1,
   };
+}
+
+export interface SpeakingProgress {
+  activePart: 1 | 2 | 3;
+  selectedQuestionIndex: number;
+  prepNotes: string;
+  transcriptsMap: Record<string, string>;
+  lastSavedAt: number;
+}
+
+const speakingProgressKey = (examId: string) =>
+  `ielts_speaking_progress_v1_${examId}`;
+
+export function loadSpeakingProgress(examId: string): SpeakingProgress | null {
+  try {
+    const raw = localStorage.getItem(speakingProgressKey(examId));
+    if (!raw) return null;
+    const val = JSON.parse(raw) as Partial<SpeakingProgress>;
+    return {
+      activePart:
+        val.activePart === 2 || val.activePart === 3 ? val.activePart : 1,
+      selectedQuestionIndex:
+        typeof val.selectedQuestionIndex === 'number'
+          ? val.selectedQuestionIndex
+          : 0,
+      prepNotes: typeof val.prepNotes === 'string' ? val.prepNotes : '',
+      transcriptsMap:
+        val.transcriptsMap && typeof val.transcriptsMap === 'object'
+          ? val.transcriptsMap
+          : {},
+      lastSavedAt:
+        typeof val.lastSavedAt === 'number' ? val.lastSavedAt : Date.now(),
+    };
+  } catch {
+    return null;
+  }
+}
+
+export function saveSpeakingProgress(
+  examId: string,
+  progress: Omit<SpeakingProgress, 'lastSavedAt'> & { lastSavedAt?: number }
+): void {
+  try {
+    localStorage.setItem(
+      speakingProgressKey(examId),
+      JSON.stringify({ ...progress, lastSavedAt: Date.now() })
+    );
+  } catch {
+    // Ignore storage error
+  }
+}
+
+export function clearSpeakingProgress(examId: string): void {
+  try {
+    localStorage.removeItem(speakingProgressKey(examId));
+  } catch {
+    // Ignore storage error
+  }
 }
 

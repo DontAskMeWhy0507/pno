@@ -10,4 +10,8 @@ export const menuEventChannel = eventBus<{
   createClass: () => void;
   openSignup: (args: { message?: string; callbackUrl?: string }) => void;
   commandMenuClosed: () => void;
+  openIeltsAddTest: () => void;
+  openIeltsTestBank: () => void;
+  openIeltsNewCollection: () => void;
+  ieltsSearchChange: (query: string) => void;
 }>();

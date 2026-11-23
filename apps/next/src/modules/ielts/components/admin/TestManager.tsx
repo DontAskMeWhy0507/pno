@@ -1,4 +1,6 @@
 import { useState, useRef, type FC } from 'react';
+import { useToast } from '@chakra-ui/react';
+import { outfit } from '@quenti/lib/chakra-theme';
 import type { Exam } from '../../types/exam';
 import {
   getAllExams,
@@ -45,6 +47,7 @@ export const TestManager: FC<TestManagerProps> = ({
   onOpenEditor,
   onOpenSmartImport,
 }) => {
+  const toast = useToast();
   const [exams, setExams] = useState<Exam[]>(() => getAllExams());
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCollection, setSelectedCollection] = useState<string>('all');
@@ -75,13 +78,27 @@ export const TestManager: FC<TestManagerProps> = ({
     };
     saveExam(cloned);
     refreshExams();
+    toast({
+      title: 'Test duplicated',
+      description: `Created "${cloned.title}".`,
+      status: 'success',
+      duration: 2200,
+      isClosable: true,
+      position: 'bottom-right',
+    });
   };
 
   const handleDelete = (id: string, title: string) => {
-    if (window.confirm(`Are you sure you want to delete test "${title}"?`)) {
-      deleteExam(id);
-      refreshExams();
-    }
+    deleteExam(id);
+    refreshExams();
+    toast({
+      title: 'Test deleted',
+      description: `Removed "${title}" from Test Bank.`,
+      status: 'info',
+      duration: 2200,
+      isClosable: true,
+      position: 'bottom-right',
+    });
   };
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -94,9 +111,22 @@ export const TestManager: FC<TestManagerProps> = ({
         const text = evt.target?.result as string;
         importExamFromJSON(text);
         refreshExams();
-        alert('Test successfully imported!');
+        toast({
+          title: 'Test imported successfully',
+          status: 'success',
+          duration: 2500,
+          isClosable: true,
+          position: 'bottom-right',
+        });
       } catch (err: any) {
-        alert('Error importing file: ' + (err.message || 'Invalid file format'));
+        toast({
+          title: 'Error importing file',
+          description: err.message || 'Invalid JSON file format.',
+          status: 'error',
+          duration: 3000,
+          isClosable: true,
+          position: 'bottom-right',
+        });
       }
     };
     reader.readAsText(file);
@@ -114,7 +144,13 @@ export const TestManager: FC<TestManagerProps> = ({
       refreshExams();
       setImportModalOpen(false);
       setImportJsonText('');
-      alert('Test successfully imported!');
+      toast({
+        title: 'Test imported successfully',
+        status: 'success',
+        duration: 2500,
+        isClosable: true,
+        position: 'bottom-right',
+      });
     } catch (err: any) {
       setImportError(err.message || 'Invalid JSON format.');
     }
@@ -143,38 +179,55 @@ export const TestManager: FC<TestManagerProps> = ({
       setNewCollectionDesc('');
       setShowNewCollectionModal(false);
       refreshExams();
+      toast({
+        title: 'Collection created',
+        status: 'success',
+        duration: 2200,
+        isClosable: true,
+        position: 'bottom-right',
+      });
     } catch (err: any) {
-      alert(err.message || 'Failed to create collection');
+      toast({
+        title: 'Failed to create collection',
+        description: err.message || 'Please check the collection name.',
+        status: 'error',
+        duration: 2800,
+        isClosable: true,
+        position: 'bottom-right',
+      });
     }
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 select-text font-sans">
-      <div className="bg-white rounded-2xl shadow-2xl max-w-5xl w-full h-[88vh] flex flex-col overflow-hidden border border-gray-200">
-        {/* Header */}
-        <div className="h-16 border-b border-gray-200 px-6 flex items-center justify-between bg-slate-50 shrink-0">
+    <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4 select-text font-sans">
+      <div className="bg-white rounded-2xl shadow-2xl max-w-5xl w-full h-[88vh] flex flex-col overflow-hidden border-2 border-gray-200 animate-in fade-in zoom-in-95">
+        {/* Header — PNO Quiz Modal Header Style */}
+        <div className="min-h-16 py-3 border-b-2 border-gray-200 px-6 flex flex-wrap items-center justify-between gap-3 bg-white shrink-0">
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-lg bg-blue-600 text-white flex items-center justify-center shadow-xs">
+            <div className="w-10 h-10 rounded-xl bg-blue-600 text-white flex items-center justify-center shadow-xs">
               <BookOpen className="w-5 h-5" />
             </div>
             <div>
-              <h2 className="text-base font-bold text-gray-900">
+              <h2
+                className="text-lg font-extrabold text-gray-900 leading-tight"
+                style={{ fontFamily: outfit.style.fontFamily }}
+              >
                 IELTS Test Bank &amp; Collection Manager
               </h2>
-              <p className="text-xs text-gray-500">
-                Manage practice exams, organize into collections, edit content, and export backups
+              <p className="text-xs font-medium text-gray-500">
+                Manage practice tests, organize collections, edit content, and export JSON backups
               </p>
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <button
               onClick={() => setShowNewCollectionModal(true)}
-              className="px-3 py-1.5 text-xs font-bold text-amber-700 bg-amber-50 hover:bg-amber-100 border border-amber-300 rounded-lg shadow-2xs transition flex items-center gap-1.5"
+              className="px-3.5 py-2 text-xs font-bold text-gray-700 bg-gray-100 hover:bg-gray-200 border-2 border-gray-200 rounded-xl transition flex items-center gap-1.5"
               title="Create a new collection folder"
             >
-              <FolderPlus className="w-4 h-4 text-amber-600" />
-              <span>+ New Collection</span>
+              <FolderPlus className="w-4 h-4 text-blue-600" />
+              <span>New Collection</span>
             </button>
 
             <button
@@ -185,15 +238,15 @@ export const TestManager: FC<TestManagerProps> = ({
                   onOpenEditor(null);
                 }
               }}
-              className="px-3.5 py-1.5 text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-lg shadow-xs transition flex items-center gap-1.5"
+              className="px-4 py-2 text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-xl shadow-xs transition flex items-center gap-1.5"
             >
               <Plus className="w-4 h-4" />
-              <span>+ Add Test</span>
+              <span>Add Test</span>
             </button>
 
             <button
               onClick={() => fileInputRef.current?.click()}
-              className="px-3 py-1.5 text-xs font-semibold text-gray-700 bg-white hover:bg-gray-100 rounded-lg border border-gray-300 transition flex items-center gap-1 shadow-2xs"
+              className="px-3.5 py-2 text-xs font-bold text-gray-700 bg-white hover:bg-gray-100 rounded-xl border-2 border-gray-200 transition flex items-center gap-1.5"
               title="Import test from .json backup file"
             >
               <Upload className="w-3.5 h-3.5" />
@@ -202,7 +255,7 @@ export const TestManager: FC<TestManagerProps> = ({
 
             <button
               onClick={() => setImportModalOpen(true)}
-              className="px-3 py-1.5 text-xs font-semibold text-gray-700 bg-white hover:bg-gray-100 rounded-lg border border-gray-300 transition flex items-center gap-1 shadow-2xs"
+              className="px-3.5 py-2 text-xs font-bold text-gray-700 bg-white hover:bg-gray-100 rounded-xl border-2 border-gray-200 transition flex items-center gap-1.5"
               title="Paste JSON string"
             >
               <FileText className="w-3.5 h-3.5" />
@@ -220,7 +273,7 @@ export const TestManager: FC<TestManagerProps> = ({
 
             <button
               onClick={onClose}
-              className="p-1.5 text-gray-400 hover:text-gray-700 rounded-lg transition ml-2"
+              className="p-2 text-gray-400 hover:text-gray-700 hover:bg-gray-100 rounded-xl transition ml-1"
             >
               <X className="w-5 h-5" />
             </button>
@@ -228,29 +281,29 @@ export const TestManager: FC<TestManagerProps> = ({
         </div>
 
         {/* Search and Filters */}
-        <div className="px-6 py-3 border-b border-gray-200 bg-white flex flex-wrap items-center justify-between gap-3 shrink-0">
-          <div className="flex items-center gap-3 flex-1 max-w-xl">
-            <div className="relative flex-1">
-              <Search className="w-4 h-4 text-gray-400 absolute left-3 top-2.5" />
+        <div className="px-6 py-3.5 border-b-2 border-gray-200 bg-slate-50/70 flex flex-wrap items-center justify-between gap-3 shrink-0">
+          <div className="flex flex-wrap items-center gap-3 flex-1 max-w-2xl">
+            <div className="relative flex-1 min-w-[200px]">
+              <Search className="w-4 h-4 text-gray-400 absolute left-3.5 top-2.5" />
               <input
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="Search practice tests..."
-                className="w-full pl-9 pr-3 py-1.5 text-xs border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600"
+                className="w-full pl-9 pr-3 py-2 text-xs font-semibold border-2 border-gray-200 rounded-xl bg-white focus:outline-none focus:border-blue-500 transition"
               />
             </div>
 
             {/* Collection Filter Dropdown */}
-            <div className="flex items-center gap-1.5 shrink-0">
-              <span className="text-xs font-semibold text-gray-600 flex items-center gap-1">
+            <div className="flex items-center gap-2 shrink-0">
+              <span className="text-xs font-bold text-gray-600 flex items-center gap-1">
                 <Folder className="w-3.5 h-3.5 text-blue-600" />
                 <span>Collection:</span>
               </span>
               <select
                 value={selectedCollection}
                 onChange={(e) => setSelectedCollection(e.target.value)}
-                className="text-xs border border-gray-300 rounded-lg px-2.5 py-1.5 bg-white text-gray-800 font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="text-xs border-2 border-gray-200 rounded-xl px-3 py-2 bg-white text-gray-800 font-bold focus:outline-none focus:border-blue-500 cursor-pointer"
               >
                 <option value="all">All ({exams.length} tests)</option>
                 {collections.map((c) => {
@@ -267,15 +320,15 @@ export const TestManager: FC<TestManagerProps> = ({
             </div>
           </div>
 
-          <span className="text-xs font-semibold text-gray-500">
+          <span className="text-xs font-bold text-gray-500 bg-white px-3 py-1.5 rounded-xl border-2 border-gray-200">
             Showing {filteredExams.length} tests
           </span>
         </div>
 
-        {/* List of Exams */}
-        <div className="flex-1 overflow-y-auto p-6 space-y-3.5 bg-gray-50">
+        {/* List of Exams — PNO Quiz GenericCard Style */}
+        <div className="flex-1 overflow-y-auto p-6 space-y-3.5 bg-slate-50/50">
           {filteredExams.length === 0 ? (
-            <div className="text-center py-12 text-gray-400 text-xs">
+            <div className="text-center py-12 text-gray-400 text-xs font-semibold">
               No practice tests found in this collection.
             </div>
           ) : (
@@ -291,27 +344,30 @@ export const TestManager: FC<TestManagerProps> = ({
               return (
                 <div
                   key={exam.id}
-                  className="bg-white rounded-xl border border-gray-200 p-4 shadow-2xs hover:shadow-xs transition flex items-center justify-between gap-4"
+                  className="bg-white rounded-2xl border-2 border-gray-200 p-5 shadow-xs hover:border-blue-300 transition-all flex flex-wrap items-center justify-between gap-4"
                 >
-                  <div className="space-y-1.5 flex-1 min-w-0">
+                  <div className="space-y-1.5 flex-1 min-w-[240px]">
                     <div className="flex flex-wrap items-center gap-2">
                       {isListening ? (
-                        <span className="p-1 rounded bg-blue-100 text-blue-700" title="IELTS Listening Test">
-                          <Headphones className="w-3.5 h-3.5" />
+                        <span className="p-1.5 rounded-xl bg-purple-100 text-purple-700" title="IELTS Listening Test">
+                          <Headphones className="w-4 h-4" />
                         </span>
                       ) : (
-                        <span className="p-1 rounded bg-slate-100 text-slate-700" title="IELTS Reading Test">
-                          <BookOpen className="w-3.5 h-3.5" />
+                        <span className="p-1.5 rounded-xl bg-blue-100 text-blue-700" title="IELTS Reading Test">
+                          <BookOpen className="w-4 h-4" />
                         </span>
                       )}
 
-                      <h3 className="font-bold text-sm text-gray-900 truncate">
+                      <h3
+                        className="font-extrabold text-sm text-gray-900 truncate"
+                        style={{ fontFamily: outfit.style.fontFamily }}
+                      >
                         {exam.title}
                       </h3>
 
                       {/* Collection Pill with quick changer */}
-                      <div className="flex items-center gap-1">
-                        <span className="text-[11px] font-bold text-blue-700 bg-blue-50 border border-blue-200 px-2 py-0.5 rounded-md flex items-center gap-1">
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-[11px] font-bold text-blue-700 bg-blue-50 border border-blue-200 px-2.5 py-0.5 rounded-lg flex items-center gap-1">
                           <Folder className="w-3 h-3" />
                           <span>{currentExamCol}</span>
                         </span>
@@ -320,8 +376,16 @@ export const TestManager: FC<TestManagerProps> = ({
                           onChange={(e) => {
                             setExamCollection(exam.id, e.target.value);
                             refreshExams();
+                            toast({
+                              title: 'Moved test to collection',
+                              description: `${exam.title} → ${e.target.value}`,
+                              status: 'info',
+                              duration: 2000,
+                              isClosable: true,
+                              position: 'bottom-right',
+                            });
                           }}
-                          className="text-[10px] bg-slate-50 border border-gray-300 rounded px-1 py-0.5 text-gray-600 hover:bg-white transition cursor-pointer"
+                          className="text-[11px] font-semibold bg-gray-100 border border-gray-200 rounded-lg px-2 py-0.5 text-gray-700 hover:bg-gray-200 transition cursor-pointer"
                           title="Move test to another collection"
                         >
                           {collections.map((c) => (
@@ -333,8 +397,8 @@ export const TestManager: FC<TestManagerProps> = ({
                       </div>
 
                       {exam.isBuiltin && (
-                        <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200 shrink-0">
-                          Built-in
+                        <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-lg border border-emerald-200 shrink-0">
+                          Official
                         </span>
                       )}
                     </div>
@@ -345,15 +409,15 @@ export const TestManager: FC<TestManagerProps> = ({
                       </p>
                     )}
 
-                    <div className="flex items-center gap-4 text-xs text-gray-500 pt-0.5">
+                    <div className="flex items-center gap-3 text-xs text-gray-500 pt-0.5 font-medium">
                       <span className="flex items-center gap-1">
-                        <Clock className="w-3.5 h-3.5" />
+                        <Clock className="w-3.5 h-3.5 text-blue-500" />
                         {exam.durationMinutes} mins
                       </span>
                       <span>•</span>
                       <span>{exam.parts.length} {isListening ? 'Sections' : 'Passages'}</span>
                       <span>•</span>
-                      <span className="font-semibold text-gray-700">
+                      <span className="font-bold text-gray-700">
                         {totalQuestions} Questions
                       </span>
                     </div>
@@ -367,17 +431,17 @@ export const TestManager: FC<TestManagerProps> = ({
                         onSelectExam(exam);
                         onClose();
                       }}
-                      className="px-3.5 py-1.5 text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-lg shadow-xs transition flex items-center gap-1"
-                      title="Take this test"
+                      className="px-4 py-2 text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-xl shadow-xs transition flex items-center gap-1.5"
+                      title="Start this test"
                     >
                       <Play className="w-3.5 h-3.5 fill-white" />
-                      <span>Take Test</span>
+                      <span>Start Test</span>
                     </button>
 
                     {/* Edit */}
                     <button
                       onClick={() => onOpenEditor(exam)}
-                      className="p-1.5 text-gray-500 hover:text-blue-600 hover:bg-gray-100 rounded-lg transition"
+                      className="p-2 text-gray-600 hover:text-blue-600 bg-gray-100 hover:bg-blue-50 border border-gray-200 rounded-xl transition"
                       title="Edit test"
                     >
                       <Edit className="w-4 h-4" />
@@ -386,8 +450,8 @@ export const TestManager: FC<TestManagerProps> = ({
                     {/* Clone */}
                     <button
                       onClick={() => handleClone(exam)}
-                      className="p-1.5 text-gray-500 hover:text-emerald-600 hover:bg-gray-100 rounded-lg transition"
-                      title="Clone test"
+                      className="p-2 text-gray-600 hover:text-emerald-600 bg-gray-100 hover:bg-emerald-50 border border-gray-200 rounded-xl transition"
+                      title="Duplicate test"
                     >
                       <Copy className="w-4 h-4" />
                     </button>
@@ -395,7 +459,7 @@ export const TestManager: FC<TestManagerProps> = ({
                     {/* Export */}
                     <button
                       onClick={() => exportExamAsJSON(exam)}
-                      className="p-1.5 text-gray-500 hover:text-indigo-600 hover:bg-gray-100 rounded-lg transition"
+                      className="p-2 text-gray-600 hover:text-indigo-600 bg-gray-100 hover:bg-indigo-50 border border-gray-200 rounded-xl transition"
                       title="Export as JSON backup"
                     >
                       <Download className="w-4 h-4" />
@@ -404,7 +468,7 @@ export const TestManager: FC<TestManagerProps> = ({
                     {/* Delete */}
                     <button
                       onClick={() => handleDelete(exam.id, exam.title)}
-                      className="p-1.5 text-gray-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition"
+                      className="p-2 text-gray-500 hover:text-rose-600 bg-gray-100 hover:bg-rose-50 border border-gray-200 rounded-xl transition"
                       title="Delete test"
                     >
                       <Trash2 className="w-4 h-4" />
@@ -419,20 +483,25 @@ export const TestManager: FC<TestManagerProps> = ({
 
       {/* JSON Import Modal */}
       {importModalOpen && (
-        <div className="fixed inset-0 z-60 bg-black/60 flex items-center justify-center p-4">
-          <div className="bg-white rounded-xl shadow-xl max-w-lg w-full p-5 space-y-3">
+        <div className="fixed inset-0 z-60 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl border-2 border-gray-200 shadow-2xl max-w-lg w-full p-6 space-y-4">
             <div className="flex items-center justify-between">
-              <h3 className="text-sm font-bold text-gray-900">Paste JSON Test Backup</h3>
+              <h3
+                className="text-base font-extrabold text-gray-900"
+                style={{ fontFamily: outfit.style.fontFamily }}
+              >
+                Paste JSON Test Backup
+              </h3>
               <button
                 onClick={() => setImportModalOpen(false)}
-                className="text-gray-400 hover:text-gray-600"
+                className="text-gray-400 hover:text-gray-600 p-1 rounded-xl hover:bg-gray-100"
               >
                 <X className="w-4 h-4" />
               </button>
             </div>
 
             <p className="text-xs text-gray-500">
-              Paste JSON content exported from the system to immediately add it to your test bank.
+              Paste JSON content exported from PNO to immediately add it to your Test Bank.
             </p>
 
             <textarea
@@ -440,23 +509,23 @@ export const TestManager: FC<TestManagerProps> = ({
               onChange={(e) => setImportJsonText(e.target.value)}
               rows={8}
               placeholder="Paste JSON content here..."
-              className="w-full text-xs font-mono p-2.5 border rounded-lg border-gray-300 focus:ring-2 focus:ring-blue-600"
+              className="w-full text-xs font-mono p-3 border-2 rounded-xl border-gray-200 focus:border-blue-500 outline-none"
             />
 
             {importError && (
-              <p className="text-xs text-rose-600 font-semibold">{importError}</p>
+              <p className="text-xs text-rose-600 font-bold">{importError}</p>
             )}
 
             <div className="flex items-center justify-end gap-2 pt-2">
               <button
                 onClick={() => setImportModalOpen(false)}
-                className="px-3 py-1.5 text-xs text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-lg"
+                className="px-4 py-2 text-xs font-bold text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-xl"
               >
                 Cancel
               </button>
               <button
                 onClick={handleImportJsonText}
-                className="px-4 py-1.5 text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-lg"
+                className="px-4 py-2 text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-xl"
               >
                 Import Test
               </button>
@@ -467,24 +536,29 @@ export const TestManager: FC<TestManagerProps> = ({
 
       {/* New Collection Modal */}
       {showNewCollectionModal && (
-        <div className="fixed inset-0 z-60 bg-black/60 flex items-center justify-center p-4">
-          <div className="bg-white rounded-xl shadow-xl max-w-md w-full p-5 space-y-3.5">
+        <div className="fixed inset-0 z-60 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl border-2 border-gray-200 shadow-2xl max-w-md w-full p-6 space-y-4">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <FolderPlus className="w-4 h-4 text-amber-600" />
-                <h3 className="text-sm font-bold text-gray-900">Create New Collection</h3>
+                <FolderPlus className="w-5 h-5 text-blue-600" />
+                <h3
+                  className="text-base font-extrabold text-gray-900"
+                  style={{ fontFamily: outfit.style.fontFamily }}
+                >
+                  Create New Collection
+                </h3>
               </div>
               <button
                 onClick={() => setShowNewCollectionModal(false)}
-                className="text-gray-400 hover:text-gray-600"
+                className="text-gray-400 hover:text-gray-600 p-1 rounded-xl hover:bg-gray-100"
               >
                 <X className="w-4 h-4" />
               </button>
             </div>
 
-            <form onSubmit={handleCreateCollectionSubmit} className="space-y-3">
+            <form onSubmit={handleCreateCollectionSubmit} className="space-y-3.5">
               <div>
-                <label className="block text-xs font-semibold text-gray-700 mb-1">
+                <label className="block text-xs font-bold text-gray-700 mb-1">
                   Collection Name <span className="text-rose-500">*</span>
                 </label>
                 <input
@@ -493,20 +567,20 @@ export const TestManager: FC<TestManagerProps> = ({
                   value={newCollectionName}
                   onChange={(e) => setNewCollectionName(e.target.value)}
                   placeholder="e.g. Cambridge 19, Intensive Mock Tests..."
-                  className="w-full text-xs p-2.5 border rounded-lg border-gray-300 focus:ring-2 focus:ring-amber-500 outline-none"
+                  className="w-full text-xs p-3 border-2 rounded-xl border-gray-200 focus:border-blue-500 outline-none font-medium"
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-gray-700 mb-1">
-                  Description (optional)
+                <label className="block text-xs font-bold text-gray-700 mb-1">
+                  Description (Optional)
                 </label>
                 <input
                   type="text"
                   value={newCollectionDesc}
                   onChange={(e) => setNewCollectionDesc(e.target.value)}
-                  placeholder="e.g. Authentic computer-delivered exam set..."
-                  className="w-full text-xs p-2.5 border rounded-lg border-gray-300 focus:ring-2 focus:ring-amber-500 outline-none"
+                  placeholder="e.g. Authentic computer-delivered practice set..."
+                  className="w-full text-xs p-3 border-2 rounded-xl border-gray-200 focus:border-blue-500 outline-none font-medium"
                 />
               </div>
 
@@ -514,13 +588,13 @@ export const TestManager: FC<TestManagerProps> = ({
                 <button
                   type="button"
                   onClick={() => setShowNewCollectionModal(false)}
-                  className="px-3 py-1.5 text-xs text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-lg"
+                  className="px-4 py-2 text-xs font-bold text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-xl"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-1.5 text-xs font-bold text-white bg-amber-600 hover:bg-amber-700 rounded-lg shadow-xs"
+                  className="px-4 py-2 text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-xl shadow-xs"
                 >
                   Create Collection
                 </button>

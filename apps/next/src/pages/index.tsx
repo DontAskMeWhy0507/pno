@@ -55,7 +55,7 @@ const PnoPortalPage = () => {
   return (
     <>
       <HeadSeo
-        title="PNO — Học Quiz & Luyện Thi IELTS"
+        title="PNO — Quiz & IELTS Practice Platform"
         hideTitleSuffix
       />
       <LazyWrapper>
@@ -92,7 +92,7 @@ const PnoPortalPage = () => {
                     fontWeight={800}
                     lineHeight={1.15}
                   >
-                    Chọn không gian học tập của bạn trên{" "}
+                    Choose your study workspace on{" "}
                     <Text
                       as="span"
                       bgGradient="linear(to-r, blue.400, purple.500)"
@@ -106,11 +106,11 @@ const PnoPortalPage = () => {
                     color={subTextColor}
                     fontWeight={500}
                   >
-                    Ôn luyện thẻ từ vựng thông minh với Flashcards, Anki, Game Blocks hoặc bước vào phòng thi thử IELTS 4 kỹ năng chuẩn máy tính.
+                    Master vocabulary with smart Flashcards, Anki SRS, and Blocks Game, or step into the 4-skill Computer-Delivered IELTS Exam Room.
                   </Text>
                 </VStack>
 
-                {/* 2 Big Choice Cards: QUIZ vs THI IELTS */}
+                {/* 2 Big Choice Cards: QUIZ vs IELTS */}
                 <SimpleGrid
                   columns={{ base: 1, md: 2 }}
                   spacing={{ base: 6, md: 8 }}
@@ -174,16 +174,16 @@ const PnoPortalPage = () => {
                           Quiz
                         </Heading>
                         <Text color={subTextColor} fontSize="sm" lineHeight="tall">
-                          Tạo và học bộ thẻ từ vựng, nhập trực tiếp từ Quizlet &amp; Anki (<code>.apkg</code>), luyện trí nhớ ngắt quãng (SRS) và chơi các chế độ tương tác.
+                          Create and study vocabulary sets, import directly from Quizlet &amp; Anki (<code>.apkg</code>), review with spaced repetition (SRS), and play interactive modes.
                         </Text>
                       </Stack>
 
                       <SimpleGrid columns={2} spacing={2.5}>
                         {[
                           { icon: IconCards, label: "Flashcards & Anki SRS" },
-                          { icon: IconBrain, label: "Learn & Test tự động" },
-                          { icon: IconDeviceGamepad2, label: "Ghép thẻ Match" },
-                          { icon: IconCube, label: "Game xếp hình Blocks" },
+                          { icon: IconBrain, label: "Adaptive Learn & Test" },
+                          { icon: IconDeviceGamepad2, label: "Match Game" },
+                          { icon: IconCube, label: "Blocks Puzzle Game" },
                         ].map((item) => (
                           <HStack
                             key={item.label}
@@ -219,11 +219,11 @@ const PnoPortalPage = () => {
                       rightIcon={<IconArrowRight size={18} />}
                       onClick={(e) => e.stopPropagation()}
                     >
-                      Vào Quiz
+                      Open Quiz
                     </Button>
                   </Box>
 
-                  {/* Card 2: THI IELTS */}
+                  {/* Card 2: IELTS */}
                   <Box
                     as="article"
                     role="group"
@@ -267,7 +267,7 @@ const PnoPortalPage = () => {
                           fontSize="xs"
                           fontWeight={700}
                         >
-                          4 Kỹ Năng • Chuẩn Máy Tính
+                          4 Skills • Computer-Delivered
                         </Badge>
                       </Flex>
 
@@ -278,10 +278,10 @@ const PnoPortalPage = () => {
                           fontSize={{ base: "2xl", sm: "3xl" }}
                           fontWeight={800}
                         >
-                          Thi IELTS
+                          IELTS
                         </Heading>
                         <Text color={subTextColor} fontSize="sm" lineHeight="tall">
-                          Phòng luyện thi IELTS trên máy tính 4 kỹ năng với đồng hồ đếm ngược, tô màu highlight, chấm điểm Band 9.0, thu âm Speaking và tự tạo/nhập kho đề.
+                          Full 4-skill Computer-Delivered IELTS practice suite with countdown timers, 4-color passage highlights, Band 9.0 scoring, live Speaking recording, and custom test imports.
                         </Text>
                       </Stack>
 
@@ -290,7 +290,7 @@ const PnoPortalPage = () => {
                           { icon: IconBook, label: "Reading Split-Pane" },
                           { icon: IconHeadphones, label: "Listening Audio" },
                           { icon: IconPencil, label: "Writing Task 1 & 2" },
-                          { icon: IconMicrophone, label: "Speaking & Thu âm" },
+                          { icon: IconMicrophone, label: "Speaking & Recorder" },
                         ].map((item) => (
                           <HStack
                             key={item.label}
@@ -331,7 +331,7 @@ const PnoPortalPage = () => {
                       rightIcon={<IconArrowRight size={18} />}
                       onClick={(e) => e.stopPropagation()}
                     >
-                      Vào Thi IELTS
+                      Open IELTS
                     </Button>
                   </Box>
                 </SimpleGrid>

@@ -64,15 +64,10 @@ export function getSavedExamSummary(examId: string): {
     (a) => a !== undefined && a !== '' && (!Array.isArray(a) || a.length > 0)
   ).length;
 
-  // If completely empty and full duration remains, return null
-  if (answeredCount === 0 && progress.flaggedQuestions.length === 0) {
-    return null;
-  }
-
   return {
     answeredCount,
     timeRemaining: progress.timeRemaining,
-    lastSavedAt: progress.lastSavedAt,
+    lastSavedAt: progress.lastSavedAt || Date.now(),
     activePartNumber: progress.activePartNumber,
     currentQuestionNumber: progress.currentQuestionNumber,
   };

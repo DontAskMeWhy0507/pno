@@ -5,7 +5,7 @@ export const sampleSpeakingExams: SpeakingExam[] = [
     id: 'speaking_test_1',
     title: 'IELTS Speaking Test 1: Hometown, Book & Reading Culture',
     collection: 'IELTS Forecast 2024-2026',
-    description: 'Chủ đề quen thuộc Part 1, Cue card sách yêu thích Part 2 và Thảo luận văn hóa đọc Part 3.',
+    description: 'High-frequency Part 1 hometown questions, Part 2 favorite book Cue Card, and Part 3 reading culture discussion.',
     createdAt: Date.now() - 1000000,
     updatedAt: Date.now() - 1000000,
     part1Questions: [
@@ -17,10 +17,10 @@ export const sampleSpeakingExams: SpeakingExam[] = [
         sampleAnswer:
           'I hail from Da Nang, a coastal city in central Vietnam. What captivates me most is the breathtaking harmony between mountains and the ocean, complemented by an exceptionally clean and laid-back urban atmosphere. Unlike bustling megacities, people in my hometown are genuinely cordial, and the seafood is unparalleled.',
         keyVocabulary: [
-          { word: 'hail from', meaning: 'Sinh ra và lớn lên từ...', phonetic: '/heɪl frəm/' },
-          { word: 'breathtaking harmony', meaning: 'Sự hòa hợp ngoạn mục, tuyệt đẹp', phonetic: '/ˈbreθteɪkɪŋ ˈhɑːməni/' },
-          { word: 'laid-back atmosphere', meaning: 'Không khí thư thả, bình yên', phonetic: '/ˌleɪd ˈbæk ˈætməsfɪər/' },
-          { word: 'unparalleled', meaning: 'Không gì sánh bằng, xuất sắc vượt trội', phonetic: '/ʌnˈpærəleld/' },
+          { word: 'hail from', meaning: 'Originate or come from a particular place', phonetic: '/heɪl frəm/' },
+          { word: 'breathtaking harmony', meaning: 'Stunning and peaceful balance of nature', phonetic: '/ˈbreθteɪkɪŋ ˈhɑːməni/' },
+          { word: 'laid-back atmosphere', meaning: 'Relaxed, calm, and unhurried environment', phonetic: '/ˌleɪd ˈbæk ˈætməsfɪər/' },
+          { word: 'unparalleled', meaning: 'Unmatched; having no equal in quality', phonetic: '/ʌnˈpærəleld/' },
         ],
       },
       {
@@ -31,9 +31,9 @@ export const sampleSpeakingExams: SpeakingExam[] = [
         sampleAnswer:
           'Substantially, I would say. Over the past decade, my city has experienced rapid modernization, with iconic architectural landmarks like the Dragon Bridge emerging alongside state-of-the-art infrastructure. While it has undoubtedly become a premier tourist destination, it has managed to preserve its serene coastal charm without succumbing to severe traffic congestion.',
         keyVocabulary: [
-          { word: 'rapid modernization', meaning: 'Hiện đại hóa nhanh chóng' },
-          { word: 'architectural landmarks', meaning: 'Các biểu tượng kiến trúc' },
-          { word: 'succumbing to', meaning: 'Bị khuất phục, chìm vào (ùn tắc)' },
+          { word: 'rapid modernization', meaning: 'Fast-paced urban and technological development' },
+          { word: 'architectural landmarks', meaning: 'Iconic buildings or structures defining a city' },
+          { word: 'succumbing to', meaning: 'Giving in to or falling victim to (e.g. congestion)' },
         ],
       },
       {
@@ -44,9 +44,9 @@ export const sampleSpeakingExams: SpeakingExam[] = [
         sampleAnswer:
           'To be completely honest, I lean toward paperbacks. There is an irreplaceable tactile sensation in flipping physical pages and the pleasant aroma of fresh print. That being said, I occasionally resort to e-readers when commuting due to their sheer portability and built-in dictionary lookups.',
         keyVocabulary: [
-          { word: 'tactile sensation', meaning: 'Cảm giác xúc giác khi chạm vào' },
-          { word: 'sheer portability', meaning: 'Tính tiện lợi, dễ mang theo' },
-          { word: 'lean toward', meaning: 'Nghiêng về, ưa chuộng hơn' },
+          { word: 'tactile sensation', meaning: 'Physical feeling experienced through touch' },
+          { word: 'sheer portability', meaning: 'Extreme convenience of carrying anywhere' },
+          { word: 'lean toward', meaning: 'Prefer or favor one option over another' },
         ],
       },
     ],
@@ -64,9 +64,9 @@ export const sampleSpeakingExams: SpeakingExam[] = [
       prepTimeSeconds: 60,
       speakTimeSeconds: 120,
       tips: [
-        'Dùng 1 phút chuẩn bị để ghi từ khóa chính (Keywords) chứ không viết thành câu.',
-        'Sử dụng các cấu trúc thì quá khứ (Past simple, Past continuous, Past perfect) khi kể lại hoàn cảnh.',
-        'Áp dụng Idioms tự nhiên và nhấn nhá ngữ điệu để tạo sự lôi cuốn.',
+        'Use the 1-minute preparation time to jot down core keywords rather than full sentences.',
+        'Mix narrative past tenses (Past Simple, Past Continuous, Past Perfect) when explaining how you found the book.',
+        'Incorporate natural idiomatic expressions and varied intonation for an engaging delivery.',
       ],
       sampleAnswer: `I would like to share my thoughts on a profoundly thought-provoking non-fiction book that I finished just a couple of months ago, entitled "Atomic Habits" by James Clear. 
 
@@ -76,12 +76,12 @@ The core philosophy of the book revolves around the transformative power of marg
 
 What captivated me most was Clear's scientific yet accessible narrative. Rather than relying on empty motivational platitudes, he grounds his concepts in behavioral psychology and neuroscience. Reading the book genuinely shifted my mindset from fixating on abstract goals to designing durable daily systems. It was an eye-opening revelation that has tangibly improved my daily focus and disciplined routine.`,
       keyVocabulary: [
-        { word: 'thought-provoking', meaning: 'Kích thích suy nghĩ sâu sắc' },
-        { word: 'stumbled upon', meaning: 'Tình cờ biết đến' },
-        { word: 'marginal gains', meaning: 'Những cải tiến nhỏ nhặt nhưng tích lũy' },
-        { word: 'culminate in monumental achievements', meaning: 'Đạt đỉnh điểm thành thành tựu vĩ đại' },
-        { word: 'motivational platitudes', meaning: 'Những lời sáo rỗng tạo động lực' },
-        { word: 'eye-opening revelation', meaning: 'Một sự khai sáng mở mang tầm mắt' },
+        { word: 'thought-provoking', meaning: 'Stimulating deep reflection and serious thought' },
+        { word: 'stumbled upon', meaning: 'Discovered by chance or unexpectedly' },
+        { word: 'marginal gains', meaning: 'Small incremental improvements that add up' },
+        { word: 'culminate in monumental achievements', meaning: 'Lead ultimately to major accomplishments' },
+        { word: 'motivational platitudes', meaning: 'Overused, cliché advice lacking depth' },
+        { word: 'eye-opening revelation', meaning: 'A surprising insight that changes one’s perspective' },
       ],
     },
     part3Questions: [
@@ -93,10 +93,10 @@ What captivated me most was Clear's scientific yet accessible narrative. Rather 
         sampleAnswer:
           'Primarily, it boils down to the overwhelming influx of bite-sized digital entertainment. Platforms like TikTok, Instagram Reels, and YouTube offer instant dopamine hits in mere seconds, which drastically diminishes our attention spans. Consequently, diving into a 400-page book requires deliberate cognitive effort and sustained concentration that many youngsters find challenging to maintain amidst ubiquitous smartphone notifications.',
         keyVocabulary: [
-          { word: 'boils down to', meaning: 'Quy tụ về nguyên nhân chính là' },
-          { word: 'instant dopamine hits', meaning: 'Kích thích tức thời dopamine' },
-          { word: 'diminishes attention spans', meaning: 'Làm suy giảm khả năng tập trung' },
-          { word: 'cognitive effort', meaning: 'Nỗ lực tư duy nhận thức' },
+          { word: 'boils down to', meaning: 'Has as its main or fundamental cause' },
+          { word: 'instant dopamine hits', meaning: 'Immediate bursts of pleasure from short media' },
+          { word: 'diminishes attention spans', meaning: 'Reduces the ability to focus for long periods' },
+          { word: 'cognitive effort', meaning: 'Active mental concentration and processing' },
         ],
       },
       {
@@ -107,9 +107,9 @@ What captivated me most was Clear's scientific yet accessible narrative. Rather 
         sampleAnswer:
           'I respectfully disagree with that assertion. While libraries are no longer solely custodians of paper archives, they are actively reinventing themselves into vibrant community learning hubs. Beyond borrowing books, modern libraries provide quiet sanctuaries for scholarly research, access to specialized databases, workshops, and digital fabrication spaces. Hence, their communal and educational essence ensures their enduring relevance.',
         keyVocabulary: [
-          { word: 'custodians of paper archives', meaning: 'Người trông coi các kho lưu trữ giấy' },
-          { word: 'quiet sanctuaries', meaning: 'Nơi chốn yên tĩnh tôn nghiêm' },
-          { word: 'enduring relevance', meaning: 'Giá trị và sự phù hợp lâu bền theo thời gian' },
+          { word: 'custodians of paper archives', meaning: 'Keepers or guardians of physical book collections' },
+          { word: 'quiet sanctuaries', meaning: 'Peaceful spaces free from distraction' },
+          { word: 'enduring relevance', meaning: 'Long-lasting value and importance over time' },
         ],
       },
     ],
@@ -118,7 +118,7 @@ What captivated me most was Clear's scientific yet accessible narrative. Rather 
     id: 'speaking_test_2',
     title: 'IELTS Speaking Test 2: Technology, Artificial Intelligence & Future Careers',
     collection: 'Cambridge 18',
-    description: 'Chủ đề xu hướng công nghệ số, Trí tuệ nhân tạo và Tác động đối với thị trường việc làm.',
+    description: 'Digital technology trends, Artificial Intelligence tools, and their impact on future employment.',
     createdAt: Date.now() - 500000,
     updatedAt: Date.now() - 500000,
     part1Questions: [
@@ -130,8 +130,8 @@ What captivated me most was Clear's scientific yet accessible narrative. Rather 
         sampleAnswer:
           'Virtually non-stop throughout my waking hours! As an IT enthusiast, my computer serves as both my primary workstation and my gateway to information and entertainment. From coding algorithms and drafting reports to video streaming, it is an indispensable tool in my everyday existence.',
         keyVocabulary: [
-          { word: 'virtually non-stop', meaning: 'Gần như liên tục không ngừng' },
-          { word: 'indispensable tool', meaning: 'Công cụ thiết yếu không thể thiếu' },
+          { word: 'virtually non-stop', meaning: 'Almost continuously without interruption' },
+          { word: 'indispensable tool', meaning: 'An essential instrument one cannot do without' },
         ],
       },
     ],
@@ -156,9 +156,9 @@ What sets this tool apart from generic conversational bots is its profound envir
 
 In terms of personal impact, this tool has elevated my productivity to unprecedented heights. Tasks that previously consumed days of manual labor—such as configuring boilerplate setups or migrating legacy workflows—can now be orchestrated within minutes. It feels like having a senior engineer constantly collaborating at my side.`,
       keyVocabulary: [
-        { word: 'revolutionary workflow', meaning: 'Quy trình làm việc mang tính cách mạng' },
-        { word: 'environmental awareness', meaning: 'Khả năng hiểu bối cảnh môi trường xung quanh' },
-        { word: 'unprecedented heights', meaning: 'Tầm cao chưa từng có trước đây' },
+        { word: 'revolutionary workflow', meaning: 'A transformative way of organizing daily work' },
+        { word: 'environmental awareness', meaning: 'Ability to understand the surrounding project context' },
+        { word: 'unprecedented heights', meaning: 'Levels of performance never reached before' },
       ],
     },
     part3Questions: [
@@ -170,9 +170,9 @@ In terms of personal impact, this tool has elevated my productivity to unprecede
         sampleAnswer:
           'In my assessment, AI will not necessarily replace human workers outright, but rather individuals who adeptly harness AI will supersede those who do not. Routine, repetitive tasks will unquestionably become automated, which might cause short-term frictional unemployment. Nevertheless, higher-order skills such as emotional intelligence, ethical discernment, creative ingenuity, and strategic decision-making will remain profoundly human domains.',
         keyVocabulary: [
-          { word: 'supersede', meaning: 'Thay thế, vượt trội hơn' },
-          { word: 'frictional unemployment', meaning: 'Thất nghiệp tạm thời do chuyển đổi' },
-          { word: 'ethical discernment', meaning: 'Sự sáng suốt về mặt đạo đức' },
+          { word: 'supersede', meaning: 'Take the place of or outperform an older approach' },
+          { word: 'frictional unemployment', meaning: 'Temporary job transitions as industries evolve' },
+          { word: 'ethical discernment', meaning: 'Sound moral judgment in complex situations' },
         ],
       },
     ],

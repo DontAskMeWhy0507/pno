@@ -81,7 +81,7 @@ export const SplitPane: React.FC<SplitPaneProps> = ({
             }`}
           >
             <BookOpen className="w-3.5 h-3.5" />
-            <span>Bài đọc (Passage)</span>
+            <span>Reading Passage</span>
           </button>
           <button
             type="button"
@@ -93,7 +93,7 @@ export const SplitPane: React.FC<SplitPaneProps> = ({
             }`}
           >
             <ListChecks className="w-3.5 h-3.5" />
-            <span>Câu hỏi (Questions)</span>
+            <span>Questions</span>
           </button>
         </div>
       )}
@@ -123,7 +123,7 @@ export const SplitPane: React.FC<SplitPaneProps> = ({
           <div
             onMouseDown={handleMouseDown}
             onDoubleClick={() => setLeftPercent(50)}
-            title="Kéo sang hai bên để chỉnh độ rộng. Nháy đúp để cân bằng 50/50"
+            title="Drag left or right to resize panes. Double-click to reset 50/50"
             className={`split-divider ${isDragging ? 'dragging' : ''}`}
           />
         )}
@@ -133,9 +133,9 @@ export const SplitPane: React.FC<SplitPaneProps> = ({
           style={isDesktop ? { width: `${100 - leftPercent}%` } : undefined}
           className={`${
             isDesktop
-              ? 'h-full overflow-y-auto px-6 py-6 bg-white font-sans text-gray-900'
+              ? 'h-full overflow-y-auto px-6 py-6 bg-slate-50/60 font-sans text-gray-900'
               : mobileTab === 'questions'
-              ? 'w-full h-full overflow-y-auto px-4 py-4 bg-white font-sans text-gray-900'
+              ? 'w-full h-full overflow-y-auto px-4 py-4 bg-slate-50/60 font-sans text-gray-900'
               : 'hidden'
           }`}
         >

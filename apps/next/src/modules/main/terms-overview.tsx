@@ -331,7 +331,7 @@ const TermsList: React.FC<TermsListProps> = ({
       {showSlice < sortedTerms.length && (
         <HStack justify="space-between" pt={3} wrap="wrap" gap={3}>
           <Text fontSize="sm" color="gray.500">
-            Đang hiển thị {visibleTerms.length} / {sortedTerms.length} thuật ngữ
+            Showing {visibleTerms.length} of {sortedTerms.length} terms
           </Text>
           <HStack spacing={2}>
             <Button
@@ -343,7 +343,7 @@ const TermsList: React.FC<TermsListProps> = ({
                 );
               }}
             >
-              Xem thêm (
+              Show more (
               {Math.min(DEFAULT_CHUNK_SIZE, sortedTerms.length - showSlice)})
             </Button>
             <Button
@@ -353,7 +353,7 @@ const TermsList: React.FC<TermsListProps> = ({
                 setShowSlice(sortedTerms.length);
               }}
             >
-              Tải tất cả ({sortedTerms.length})
+              Load all ({sortedTerms.length})
             </Button>
           </HStack>
         </HStack>

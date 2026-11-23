@@ -121,3 +121,80 @@
   outline: 2px solid transparent;
   outline-offset: 2px;
 }
+
+/* Unified PNO Typography & Dark/Light Mode Theme for IELTS Exam Rooms & Modals */
+.ielts-root h1,
+.ielts-root h2,
+.ielts-root h3,
+.ielts-root h4 {
+  font-family: "Outfit", "Open Sans", sans-serif;
+}
+
+.ielts-root.ielts-dark {
+  background-color: #171923;
+  color: #f7fafc;
+}
+
+.ielts-root.ielts-dark .bg-white,
+.ielts-root.ielts-dark .bg-white\/80 {
+  background-color: #1a202c !important;
+  color: #f7fafc;
+}
+
+.ielts-root.ielts-dark .bg-gray-50,
+.ielts-root.ielts-dark .bg-slate-50,
+.ielts-root.ielts-dark .bg-slate-50\/50,
+.ielts-root.ielts-dark .bg-slate-50\/70,
+.ielts-root.ielts-dark .bg-\[\#f8fafc\],
+.ielts-root.ielts-dark .bg-\[\#eef1f5\] {
+  background-color: #171923 !important;
+  color: #e2e8f0;
+}
+
+.ielts-root.ielts-dark .bg-gray-100,
+.ielts-root.ielts-dark .bg-slate-100,
+.ielts-root.ielts-dark .bg-slate-200\/70 {
+  background-color: #2d3748 !important;
+  color: #edf2f7;
+}
+
+.ielts-root.ielts-dark .text-gray-900,
+.ielts-root.ielts-dark .text-slate-900,
+.ielts-root.ielts-dark .text-gray-800,
+.ielts-root.ielts-dark .text-slate-800 {
+  color: #f7fafc !important;
+}
+
+.ielts-root.ielts-dark .text-gray-700,
+.ielts-root.ielts-dark .text-slate-700,
+.ielts-root.ielts-dark .text-gray-600,
+.ielts-root.ielts-dark .text-slate-600 {
+  color: #cbd5e0 !important;
+}
+
+.ielts-root.ielts-dark .text-gray-500,
+.ielts-root.ielts-dark .text-slate-500 {
+  color: #a0aec0 !important;
+}
+
+.ielts-root.ielts-dark .border-gray-100,
+.ielts-root.ielts-dark .border-slate-100,
+.ielts-root.ielts-dark .border-gray-200,
+.ielts-root.ielts-dark .border-slate-200,
+.ielts-root.ielts-dark .border-slate-200\/80,
+.ielts-root.ielts-dark .border-gray-300,
+.ielts-root.ielts-dark .border-slate-300 {
+  border-color: #2d3748 !important;
+}
+
+.ielts-root.ielts-dark input:not([type="range"]):not([type="checkbox"]):not([type="radio"]),
+.ielts-root.ielts-dark textarea,
+.ielts-root.ielts-dark select {
+  background-color: #171923 !important;
+  color: #f7fafc !important;
+  border-color: #4a5568 !important;
+}
+
+.ielts-root.ielts-dark .split-divider {
+  background-color: #2d3748;
+}

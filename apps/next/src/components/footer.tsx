@@ -119,11 +119,11 @@ export const Footer = () => {
             flexWrap="wrap"
             alignItems="center"
           >
-            <FooterLink href="/" text="Trang chủ" />
+            <FooterLink href="/" text="Home" />
             <FooterLink href="/home" text="Quiz" />
-            <FooterLink href="/ielts" text="Thi IELTS" />
-            <FooterLink href="/privacy" text="Chính sách bảo mật" />
-            <FooterLink href="/terms" text="Điều khoản sử dụng" />
+            <FooterLink href="/ielts" text="IELTS" />
+            <FooterLink href="/privacy" text="Privacy Policy" />
+            <FooterLink href="/terms" text="Terms of Service" />
           </Flex>
         </Stack>
       </Container>

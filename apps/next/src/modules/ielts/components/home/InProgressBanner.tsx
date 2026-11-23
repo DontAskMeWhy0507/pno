@@ -1,12 +1,13 @@
 import type { FC } from 'react';
 import type { Exam } from '../../types/exam';
 import type { WritingExam } from '../../types/writing';
+import type { SpeakingExam } from '../../types/speaking';
 import { Play, Trash2 } from 'lucide-react';
 
 export interface InProgressItem {
   id: string;
   title: string;
-  skill: 'reading' | 'listening' | 'writing';
+  skill: 'reading' | 'listening' | 'writing' | 'speaking';
   collection?: string;
   answeredCount: number;
   totalQuestions: number;
@@ -16,16 +17,20 @@ export interface InProgressItem {
   currentQuestionNumber?: number;
   task1Words?: number;
   task2Words?: number;
+  speakingPart?: 1 | 2 | 3;
   rawExam?: Exam;
   rawWritingExam?: WritingExam;
+  rawSpeakingExam?: SpeakingExam;
 }
 
 interface InProgressBannerProps {
   items: InProgressItem[];
   onResumeExam: (exam: Exam) => void;
   onResumeWriting: (exam: WritingExam) => void;
+  onResumeSpeaking?: (exam: SpeakingExam) => void;
   onDiscardExam: (id: string, title: string) => void;
   onDiscardWriting: (id: string, title: string) => void;
+  onDiscardSpeaking?: (id: string, title: string) => void;
 }
 
 export const InProgressBanner: FC<InProgressBannerProps> = ({

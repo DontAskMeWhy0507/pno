@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, type FC } from 'react';
+import { useColorMode } from '@chakra-ui/react';
 import type { WritingExam } from '../../types/writing';
 import { AiCoachPromptModal } from '../common/AiCoachPromptModal';
 import {
@@ -19,6 +20,8 @@ import {
   Sparkles,
   Award,
   BookOpen,
+  Sun,
+  Moon,
 } from 'lucide-react';
 
 interface WritingExamRoomProps {
@@ -34,6 +37,7 @@ export const WritingExamRoom: FC<WritingExamRoomProps> = ({ exam, onBackToHome }
   const [candidateName] = useState('PNO Candidate');
   const [showAiCoachModal, setShowAiCoachModal] = useState(false);
   const [mobilePane, setMobilePane] = useState<'prompt' | 'editor'>('prompt');
+  const { colorMode, toggleColorMode } = useColorMode();
 
   // 60 minutes timer
   const [timeRemaining, setTimeRemaining] = useState(savedWriting?.timeRemaining ?? exam.durationMinutes * 60);
@@ -47,6 +51,21 @@ export const WritingExamRoom: FC<WritingExamRoomProps> = ({ exam, onBackToHome }
   const [showGuideModal, setShowGuideModal] = useState(false);
 
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  // Save immediately on mount so opening a test marks it as In Progress
+  useEffect(() => {
+    if (!isSubmitted) {
+      saveWritingProgress(exam.id, {
+        task1Text,
+        task2Text,
+        activeTaskNum,
+        notesText,
+        timeRemaining,
+        lastSavedAt: Date.now(),
+      });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [exam.id]);
 
   // Autosave progress debounced
   useEffect(() => {
@@ -149,8 +168,8 @@ export const WritingExamRoom: FC<WritingExamRoomProps> = ({ exam, onBackToHome }
   return (
     <div className="h-[100dvh] w-full flex flex-col bg-white text-gray-900 font-sans select-auto overflow-hidden">
       {/* 1. TOP HEADER (Responsive for PC & Mobile) */}
-      <header className="min-h-12 py-1.5 sm:py-0 sm:h-12 border-b border-gray-200 bg-white px-2.5 sm:px-5 flex items-center justify-between gap-2 shrink-0">
-        <div className="flex items-center gap-2 min-w-0">
+      <header className="min-h-14 py-1.5 sm:py-0 sm:h-14 border-b-2 border-gray-200 bg-white px-2.5 sm:px-5 flex items-center justify-between gap-2 shrink-0 shadow-2xs">
+        <div className="flex items-center gap-2 sm:gap-3 min-w-0">
           <button
             onClick={() => {
               saveWritingProgress(exam.id, {
@@ -161,41 +180,40 @@ export const WritingExamRoom: FC<WritingExamRoomProps> = ({ exam, onBackToHome }
                 timeRemaining,
                 lastSavedAt: Date.now(),
               });
-              if (window.confirm('Return to Home? Your essay draft and remaining time are automatically saved. You can resume anytime.')) {
-                onBackToHome();
-              }
+              onBackToHome();
             }}
-            className="text-gray-500 hover:text-gray-800 p-1.5 rounded hover:bg-gray-100 transition mr-1 shrink-0"
-            title="Return to Home (Draft is auto-saved)"
+            className="flex items-center gap-1.5 text-xs text-gray-700 hover:text-gray-900 px-2.5 sm:px-3 py-1.5 rounded-xl bg-gray-100 hover:bg-gray-200 transition font-semibold shrink-0"
+            title="Return to Home (Progress is auto-saved)"
           >
-            <ArrowLeft className="w-4 h-4" />
+            <ArrowLeft className="w-3.5 h-3.5" />
+            <span className="hidden sm:inline">Home</span>
           </button>
 
           {/* PNO Badge */}
-          <div className="px-2 h-6 rounded bg-blue-600 flex items-center justify-center text-white text-[10px] font-extrabold tracking-wider shrink-0">
+          <div className="hidden xs:flex sm:flex px-2.5 h-7 rounded-xl bg-blue-600 items-center justify-center text-white text-[11px] font-extrabold tracking-wider shrink-0 shadow-2xs">
             PNO
           </div>
-          <span className="text-xs sm:text-sm font-semibold text-gray-800 truncate max-w-[110px] sm:max-w-none">{candidateName}</span>
+          <span className="text-xs sm:text-sm font-bold text-gray-900 truncate max-w-[140px] sm:max-w-none">{exam.title || candidateName}</span>
 
           {/* Live Autosave Indicator */}
           <span
-            className="hidden md:inline-flex items-center gap-1 text-[10px] font-medium text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200 ml-2 shrink-0"
+            className="hidden md:inline-flex items-center gap-1 text-[10px] font-medium text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200 ml-1 shrink-0"
             title="Your essay draft is automatically saved in your browser"
           >
             <CheckCircle2 className="w-3 h-3 text-emerald-600" />
-            <span>Draft Auto-saved</span>
+            <span>Auto-saved</span>
           </span>
         </div>
 
         {/* Timer & Hide button & AI Prompt Button */}
-        <div className="flex items-center gap-1.5 sm:gap-3 shrink-0">
+        <div className="flex items-center gap-1.5 sm:gap-2.5 shrink-0">
           <button
             onClick={() => setShowAiCoachModal(true)}
-            className="flex items-center gap-1 px-2 sm:px-3 py-1 text-xs font-semibold text-slate-700 bg-white hover:bg-slate-50 border border-slate-200 rounded-lg shadow-2xs transition"
+            className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 text-xs font-bold text-slate-700 bg-gray-100 hover:bg-gray-200 border border-gray-300 rounded-xl transition"
             title="Generate personalized AI coaching prompt"
           >
             <Sparkles className="w-3.5 h-3.5 text-blue-600 shrink-0" />
-            <span className="hidden sm:inline">AI Coaching Prompt</span>
+            <span className="hidden sm:inline">AI Coach Prompt</span>
             <span className="sm:hidden">AI</span>
           </button>
 
@@ -208,9 +226,16 @@ export const WritingExamRoom: FC<WritingExamRoomProps> = ({ exam, onBackToHome }
           )}
           <button
             onClick={() => setIsTimeHidden(!isTimeHidden)}
-            className="text-xs font-semibold text-gray-600 hover:text-gray-900 px-2 py-0.5 rounded border border-gray-300 hover:bg-gray-50 transition"
+            className="text-xs font-bold text-gray-600 hover:text-gray-900 px-2.5 py-1 rounded-xl border border-gray-300 hover:bg-gray-100 transition"
           >
             {isTimeHidden ? 'Show' : 'Hide'}
+          </button>
+          <button
+            onClick={toggleColorMode}
+            className="p-1.5 rounded-xl text-gray-600 hover:bg-gray-100 transition"
+            title={colorMode === 'dark' ? 'Switch to Light mode' : 'Switch to Dark mode'}
+          >
+            {colorMode === 'dark' ? <Sun className="w-4 h-4 text-amber-400" /> : <Moon className="w-4 h-4" />}
           </button>
         </div>
       </header>
@@ -226,7 +251,7 @@ export const WritingExamRoom: FC<WritingExamRoomProps> = ({ exam, onBackToHome }
               : 'text-slate-600 hover:text-slate-900'
           }`}
         >
-          Đề bài &amp; Biểu đồ
+          Prompt &amp; Chart
         </button>
         <button
           type="button"
@@ -237,7 +262,7 @@ export const WritingExamRoom: FC<WritingExamRoomProps> = ({ exam, onBackToHome }
               : 'text-slate-600 hover:text-slate-900'
           }`}
         >
-          Bài viết ({currentWords} từ)
+          Essay Editor ({currentWords} words)
         </button>
       </div>
 
@@ -247,10 +272,10 @@ export const WritingExamRoom: FC<WritingExamRoomProps> = ({ exam, onBackToHome }
         <div
           className={`${
             mobilePane === 'prompt' ? 'block w-full' : 'hidden'
-          } md:block md:w-1/2 h-full md:border-r border-gray-300 overflow-y-auto p-4 sm:p-6 bg-white space-y-4`}
+          } md:block md:w-1/2 h-full md:border-r-2 border-gray-200 overflow-y-auto p-4 sm:p-6 bg-white space-y-4`}
         >
-          {/* Top warning instruction matching screenshot */}
-          <div className="border-l-2 border-red-500 pl-2 text-xs italic text-gray-700">
+          {/* Top warning instruction */}
+          <div className="border-l-4 border-blue-600 bg-blue-50/50 rounded-r-xl px-3.5 py-2.5 text-xs font-medium text-gray-700">
             {activeTaskNum === 1
               ? `You should spend about ${exam.task1.recommendedMinutes || 20} minutes on this task. Write at least ${exam.task1.minWords || 150} words.`
               : `You should spend about ${exam.task2.recommendedMinutes || 40} minutes on this task. Write at least ${exam.task2.minWords || 250} words.`}
@@ -259,25 +284,25 @@ export const WritingExamRoom: FC<WritingExamRoomProps> = ({ exam, onBackToHome }
           {activeTaskNum === 1 ? (
             /* Task 1 Content */
             <div className="space-y-4">
-              <h2 className="text-base font-bold text-gray-900 leading-snug">
+              <h2 className="text-base font-extrabold text-gray-900 leading-snug">
                 {exam.task1.title || 'Writing Task 1'}
               </h2>
 
-              <div className="p-4 bg-slate-50 border border-gray-200 rounded-lg text-sm text-gray-800 font-serif leading-relaxed whitespace-pre-line">
+              <div className="p-5 bg-slate-50 border-2 border-gray-200 rounded-2xl text-sm text-gray-800 leading-relaxed whitespace-pre-line">
                 {exam.task1.prompt}
               </div>
 
               {exam.task1.imageUrl ? (
-                <div className="p-4 border border-gray-200 rounded-lg bg-white shadow-2xs flex justify-center">
+                <div className="p-4 border-2 border-gray-200 rounded-2xl bg-white shadow-2xs flex justify-center">
                   <img
                     src={exam.task1.imageUrl}
                     alt={exam.task1.title || 'Task 1 Diagram'}
-                    className="max-h-96 w-auto object-contain rounded"
+                    className="max-h-96 w-auto object-contain rounded-xl"
                   />
                 </div>
               ) : exam.id === 'writing_test_2' ? (
                 /* Built-in SVG Line Graph for Writing Test 2 (USA, Canada, Mexico 2010-2020) */
-                <div className="p-4 border border-gray-200 rounded-lg bg-white shadow-2xs">
+                <div className="p-5 border-2 border-gray-200 rounded-2xl bg-white shadow-2xs">
                   <div className="flex items-center justify-center gap-6 mb-3 text-xs font-semibold text-gray-700">
                     <div className="flex items-center gap-1.5">
                       <span className="w-4 h-0.5 bg-blue-600 inline-block"></span>
@@ -337,7 +362,7 @@ export const WritingExamRoom: FC<WritingExamRoomProps> = ({ exam, onBackToHome }
                 </div>
               ) : (exam.id === 'writing_test_1' || exam.task1.prompt.includes('2004')) ? (
                 /* Bar Chart Recreation for Writing Test 1 (UK 2004 expenditure) */
-                <div className="p-4 border border-gray-200 rounded-lg bg-white shadow-2xs">
+                <div className="p-5 border-2 border-gray-200 rounded-2xl bg-white shadow-2xs">
                   {/* Legend */}
                   <div className="flex items-center justify-center gap-6 mb-4 text-xs font-semibold text-gray-700">
                     <div className="flex items-center gap-1.5">
@@ -500,15 +525,15 @@ export const WritingExamRoom: FC<WritingExamRoomProps> = ({ exam, onBackToHome }
           ) : (
             /* Task 2 Content */
             <div className="space-y-4">
-              <h2 className="text-base font-bold text-gray-900 leading-snug">
+              <h2 className="text-base font-extrabold text-gray-900 leading-snug">
                 Writing Task 2 Essay
               </h2>
-              <div className="p-4 bg-slate-50 border border-gray-200 rounded-lg text-sm text-gray-800 font-serif leading-relaxed">
+              <div className="p-5 bg-slate-50 border-2 border-gray-200 rounded-2xl text-sm text-gray-800 leading-relaxed">
                 {exam.task2.prompt}
               </div>
-              <div className="text-xs text-gray-600 space-y-1">
-                <p>• Viết ít nhất 250 từ.</p>
-                <p>• Nêu rõ các luận điểm, ví dụ thực tế và quan điểm cá nhân.</p>
+              <div className="text-xs text-gray-600 space-y-1.5 bg-slate-50/70 p-4 rounded-xl border border-gray-200">
+                <p>• Write at least 250 words.</p>
+                <p>• Give reasons for your answer and include any relevant examples from your own knowledge or experience.</p>
               </div>
             </div>
           )}
@@ -518,34 +543,34 @@ export const WritingExamRoom: FC<WritingExamRoomProps> = ({ exam, onBackToHome }
         <div
           className={`${
             mobilePane === 'editor' ? 'flex w-full' : 'hidden'
-          } md:flex md:w-1/2 h-full flex-col bg-white`}
+          } md:flex md:w-1/2 h-full flex-col bg-slate-50/40`}
         >
-          {/* Mini Toolbar matching screenshot icons */}
-          <div className="h-10 border-b border-gray-200 px-4 flex items-center gap-3 text-gray-400 bg-white select-none shrink-0">
+          {/* Mini Toolbar */}
+          <div className="h-11 border-b-2 border-gray-200 px-4 flex items-center gap-2 text-gray-500 bg-white select-none shrink-0">
             <button
               onClick={handleCut}
-              className="p-1 hover:text-gray-700 hover:bg-gray-100 rounded transition"
+              className="p-1.5 hover:text-gray-800 hover:bg-gray-100 rounded-lg transition"
               title="Cut"
             >
               <Scissors className="w-4 h-4" />
             </button>
             <button
               onClick={handleCopy}
-              className="p-1 hover:text-gray-700 hover:bg-gray-100 rounded transition"
+              className="p-1.5 hover:text-gray-800 hover:bg-gray-100 rounded-lg transition"
               title="Copy"
             >
               <Copy className="w-4 h-4" />
             </button>
             <button
               onClick={() => document.execCommand('undo')}
-              className="p-1 hover:text-gray-700 hover:bg-gray-100 rounded transition"
+              className="p-1.5 hover:text-gray-800 hover:bg-gray-100 rounded-lg transition"
               title="Undo"
             >
               <Undo2 className="w-4 h-4" />
             </button>
             <button
               onClick={() => document.execCommand('redo')}
-              className="p-1 hover:text-gray-700 hover:bg-gray-100 rounded transition"
+              className="p-1.5 hover:text-gray-800 hover:bg-gray-100 rounded-lg transition"
               title="Redo"
             >
               <Redo2 className="w-4 h-4" />
@@ -553,50 +578,50 @@ export const WritingExamRoom: FC<WritingExamRoomProps> = ({ exam, onBackToHome }
           </div>
 
           {/* Textarea */}
-          <div className="flex-1 p-3 sm:p-4 relative">
+          <div className="flex-1 p-4 sm:p-5 relative">
             <textarea
               ref={textareaRef}
               value={currentText}
               onChange={(e) => setCurrentText(e.target.value)}
-              placeholder="Type your answer here..."
+              placeholder="Type your essay response here..."
               spellCheck={false}
-              className="w-full h-full p-2 resize-none border-0 outline-none text-sm text-gray-800 leading-relaxed font-sans placeholder-gray-400"
+              className="w-full h-full p-4 resize-none rounded-2xl border-2 border-gray-200 bg-white focus:border-blue-500 outline-none text-sm text-gray-800 leading-relaxed font-sans placeholder-gray-400 shadow-2xs transition"
             />
           </div>
 
           {/* Bottom Word Count indicator */}
-          <div className="h-8 border-t border-gray-200 px-4 flex items-center justify-end bg-white shrink-0">
+          <div className="h-9 border-t-2 border-gray-200 px-5 flex items-center justify-end bg-white shrink-0">
             <span
-              className={`text-xs ${
-                currentWords >= minWords ? 'text-emerald-600 font-semibold' : 'text-amber-600'
+              className={`text-xs font-bold ${
+                currentWords >= minWords ? 'text-emerald-600' : 'text-amber-600'
               }`}
             >
-              Số từ: {currentWords} (Tối thiểu {minWords} từ)
+              Word count: {currentWords} (Minimum {minWords} words)
             </span>
           </div>
         </div>
       </div>
 
       {/* 3. BOTTOM BAR (Responsive for PC & Mobile) */}
-      <footer className="min-h-12 py-2 sm:py-0 sm:h-12 border-t border-gray-200 bg-slate-50 px-3 sm:px-5 flex flex-wrap items-center justify-between gap-2 shrink-0">
+      <footer className="min-h-[52px] py-2 sm:py-0 border-t-2 border-gray-200 bg-white px-3 sm:px-5 flex flex-wrap items-center justify-between gap-2 shrink-0 shadow-xs">
         {/* Left Task Tabs */}
-        <div className="flex items-center gap-1.5">
+        <div className="flex items-center gap-2">
           <button
             onClick={() => setActiveTaskNum(1)}
-            className={`px-2.5 sm:px-4 py-1.5 rounded text-xs font-bold transition ${
+            className={`px-3.5 py-1.5 rounded-xl text-xs font-bold border-2 transition ${
               activeTaskNum === 1
-                ? 'bg-blue-600 text-white shadow-xs'
-                : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-100'
+                ? 'bg-blue-600 text-white border-blue-600 shadow-xs'
+                : 'bg-gray-100 text-gray-700 border-gray-200 hover:bg-gray-200'
             }`}
           >
             Task 1 {task1Words > 0 && `(${task1Words})`}
           </button>
           <button
             onClick={() => setActiveTaskNum(2)}
-            className={`px-2.5 sm:px-4 py-1.5 rounded text-xs font-bold transition ${
+            className={`px-3.5 py-1.5 rounded-xl text-xs font-bold border-2 transition ${
               activeTaskNum === 2
-                ? 'bg-blue-600 text-white shadow-xs'
-                : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-100'
+                ? 'bg-blue-600 text-white border-blue-600 shadow-xs'
+                : 'bg-gray-100 text-gray-700 border-gray-200 hover:bg-gray-200'
             }`}
           >
             Task 2 {task2Words > 0 && `(${task2Words})`}
@@ -604,32 +629,32 @@ export const WritingExamRoom: FC<WritingExamRoomProps> = ({ exam, onBackToHome }
         </div>
 
         {/* Right Action Buttons */}
-        <div className="flex items-center gap-1.5 sm:gap-2.5">
+        <div className="flex items-center gap-1.5 sm:gap-2">
           <button
             onClick={() => setShowNotesModal(true)}
-            className="px-2 sm:px-3 py-1.5 sm:py-1 text-xs font-semibold text-gray-700 hover:text-gray-900 bg-white border border-gray-300 rounded hover:bg-gray-100 transition flex items-center gap-1"
-            title="Ghi chú"
+            className="px-3 py-1.5 text-xs font-bold text-gray-700 hover:text-gray-900 bg-gray-100 border-2 border-gray-200 rounded-xl hover:bg-gray-200 transition flex items-center gap-1.5"
+            title="Scratchpad Notes"
           >
             <FileText className="w-3.5 h-3.5" />
-            <span className="hidden sm:inline">Ghi chú</span>
+            <span className="hidden sm:inline">Notes</span>
           </button>
 
           <button
             onClick={() => setShowReviewModal(true)}
-            className="px-2 sm:px-3 py-1.5 sm:py-1 text-xs font-semibold text-gray-700 hover:text-gray-900 bg-white border border-gray-300 rounded hover:bg-gray-100 transition flex items-center gap-1"
-            title="Xem lại bài làm"
+            className="px-3 py-1.5 text-xs font-bold text-gray-700 hover:text-gray-900 bg-gray-100 border-2 border-gray-200 rounded-xl hover:bg-gray-200 transition flex items-center gap-1.5"
+            title="Review Essay"
           >
             <Eye className="w-3.5 h-3.5" />
-            <span className="hidden md:inline">Xem lại bài làm</span>
+            <span className="hidden md:inline">Review Essay</span>
           </button>
 
           <button
             onClick={() => setShowGuideModal(true)}
-            className="px-2 sm:px-3 py-1.5 sm:py-1 text-xs font-semibold text-gray-700 hover:text-gray-900 bg-white border border-gray-300 rounded hover:bg-gray-100 transition flex items-center gap-1"
-            title="Hướng dẫn"
+            className="px-3 py-1.5 text-xs font-bold text-gray-700 hover:text-gray-900 bg-gray-100 border-2 border-gray-200 rounded-xl hover:bg-gray-200 transition flex items-center gap-1.5"
+            title="Instructions"
           >
             <HelpCircle className="w-3.5 h-3.5" />
-            <span className="hidden md:inline">Hướng dẫn</span>
+            <span className="hidden md:inline">Instructions</span>
           </button>
 
           <button
@@ -637,30 +662,30 @@ export const WritingExamRoom: FC<WritingExamRoomProps> = ({ exam, onBackToHome }
               clearWritingProgress(exam.id);
               setIsSubmitted(true);
             }}
-            className="px-3 sm:px-4 py-1.5 text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 rounded transition shadow-xs flex items-center gap-1.5"
+            className="px-4 py-1.5 text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-xl transition shadow-xs flex items-center gap-1.5"
           >
             <CheckCircle2 className="w-4 h-4" />
-            <span>Nộp bài</span>
+            <span>Submit Essay</span>
           </button>
         </div>
       </footer>
 
       {/* 4. RESULT & MODEL ANSWER MODAL AFTER SUBMISSION */}
       {isSubmitted && (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-xl shadow-2xl max-w-4xl w-full max-h-[90vh] flex flex-col overflow-hidden border border-gray-200">
+        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-4xl w-full max-h-[90vh] flex flex-col overflow-hidden border-2 border-gray-200">
             {/* Modal Header */}
-            <div className="p-5 border-b border-gray-200 flex items-center justify-between bg-slate-50">
+            <div className="p-5 border-b-2 border-gray-100 flex items-center justify-between bg-slate-50/70">
               <div className="flex items-center gap-2.5">
-                <div className="w-8 h-8 rounded-lg bg-emerald-600 text-white flex items-center justify-center">
+                <div className="w-9 h-9 rounded-xl bg-emerald-600 text-white flex items-center justify-center shadow-2xs">
                   <Award className="w-5 h-5" />
                 </div>
                 <div>
-                  <h3 className="text-base font-bold text-gray-900">
-                    Kết Quả Nộp Bài & Đáp Án Mẫu Band 8.5+
+                  <h3 className="text-base font-extrabold text-gray-900">
+                    Writing Submission &amp; Band 8.5+ Model Essays
                   </h3>
-                  <p className="text-xs text-gray-500">
-                    Task 1: {task1Words} từ • Task 2: {task2Words} từ
+                  <p className="text-xs font-medium text-gray-500">
+                    Task 1: {task1Words} words • Task 2: {task2Words} words
                   </p>
                 </div>
               </div>
@@ -668,50 +693,50 @@ export const WritingExamRoom: FC<WritingExamRoomProps> = ({ exam, onBackToHome }
               <div className="flex items-center gap-2">
                 <button
                   onClick={() => setShowAiCoachModal(true)}
-                  className="px-3.5 py-1.5 text-xs font-semibold text-white bg-slate-900 hover:bg-slate-800 rounded-lg flex items-center gap-1.5 shadow-xs transition"
-                  title="Mở bảng tạo prompt cá nhân hoá theo mục tiêu Band để gửi AI"
+                  className="px-3.5 py-1.5 text-xs font-bold text-white bg-slate-900 hover:bg-slate-800 rounded-xl flex items-center gap-1.5 shadow-xs transition"
+                  title="Generate personalized AI coaching prompt"
                 >
                   <Sparkles className="w-3.5 h-3.5 text-blue-400" />
-                  <span>Copy Prompt Cho AI</span>
+                  <span>Copy AI Coach Prompt</span>
                 </button>
 
                 <button
                   onClick={() => setIsSubmitted(false)}
-                  className="px-3 py-1.5 text-xs font-semibold text-gray-700 bg-white hover:bg-gray-100 border border-gray-300 rounded transition"
+                  className="px-3.5 py-1.5 text-xs font-bold text-gray-700 bg-white hover:bg-gray-100 border-2 border-gray-200 rounded-xl transition"
                 >
-                  Tiếp tục sửa bài
+                  Continue Editing
                 </button>
 
                 <button
                   onClick={onBackToHome}
-                  className="px-3 py-1.5 text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 rounded transition"
+                  className="px-3.5 py-1.5 text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-xl transition"
                 >
-                  Về Trang Chủ
+                  Back to Home
                 </button>
               </div>
             </div>
 
             {/* Modal Content */}
-            <div className="flex-1 overflow-y-auto p-6 space-y-6 bg-slate-50">
+            <div className="flex-1 overflow-y-auto p-6 space-y-6 bg-slate-50/60">
               {/* Task 1 Comparison */}
-              <div className="bg-white p-5 rounded-xl border border-gray-200 space-y-3">
-                <div className="flex items-center justify-between border-b pb-2">
-                  <span className="text-sm font-bold text-blue-700">TASK 1 MODEL ANSWER (Simon Band 9.0)</span>
-                  <span className="text-xs text-gray-500">Bài làm của bạn: {task1Words} từ</span>
+              <div className="bg-white p-5 rounded-2xl border-2 border-gray-200 space-y-3 shadow-2xs">
+                <div className="flex items-center justify-between border-b-2 border-gray-100 pb-2.5">
+                  <span className="text-sm font-extrabold text-blue-700">TASK 1 MODEL ANSWER (Simon Band 9.0)</span>
+                  <span className="text-xs font-semibold text-gray-500">Your essay: {task1Words} words</span>
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   {/* Your Answer */}
-                  <div className="p-3 bg-gray-50 rounded-lg border border-gray-200">
-                    <h5 className="text-xs font-bold text-gray-700 mb-2">Bài viết của bạn:</h5>
+                  <div className="p-4 bg-slate-50 rounded-xl border-2 border-gray-200">
+                    <h5 className="text-xs font-bold text-gray-700 mb-2">Your Response:</h5>
                     <div className="text-xs text-gray-800 whitespace-pre-wrap leading-relaxed max-h-60 overflow-y-auto">
-                      {task1Text || <span className="text-gray-400 italic">Chưa nhập bài làm</span>}
+                      {task1Text || <span className="text-gray-400 italic">No response submitted</span>}
                     </div>
                   </div>
 
                   {/* Model Answer */}
-                  <div className="p-3 bg-emerald-50/60 rounded-lg border border-emerald-200">
-                    <h5 className="text-xs font-bold text-emerald-800 mb-2">Bài mẫu chuẩn Band 9.0:</h5>
+                  <div className="p-4 bg-emerald-50/60 rounded-xl border-2 border-emerald-200">
+                    <h5 className="text-xs font-bold text-emerald-800 mb-2">Band 9.0 Model Essay:</h5>
                     <div className="text-xs text-gray-800 whitespace-pre-wrap leading-relaxed max-h-60 overflow-y-auto">
                       {exam.task1.sampleAnswer}
                     </div>
@@ -723,13 +748,13 @@ export const WritingExamRoom: FC<WritingExamRoomProps> = ({ exam, onBackToHome }
                   <div className="pt-2">
                     <h5 className="text-xs font-bold text-gray-700 mb-1.5 flex items-center gap-1">
                       <BookOpen className="w-3.5 h-3.5 text-amber-600" />
-                      <span>Từ vựng & Cụm từ đắt giá cho dạng bài này:</span>
+                      <span>High-Scoring Vocabulary &amp; Expressions:</span>
                     </h5>
                     <div className="flex flex-wrap gap-2">
                       {exam.task1.keyVocabulary.map((v, i) => (
                         <span
                           key={i}
-                          className="text-[11px] bg-amber-50 text-amber-900 border border-amber-200 px-2 py-0.5 rounded"
+                          className="text-[11px] bg-amber-50 text-amber-900 border border-amber-200 px-2.5 py-1 rounded-lg"
                         >
                           <strong>{v.word}</strong>: {v.meaning}
                         </span>
@@ -740,24 +765,24 @@ export const WritingExamRoom: FC<WritingExamRoomProps> = ({ exam, onBackToHome }
               </div>
 
               {/* Task 2 Comparison */}
-              <div className="bg-white p-5 rounded-xl border border-gray-200 space-y-3">
-                <div className="flex items-center justify-between border-b pb-2">
-                  <span className="text-sm font-bold text-blue-700">TASK 2 MODEL ESSAY (Band 8.5+)</span>
-                  <span className="text-xs text-gray-500">Bài làm của bạn: {task2Words} từ</span>
+              <div className="bg-white p-5 rounded-2xl border-2 border-gray-200 space-y-3 shadow-2xs">
+                <div className="flex items-center justify-between border-b-2 border-gray-100 pb-2.5">
+                  <span className="text-sm font-extrabold text-blue-700">TASK 2 MODEL ESSAY (Band 8.5+)</span>
+                  <span className="text-xs font-semibold text-gray-500">Your essay: {task2Words} words</span>
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   {/* Your Answer */}
-                  <div className="p-3 bg-gray-50 rounded-lg border border-gray-200">
-                    <h5 className="text-xs font-bold text-gray-700 mb-2">Bài viết của bạn:</h5>
+                  <div className="p-4 bg-slate-50 rounded-xl border-2 border-gray-200">
+                    <h5 className="text-xs font-bold text-gray-700 mb-2">Your Response:</h5>
                     <div className="text-xs text-gray-800 whitespace-pre-wrap leading-relaxed max-h-60 overflow-y-auto">
-                      {task2Text || <span className="text-gray-400 italic">Chưa nhập bài làm</span>}
+                      {task2Text || <span className="text-gray-400 italic">No response submitted</span>}
                     </div>
                   </div>
 
                   {/* Model Answer */}
-                  <div className="p-3 bg-emerald-50/60 rounded-lg border border-emerald-200">
-                    <h5 className="text-xs font-bold text-emerald-800 mb-2">Bài mẫu chuẩn Band 8.5+:</h5>
+                  <div className="p-4 bg-emerald-50/60 rounded-xl border-2 border-emerald-200">
+                    <h5 className="text-xs font-bold text-emerald-800 mb-2">Band 8.5+ Model Essay:</h5>
                     <div className="text-xs text-gray-800 whitespace-pre-wrap leading-relaxed max-h-60 overflow-y-auto">
                       {exam.task2.sampleAnswer}
                     </div>
@@ -769,13 +794,13 @@ export const WritingExamRoom: FC<WritingExamRoomProps> = ({ exam, onBackToHome }
                   <div className="pt-2">
                     <h5 className="text-xs font-bold text-gray-700 mb-1.5 flex items-center gap-1">
                       <BookOpen className="w-3.5 h-3.5 text-amber-600" />
-                      <span>Từ vựng C1-C2 dùng trong bài mẫu:</span>
+                      <span>C1-C2 Academic Vocabulary Used in Model Essay:</span>
                     </h5>
                     <div className="flex flex-wrap gap-2">
                       {exam.task2.keyVocabulary.map((v, i) => (
                         <span
                           key={i}
-                          className="text-[11px] bg-sky-50 text-sky-900 border border-sky-200 px-2 py-0.5 rounded"
+                          className="text-[11px] bg-sky-50 text-sky-900 border border-sky-200 px-2.5 py-1 rounded-lg"
                         >
                           <strong>{v.word}</strong>: {v.meaning}
                         </span>
@@ -791,22 +816,22 @@ export const WritingExamRoom: FC<WritingExamRoomProps> = ({ exam, onBackToHome }
 
       {/* 5. NOTES MODAL */}
       {showNotesModal && (
-        <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-xl shadow-xl max-w-md w-full p-5 space-y-3">
-            <h4 className="text-sm font-bold text-gray-900">Sổ tay ghi chú (Scratchpad)</h4>
+        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl border-2 border-gray-200 shadow-2xl max-w-md w-full p-5 space-y-3">
+            <h4 className="text-sm font-extrabold text-gray-900">Scratchpad Notes</h4>
             <textarea
               value={notesText}
               onChange={(e) => setNotesText(e.target.value)}
-              placeholder="Ghi nhanh dàn bài, từ vựng hoặc ý tưởng tại đây..."
+              placeholder="Jot down your essay outline, key vocabulary, or ideas here..."
               rows={8}
-              className="w-full p-3 border border-gray-300 rounded text-xs focus:ring-2 focus:ring-blue-500 outline-none"
+              className="w-full p-3 border-2 border-gray-200 rounded-xl text-xs focus:border-blue-500 outline-none"
             />
             <div className="flex justify-end">
               <button
                 onClick={() => setShowNotesModal(false)}
-                className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded"
+                className="px-4 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl"
               >
-                Đóng
+                Close
               </button>
             </div>
           </div>
@@ -815,34 +840,34 @@ export const WritingExamRoom: FC<WritingExamRoomProps> = ({ exam, onBackToHome }
 
       {/* 6. REVIEW MODAL */}
       {showReviewModal && (
-        <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-xl shadow-xl max-w-2xl w-full max-h-[80vh] flex flex-col overflow-hidden">
-            <div className="p-4 border-b flex justify-between items-center">
-              <h4 className="text-sm font-bold text-gray-900">Xem Lại Toàn Bộ Bài Làm</h4>
+        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl border-2 border-gray-200 shadow-2xl max-w-2xl w-full max-h-[80vh] flex flex-col overflow-hidden">
+            <div className="p-4 border-b-2 border-gray-100 flex justify-between items-center">
+              <h4 className="text-sm font-extrabold text-gray-900">Review Full Submission</h4>
               <button onClick={() => setShowReviewModal(false)} className="text-gray-400 hover:text-gray-700">
                 ✕
               </button>
             </div>
             <div className="p-5 overflow-y-auto space-y-4 text-xs">
               <div>
-                <h5 className="font-bold text-blue-700 mb-1">TASK 1 ({task1Words} từ):</h5>
-                <div className="p-3 bg-gray-50 rounded border border-gray-200 whitespace-pre-wrap">
-                  {task1Text || '(Chưa viết)'}
+                <h5 className="font-bold text-blue-700 mb-1.5">TASK 1 ({task1Words} words):</h5>
+                <div className="p-3.5 bg-slate-50 rounded-xl border-2 border-gray-200 whitespace-pre-wrap">
+                  {task1Text || '(No response yet)'}
                 </div>
               </div>
               <div>
-                <h5 className="font-bold text-blue-700 mb-1">TASK 2 ({task2Words} từ):</h5>
-                <div className="p-3 bg-gray-50 rounded border border-gray-200 whitespace-pre-wrap">
-                  {task2Text || '(Chưa viết)'}
+                <h5 className="font-bold text-blue-700 mb-1.5">TASK 2 ({task2Words} words):</h5>
+                <div className="p-3.5 bg-slate-50 rounded-xl border-2 border-gray-200 whitespace-pre-wrap">
+                  {task2Text || '(No response yet)'}
                 </div>
               </div>
             </div>
-            <div className="p-3 border-t flex justify-end">
+            <div className="p-3.5 border-t-2 border-gray-100 flex justify-end">
               <button
                 onClick={() => setShowReviewModal(false)}
-                className="px-4 py-1.5 bg-blue-600 text-white text-xs font-bold rounded"
+                className="px-4 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl"
               >
-                Tiếp Tục Viết
+                Keep Writing
               </button>
             </div>
           </div>
@@ -851,21 +876,21 @@ export const WritingExamRoom: FC<WritingExamRoomProps> = ({ exam, onBackToHome }
 
       {/* 7. GUIDE MODAL */}
       {showGuideModal && (
-        <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-xl shadow-xl max-w-md w-full p-5 space-y-3">
-            <h4 className="text-sm font-bold text-gray-900">Hướng Dẫn Thi IELTS Writing Trên Máy</h4>
+        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl border-2 border-gray-200 shadow-2xl max-w-md w-full p-5 space-y-3">
+            <h4 className="text-sm font-extrabold text-gray-900">Computer-Delivered IELTS Writing Guide</h4>
             <div className="text-xs text-gray-600 space-y-2 leading-relaxed">
-              <p>• <strong>Thời gian làm bài:</strong> 60 phút cho cả 2 task. Bạn có thể tự do chuyển đổi giữa Task 1 và Task 2 bất kỳ lúc nào.</p>
-              <p>• <strong>Khuyến nghị phân bổ:</strong> Dành 20 phút cho Task 1 (tối thiểu 150 từ) và 40 phút cho Task 2 (tối thiểu 250 từ).</p>
-              <p>• <strong>Thanh công cụ:</strong> Sử dụng các nút Cut, Copy, Undo, Redo trên đầu khung gõ để chỉnh sửa văn bản nhanh.</p>
-              <p>• <strong>Ẩn đồng hồ:</strong> Bấm nút "Ẩn" cạnh thời gian nếu bạn muốn tập trung viết mà không bị áp lực số phút đếm ngược.</p>
+              <p>• <strong>Total Duration:</strong> 60 minutes for both tasks. You can freely switch between Task 1 and Task 2 at any time.</p>
+              <p>• <strong>Recommended Time Split:</strong> Spend about 20 minutes on Task 1 (at least 150 words) and 40 minutes on Task 2 (at least 250 words).</p>
+              <p>• <strong>Editor Toolbar:</strong> Use the Cut, Copy, Undo, and Redo buttons at the top of the editor for quick text editing.</p>
+              <p>• <strong>Auto-Save:</strong> Your essay draft and remaining timer are saved automatically so you can exit and resume anytime.</p>
             </div>
             <div className="flex justify-end pt-2">
               <button
                 onClick={() => setShowGuideModal(false)}
-                className="px-4 py-1.5 bg-blue-600 text-white text-xs font-bold rounded"
+                className="px-4 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl"
               >
-                Đã hiểu
+                Got It
               </button>
             </div>
           </div>
@@ -879,8 +904,8 @@ export const WritingExamRoom: FC<WritingExamRoomProps> = ({ exam, onBackToHome }
         skillType="writing"
         taskTitle={exam.title}
         taskPrompt={`TASK 1:\n${exam.task1.prompt}\n\nTASK 2:\n${exam.task2.prompt}`}
-        userContent={`--- BÀI LÀM TASK 1 (${task1Words} từ) ---\n${task1Text || '(Chưa làm)'}\n\n--- BÀI LÀM TASK 2 (${task2Words} từ) ---\n${task2Text || '(Chưa làm)'}`}
-        sampleContent={`--- BÀI MẪU TASK 1 (Band 9.0 Simon) ---\n${exam.task1.sampleAnswer}\n\n--- BÀI MẪU TASK 2 (Band 8.5+) ---\n${exam.task2.sampleAnswer}`}
+        userContent={`--- TASK 1 SUBMISSION (${task1Words} words) ---\n${task1Text || '(Not written yet)'}\n\n--- TASK 2 SUBMISSION (${task2Words} words) ---\n${task2Text || '(Not written yet)'}`}
+        sampleContent={`--- TASK 1 MODEL ESSAY (Band 9.0 Simon) ---\n${exam.task1.sampleAnswer}\n\n--- TASK 2 MODEL ESSAY (Band 8.5+) ---\n${exam.task2.sampleAnswer}`}
         wordCount={task1Words + task2Words}
       />
     </div>

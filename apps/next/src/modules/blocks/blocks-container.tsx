@@ -892,8 +892,8 @@ export const BlocksContainer: React.FC = () => {
               >
                 <Text fontSize="xs" fontWeight={700} color="gray.500">
                   {phase === "placing"
-                    ? "Kéo-thả (hoặc chạm/click) khối hình vào bảng 8×8"
-                    : "Trả lời câu hỏi bên phải để nhận 3 khối mới"}
+                    ? "Drag & drop (or tap/click) a block piece onto the 8×8 board"
+                    : "Answer the question on the right to unlock 3 new blocks"}
                 </Text>
 
                 {phase === "placing" && pieces.length > 0 && (
@@ -904,9 +904,9 @@ export const BlocksContainer: React.FC = () => {
                       colorScheme="blue"
                       leftIcon={<IconRotateClockwise size={14} />}
                       onClick={handleRotateSelectedPiece}
-                      title="Xoay khối đang chọn 90° (Phím R)"
+                      title="Rotate selected block 90° (Key R)"
                     >
-                      Xoay (R)
+                      Rotate (R)
                     </Button>
                     <Button
                       size="xs"
@@ -914,9 +914,9 @@ export const BlocksContainer: React.FC = () => {
                       colorScheme="gray"
                       leftIcon={<IconRefresh size={14} />}
                       onClick={handleRerollPieces}
-                      title="Đổi 3 khối khác"
+                      title="Reroll 3 new blocks"
                     >
-                      Đổi khối
+                      Reroll
                     </Button>
                   </HStack>
                 )}
@@ -978,7 +978,7 @@ export const BlocksContainer: React.FC = () => {
                   })
                 ) : (
                   <Text fontSize="xs" color="gray.400">
-                    Đã xếp hết 3 khối — hãy trả lời câu hỏi bên phải để lấy thêm!
+                    All 3 blocks placed — answer the question on the right to get more!
                   </Text>
                 )}
               </HStack>
@@ -1008,7 +1008,7 @@ export const BlocksContainer: React.FC = () => {
             {terms.length === 0 ? (
               <Stack spacing={3} py={4} textAlign="center">
                 <Text fontSize="sm" color="gray.500">
-                  Bộ học tập này chưa có thẻ từ vựng nào.
+                  This study set does not contain any terms yet.
                 </Text>
                 <Button
                   as={Link}
@@ -1016,7 +1016,7 @@ export const BlocksContainer: React.FC = () => {
                   colorScheme="blue"
                   size="sm"
                 >
-                  Quay lại bộ thẻ
+                  Back to study set
                 </Button>
               </Stack>
             ) : phase === "question" && currentQuestion ? (
@@ -1035,7 +1035,7 @@ export const BlocksContainer: React.FC = () => {
                     fontWeight={600}
                     mb={1}
                   >
-                    CÂU HỎI ÔN TẬP
+                    REVIEW QUESTION
                   </Text>
                   <Text fontSize="md" fontWeight={700}>
                     {currentQuestion.prompt}
@@ -1043,7 +1043,7 @@ export const BlocksContainer: React.FC = () => {
                 </Box>
 
                 <Text fontSize="xs" fontWeight={700} color="gray.500">
-                  Chọn đáp án đúng để mở khóa 3 khối tiếp theo:
+                  Choose the correct answer to unlock 3 new blocks:
                 </Text>
 
                 <Stack spacing={2}>
@@ -1110,7 +1110,7 @@ export const BlocksContainer: React.FC = () => {
                     color="green.600"
                     _dark={{ color: "green.300" }}
                   >
-                    Lượt xếp gạch ({pieces.length} khối còn lại)
+                    Placement Phase ({pieces.length} {pieces.length === 1 ? "block" : "blocks"} left)
                   </Text>
                   <Text
                     fontSize="xs"
@@ -1118,18 +1118,18 @@ export const BlocksContainer: React.FC = () => {
                     _dark={{ color: "gray.300" }}
                     mt={1}
                   >
-                    Kéo-thả trực tiếp khối hình từ khay bên dưới lên bảng 8×8 (hoặc bấm phím R để xoay khối). Lấp đầy hàng ngang hoặc cột dọc để ghi điểm combo!
+                    Drag &amp; drop blocks from the dock onto the 8×8 board (or press R to rotate). Fill rows or columns to score combo points!
                   </Text>
                 </Box>
 
                 <Box p={4} bg={statBoxBg} rounded="xl">
                   <Text fontSize="xs" fontWeight={700} color="gray.500" mb={2}>
-                    TIẾN ĐỘ HỌC TẬP
+                    STUDY PROGRESS
                   </Text>
                   <SimpleGrid columns={2} spacing={3}>
                     <Box>
                       <Text fontSize="xs" color="gray.500">
-                        THẺ ĐÃ ÔN
+                        CARDS REVIEWED
                       </Text>
                       <Text fontSize="lg" fontWeight={700} color="blue.500">
                         {cardsAnswered}
@@ -1137,7 +1137,7 @@ export const BlocksContainer: React.FC = () => {
                     </Box>
                     <Box>
                       <Text fontSize="xs" color="gray.500">
-                        CHUỖI ĐÚNG
+                        STREAK
                       </Text>
                       <Text fontSize="lg" fontWeight={700} color="orange.500">
                         {streak} 🔥
@@ -1167,7 +1167,7 @@ export const BlocksContainer: React.FC = () => {
               />
               <Heading size="md">Game Over</Heading>
               <Text fontSize="xs" color="gray.500" mt={1}>
-                Không còn chỗ trống hợp lệ trên bàn cờ cho các khối còn lại.
+                No valid spaces left on the board for the remaining blocks.
               </Text>
             </ModalHeader>
 

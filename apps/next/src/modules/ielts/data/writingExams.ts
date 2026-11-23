@@ -18,18 +18,18 @@ export const sampleWritingExams: WritingExam[] = [
       prompt:
         'The chart below shows the expenditure on three categories among different age groups of residents in the UK in 2004. Summarise the information by selecting and reporting the main features, and make comparisons where relevant.',
       analysisTips: [
-        'Nhóm tuổi lớn nhất (76+) và nhóm 61-75 chi tiêu nhiều nhất cho Food and Drink.',
-        'Nhóm trẻ tuổi nhất (Under 30) chi tiêu cao nhất cho Restaurant and Hotel (14%).',
-        'Chi tiêu cho Entertainment đạt đỉnh ở nhóm tuổi 61-75 (23%).',
-        'Phần Overview cần nêu bật 2 xu hướng chính: Food & Drink tăng theo độ tuổi, trong khi Restaurant & Hotel giảm dần.',
+        'The oldest age group (76+) and the 61-75 group spent the highest share on Food and Drink.',
+        'The youngest group (Under 30) spent the largest proportion on Restaurant and Hotel (14%).',
+        'Spending on Entertainment peaked in the 61-75 age group (23%).',
+        'The Overview should highlight two main trends: Food & Drink increases with age, whereas Restaurant & Hotel generally declines.',
       ],
       keyVocabulary: [
-        { word: 'expenditure / spending allocation', meaning: 'Khoản chi tiêu / phân bổ chi tiêu' },
-        { word: 'peaked at / reached a pinnacle of', meaning: 'Đạt đỉnh tại mức...' },
-        { word: 'in sharp contrast to', meaning: 'Tương phản rõ rệt với' },
-        { word: 'allocated approximately', meaning: 'Dành ra khoảng...' },
-        { word: 'accounted for a mere 2%', meaning: 'Chỉ chiếm vỏn vẹn 2%' },
-        { word: 'grew progressively', meaning: 'Tăng dần đều đặn qua các nhóm' },
+        { word: 'expenditure / spending allocation', meaning: 'Budget share dedicated to a category' },
+        { word: 'peaked at / reached a pinnacle of', meaning: 'Reached the highest point at...' },
+        { word: 'in sharp contrast to', meaning: 'Showing a clear opposite trend compared with' },
+        { word: 'allocated approximately', meaning: 'Dedicated roughly...' },
+        { word: 'accounted for a mere 2%', meaning: 'Made up only a very small share of 2%' },
+        { word: 'grew progressively', meaning: 'Increased steadily across consecutive groups' },
       ],
       sampleAnswer: `The bar chart compares the percentage of total spending allocated to food and drink, restaurants and hotels, and entertainment across five age demographics in the United Kingdom in 2004.
 
@@ -49,18 +49,18 @@ Regarding entertainment, spending levels fluctuated substantially. The under-30 
       prompt:
         'Some people think that university education should be free for everyone. Others think that students should pay for their higher education. Discuss both views and give your own opinion.',
       analysisTips: [
-        'Dạng bài: Discussion Essay (Thảo luận 2 quan điểm + Đưa ra ý kiến cá nhân).',
-        'Body 1: Lập luận vì sao một số người ủng hộ miễn học phí (Bình đẳng cơ hội, giảm gánh nặng nợ nần, phát triển nhân lực quốc gia).',
-        'Body 2: Lập luận vì sao nên thu học phí (Giảm áp lực ngân sách nhà nước, nâng cao tính tự giác và chất lượng giảng dạy).',
-        'Kết bài: Tóm tắt quan điểm cân bằng (Học phí có trợ cấp hoặc học bổng cho sinh viên hoàn cảnh khó khăn).',
+        'Essay Type: Discussion Essay (Discuss both views + Give your personal opinion).',
+        'Body 1: Arguments supporting tuition-free university (Equal opportunity, reduced student debt, national workforce development).',
+        'Body 2: Arguments supporting student-paid tuition (Relieving public budget pressure, encouraging student accountability and teaching quality).',
+        'Conclusion: Balanced thesis (Moderate tuition combined with state subsidies and scholarships for disadvantaged students).',
       ],
       keyVocabulary: [
-        { word: 'tertiary education / higher education', meaning: 'Giáo dục đại học' },
-        { word: 'financial burden', meaning: 'Gánh nặng tài chính' },
-        { word: 'equal access to opportunities', meaning: 'Cơ hội tiếp cận bình đẳng' },
-        { word: 'subsidise / state subsidies', meaning: 'Trợ cấp nhà nước' },
-        { word: 'fiscal strain on public funds', meaning: 'Áp lực tài khóa lên ngân sách công' },
-        { word: 'merit-based scholarship', meaning: 'Học bổng dựa trên thành tích' },
+        { word: 'tertiary education / higher education', meaning: 'University-level post-secondary education' },
+        { word: 'financial burden', meaning: 'Heavy monetary cost or debt pressure' },
+        { word: 'equal access to opportunities', meaning: 'Fair educational access regardless of background' },
+        { word: 'subsidise / state subsidies', meaning: 'Government financial support' },
+        { word: 'fiscal strain on public funds', meaning: 'Budgetary pressure on government revenue' },
+        { word: 'merit-based scholarship', meaning: 'Financial aid awarded for academic excellence' },
       ],
       sampleAnswer: `The debate over whether higher education should be provided free of charge or financed by students themselves has sparked considerable controversy. While there are convincing arguments that tertiary education ought to be publicly funded, I believe that students should contribute financially to their studies, complemented by state-supported scholarships for underprivileged individuals.
 
@@ -88,14 +88,14 @@ In conclusion, although free higher education promotes equal access for all citi
       prompt:
         'The line graph below shows the percentage of people using the internet in three countries (USA, Canada, and Mexico) between 2010 and 2020. Summarise the information by selecting and reporting the main features, and make comparisons where relevant.',
       analysisTips: [
-        'Cả 3 nước đều có xu hướng tăng đều đặn qua các năm.',
-        'Canada và USA luôn dẫn đầu với tỉ lệ trên 70-80%.',
-        'Mexico tăng trưởng nhanh nhất từ 30% lên gần 70%.',
+        'All three countries experienced a steady upward trend over the decade.',
+        'Canada and the USA consistently led with usage rates above 70-80%.',
+        'Mexico grew the fastest, more than doubling from 30% to nearly 70%.',
       ],
       keyVocabulary: [
-        { word: 'steadily escalated', meaning: 'Tăng đều đặn' },
-        { word: 'remained dominant', meaning: 'Giữ vị trí áp đảo' },
-        { word: 'narrowed the disparity', meaning: 'Thu hẹp khoảng cách' },
+        { word: 'steadily escalated', meaning: 'Increased continuously and consistently' },
+        { word: 'remained dominant', meaning: 'Held the leading position throughout' },
+        { word: 'narrowed the disparity', meaning: 'Reduced the gap between countries' },
       ],
       sampleAnswer: `The line graph illustrates the proportion of citizens utilizing the internet across three North American nations—the United States, Canada, and Mexico—over a decade from 2010 to 2020.
 
@@ -115,15 +115,15 @@ Meanwhile, Mexico commenced the period with a markedly lower proportion of appro
       prompt:
         'In many countries, an increasing number of people are choosing to work from home rather than in a traditional office. Do the advantages of this trend outweigh the disadvantages?',
       analysisTips: [
-        'Dạng bài: Advantages vs Disadvantages.',
-        'Ưu điểm: Tiết kiệm thời gian di chuyển, cân bằng công việc - gia đình, tiết kiệm chi phí văn phòng cho doanh nghiệp.',
-        'Nhược điểm: Giảm tính gắn kết đồng đội, khó tách biệt công việc và cuộc sống cá nhân, cảm giác cô lập.',
+        'Essay Type: Advantages vs Disadvantages (Outweigh Essay).',
+        'Advantages: Eliminates commuting time, improves work-life balance, and reduces office overhead costs for companies.',
+        'Disadvantages: Reduces team cohesion, blurs boundaries between work and personal life, and increases feelings of isolation.',
       ],
       keyVocabulary: [
-        { word: 'telecommuting / remote working', meaning: 'Làm việc từ xa' },
-        { word: 'eliminate commuting times', meaning: 'Xóa bỏ thời gian đi lại tắc đường' },
-        { word: 'work-life equilibrium', meaning: 'Sự cân bằng công việc - cuộc sống' },
-        { word: 'social isolation', meaning: 'Cảm giác cô lập xã hội' },
+        { word: 'telecommuting / remote working', meaning: 'Working from home via digital tools' },
+        { word: 'eliminate commuting times', meaning: 'Remove daily travel time in traffic' },
+        { word: 'work-life equilibrium', meaning: 'Healthy balance between career and personal life' },
+        { word: 'social isolation', meaning: 'Lack of interpersonal contact with colleagues' },
       ],
       sampleAnswer: `In recent years, the transition toward remote work has accelerated globally, with numerous professionals opting to work from home instead of conventional office environments. While this arrangement introduces notable obstacles regarding team cohesion and personal isolation, I believe that the flexibility and productivity enhancements it offers make the advantages far outweigh the disadvantages.
 

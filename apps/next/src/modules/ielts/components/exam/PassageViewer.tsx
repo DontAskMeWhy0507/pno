@@ -164,7 +164,7 @@ export const PassageViewer: FC<PassageViewerProps> = ({
       {floatingMenu.visible && (
         <div
           style={{ top: `${floatingMenu.top}px`, left: `${floatingMenu.left}px` }}
-          className="absolute z-30 flex items-center gap-1.5 bg-gray-900 text-white px-2 py-1 rounded-md shadow-lg text-xs"
+          className="absolute z-30 flex items-center gap-2 bg-gray-900 text-white px-3 py-1.5 rounded-xl border border-gray-700 shadow-xl text-xs"
           onMouseDown={(e) => e.preventDefault()} // Keep selection
         >
           <button
@@ -198,12 +198,12 @@ export const PassageViewer: FC<PassageViewerProps> = ({
       )}
 
       {/* Header section of Passage */}
-      <div className="mb-6 md:mb-8 text-center w-full">
-        <h2 className={`font-bold text-black tracking-tight mb-2 ${titleClass}`}>
+      <div className="mb-6 md:mb-8 pb-4 border-b-2 border-gray-100 text-center w-full">
+        <h2 className={`font-extrabold text-gray-900 tracking-tight mb-2 ${titleClass}`}>
           {renderMarkdownText(title)}
         </h2>
         {subtitle && (
-          <p className={`italic text-gray-700 leading-relaxed max-w-4xl mx-auto ${subtitleClass}`}>
+          <p className={`italic text-gray-600 leading-relaxed max-w-4xl mx-auto ${subtitleClass}`}>
             {renderMarkdownText(subtitle)}
           </p>
         )}

@@ -1,11 +1,73 @@
-import { useState, useEffect, type FC } from 'react';
-import type { Exam } from '../../types/exam';
-import type { WritingExam } from '../../types/writing';
-import type { SpeakingExam } from '../../types/speaking';
-import { getAllWritingExams, saveWritingExam, deleteWritingExam } from '../../data/writingExams';
-import { getAllSpeakingExams, saveSpeakingExam, deleteSpeakingExam } from '../../data/speakingExams';
-import { WritingEditorModal } from '../admin/WritingEditorModal';
-import { SpeakingEditorModal } from '../admin/SpeakingEditorModal';
+import React, { useState, useEffect, type FC } from "react";
+import { outfit } from "@quenti/lib/chakra-theme";
+import {
+  Badge,
+  Box,
+  Button,
+  Container,
+  Flex,
+  Grid,
+  GridItem,
+  HStack,
+  Heading,
+  Icon,
+  IconButton,
+  Input,
+  Menu,
+  MenuButton,
+  MenuList,
+  Modal,
+  ModalBody,
+  ModalCloseButton,
+  ModalContent,
+  ModalFooter,
+  ModalHeader,
+  ModalOverlay,
+  SimpleGrid,
+  Stack,
+  Text,
+  Textarea,
+  useColorModeValue,
+  useToast,
+} from "@chakra-ui/react";
+import {
+  IconArrowLeft,
+  IconArrowRight,
+  IconBook,
+  IconClock,
+  IconDotsVertical,
+  IconEdit,
+  IconFolder,
+  IconFolderPlus,
+  IconHeadphones,
+  IconMicrophone,
+  IconPencil,
+  IconPlayerPlay,
+  IconPlus,
+  IconRotateClockwise,
+  IconSchool,
+  IconSparkles,
+  IconTrash,
+  IconX,
+} from "@tabler/icons-react";
+
+import { menuEventChannel } from "../../../../events/menu";
+import { MenuOption } from "../../../../components/menu-option";
+import type { Exam } from "../../types/exam";
+import type { WritingExam } from "../../types/writing";
+import type { SpeakingExam } from "../../types/speaking";
+import {
+  getAllWritingExams,
+  saveWritingExam,
+  deleteWritingExam,
+} from "../../data/writingExams";
+import {
+  getAllSpeakingExams,
+  saveSpeakingExam,
+  deleteSpeakingExam,
+} from "../../data/speakingExams";
+import { WritingEditorModal } from "../admin/WritingEditorModal";
+import { SpeakingEditorModal } from "../admin/SpeakingEditorModal";
 import {
   deleteExam,
   getAllCollections,
@@ -13,39 +75,241 @@ import {
   createCollection,
   deleteCollection,
   isListeningExam,
-} from '../../utils/storage';
-import { getSavedExamSummary, clearExamProgress } from '../../utils/examProgress';
-import { getSavedWritingSummary, clearWritingProgress } from '../../utils/writingProgress';
-import { InProgressBanner, type InProgressItem } from './InProgressBanner';
-
+} from "../../utils/storage";
 import {
-  BookOpen,
-  Headphones,
-  PenTool,
-  Mic,
-  Search,
-  FolderOpen,
-  Play,
-  Clock,
-  Plus,
-  X,
-  Trash2,
-  Edit3,
-  FolderPlus,
-  Folder,
-  Award,
-} from 'lucide-react';
+  getSavedExamSummary,
+  clearExamProgress,
+} from "../../utils/examProgress";
+import {
+  getSavedWritingSummary,
+  clearWritingProgress,
+  loadSpeakingProgress,
+  clearSpeakingProgress,
+} from "../../utils/writingProgress";
+import { type InProgressItem } from "./InProgressBanner";
 
 interface HomePageProps {
   exams: Exam[];
   onSelectExam: (exam: Exam) => void;
   onOpenEditor: (exam?: Exam | null) => void;
   onOpenTestManager: () => void;
-  onOpenSmartImport: (collection?: string, skill?: 'reading' | 'listening' | 'writing' | 'speaking') => void;
+  onOpenSmartImport: (
+    collection?: string,
+    skill?: "reading" | "listening" | "writing" | "speaking",
+  ) => void;
   onRefreshExams: () => void;
   onStartWritingExam: (exam: WritingExam) => void;
   onStartSpeakingExam: (exam: SpeakingExam) => void;
 }
+
+interface UnifiedIeltsCardProps {
+  title: string;
+  collectionName: string;
+  metaText: string;
+  subText?: string;
+  skillColor: string;
+  skillBadgeLabel: string;
+  skillIcon: React.ElementType;
+  inProgressLabel?: string;
+  isCustom?: boolean;
+  onStart: () => void;
+  onEdit: () => void;
+  onDelete: () => void;
+  onDiscardProgress?: () => void;
+}
+
+/**
+ * UnifiedIeltsCard — Uses the exact same visual language as Quiz's GenericCard / StudySetCard:
+ * - 2px border, rounded="xl", p="5", shadow="lg", Outfit heading size="md"
+ * - Hover lift translateY(-2px) + bottom border highlight (blue.300)
+ * - Click anywhere on card to start/resume immediately
+ * - 3-dots menu (⋮) in bottom-right corner for Edit / Discard Progress / Delete
+ */
+const UnifiedIeltsCard: FC<UnifiedIeltsCardProps> = ({
+  title,
+  collectionName,
+  metaText,
+  subText,
+  skillColor,
+  skillBadgeLabel,
+  skillIcon,
+  inProgressLabel,
+  isCustom,
+  onStart,
+  onEdit,
+  onDelete,
+  onDiscardProgress,
+}) => {
+  const [menuOpen, setMenuOpen] = useState(false);
+  const cardBg = useColorModeValue("white", "gray.800");
+  const cardBorder = useColorModeValue("gray.200", "gray.700");
+  const activeBorder = useColorModeValue("green.400", "green.500");
+  const secondaryColor = useColorModeValue("gray.600", "gray.400");
+  const menuBg = useColorModeValue("white", "gray.800");
+
+  return (
+    <Box
+      as="article"
+      role="group"
+      h="full"
+      minH="164px"
+      rounded="xl"
+      p="5"
+      bg={cardBg}
+      borderColor={inProgressLabel ? activeBorder : cardBorder}
+      borderWidth="2px"
+      shadow="lg"
+      cursor="pointer"
+      transition="all ease-in-out 150ms"
+      zIndex={menuOpen ? 30 : 25}
+      position="relative"
+      onClick={onStart}
+      _hover={{
+        transform: "translateY(-2px)",
+        borderBottomColor: inProgressLabel ? "green.400" : "blue.300",
+      }}
+    >
+      <Flex justifyContent="space-between" flexDir="column" h="full" gap={4}>
+        <Stack spacing={2}>
+          <HStack justify="space-between" align="start" spacing={2}>
+            <Heading
+              size="md"
+              fontFamily={outfit.style.fontFamily}
+              lineHeight="1.35"
+              noOfLines={2}
+            >
+              {title}
+            </Heading>
+            {inProgressLabel ? (
+              <Badge
+                colorScheme="green"
+                fontSize="xs"
+                px={2}
+                py={0.5}
+                rounded="md"
+                flexShrink={0}
+              >
+                {inProgressLabel}
+              </Badge>
+            ) : isCustom ? (
+              <Badge
+                colorScheme="blue"
+                fontSize="xs"
+                px={2}
+                py={0.5}
+                rounded="md"
+                flexShrink={0}
+              >
+                Custom
+              </Badge>
+            ) : null}
+          </HStack>
+
+          <HStack spacing="2" color={secondaryColor} flexWrap="wrap">
+            <Icon as={skillIcon} boxSize={4} color={skillColor} />
+            <Text fontSize="sm" fontWeight={500}>
+              {metaText}
+            </Text>
+          </HStack>
+
+          {subText && (
+            <Text fontSize="xs" color={secondaryColor} noOfLines={2}>
+              {subText}
+            </Text>
+          )}
+        </Stack>
+
+        <Flex justifyContent="space-between" alignItems="center">
+          <HStack spacing={2}>
+            <Badge
+              colorScheme="purple"
+              variant="subtle"
+              fontSize="xs"
+              px={2}
+              py={0.5}
+              rounded="md"
+            >
+              {collectionName}
+            </Badge>
+            <Badge
+              colorScheme="gray"
+              variant="subtle"
+              fontSize="xs"
+              px={2}
+              py={0.5}
+              rounded="md"
+            >
+              {skillBadgeLabel}
+            </Badge>
+          </HStack>
+
+          <HStack
+            spacing={1}
+            onClick={(e) => {
+              e.stopPropagation();
+            }}
+          >
+            <Menu
+              placement="bottom-end"
+              isOpen={menuOpen}
+              onOpen={() => setMenuOpen(true)}
+              onClose={() => setMenuOpen(false)}
+            >
+              <MenuButton
+                as={IconButton}
+                size="xs"
+                variant="ghost"
+                rounded="full"
+                aria-label="Test options"
+                icon={<IconDotsVertical size={16} />}
+              />
+              <MenuList
+                bg={menuBg}
+                py={0}
+                overflow="hidden"
+                minW="auto"
+                w="48"
+                shadow="lg"
+                zIndex={40}
+              >
+                <MenuOption
+                  icon={<IconPlayerPlay size={16} />}
+                  label={inProgressLabel ? "Resume Test" : "Start Test"}
+                  fontSize="sm"
+                  py="6px"
+                  onClick={onStart}
+                />
+                <MenuOption
+                  icon={<IconEdit size={16} />}
+                  label="Edit Test"
+                  fontSize="sm"
+                  py="6px"
+                  onClick={onEdit}
+                />
+                {onDiscardProgress && (
+                  <MenuOption
+                    icon={<IconRotateClockwise size={16} />}
+                    label="Restart from Scratch"
+                    fontSize="sm"
+                    py="6px"
+                    onClick={onDiscardProgress}
+                  />
+                )}
+                <MenuOption
+                  icon={<IconTrash size={16} />}
+                  label="Delete Test"
+                  fontSize="sm"
+                  py="6px"
+                  onClick={onDelete}
+                />
+              </MenuList>
+            </Menu>
+          </HStack>
+        </Flex>
+      </Flex>
+    </Box>
+  );
+};
 
 export const HomePage: FC<HomePageProps> = ({
   exams,
@@ -57,43 +321,82 @@ export const HomePage: FC<HomePageProps> = ({
   onStartWritingExam,
   onStartSpeakingExam,
 }) => {
-  const [activeTab, setActiveTab] = useState<'reading' | 'listening' | 'writing' | 'speaking'>('reading');
-  const [viewMode, setViewMode] = useState<'all_tests' | 'by_collection'>('all_tests');
-  const [selectedCollectionName, setSelectedCollectionName] = useState<string | null>(null);
-  const [searchQuery, setSearchQuery] = useState('');
+  const [activeTab, setActiveTab] = useState<
+    "reading" | "listening" | "writing" | "speaking"
+  >("reading");
+  const [viewMode, setViewMode] = useState<"all_tests" | "by_collection">(
+    "all_tests",
+  );
+  const [selectedCollectionName, setSelectedCollectionName] = useState<
+    string | null
+  >(null);
+  const [searchQuery, setSearchQuery] = useState("");
   const [showNewCollectionModal, setShowNewCollectionModal] = useState(false);
-  const [newCollectionName, setNewCollectionName] = useState('');
-  const [newCollectionDesc, setNewCollectionDesc] = useState('');
+  const [newCollectionName, setNewCollectionName] = useState("");
+  const [newCollectionDesc, setNewCollectionDesc] = useState("");
+  const [progressVersion, setProgressVersion] = useState(0);
 
-  // Collections and Exams
   const collections = getAllCollections();
-  const [writingExams, setWritingExams] = useState<WritingExam[]>(() => getAllWritingExams());
-  const [speakingExams, setSpeakingExams] = useState<SpeakingExam[]>(() => getAllSpeakingExams());
+  const [writingExams, setWritingExams] = useState<WritingExam[]>(() =>
+    getAllWritingExams(),
+  );
+  const [speakingExams, setSpeakingExams] = useState<SpeakingExam[]>(() =>
+    getAllSpeakingExams(),
+  );
+
+  const [isWritingEditorOpen, setIsWritingEditorOpen] = useState(false);
+  const [editingWritingExam, setEditingWritingExam] =
+    useState<WritingExam | null>(null);
+  const [isSpeakingEditorOpen, setIsSpeakingEditorOpen] = useState(false);
+  const [editingSpeakingExam, setEditingSpeakingExam] =
+    useState<SpeakingExam | null>(null);
+
+  const toast = useToast();
+  const cardBg = useColorModeValue("white", "gray.800");
+  const cardBorder = useColorModeValue("gray.200", "gray.700");
+  const secondaryColor = useColorModeValue("gray.600", "gray.400");
+  const pillBg = useColorModeValue("gray.100", "gray.750");
 
   useEffect(() => {
     setWritingExams(getAllWritingExams());
     setSpeakingExams(getAllSpeakingExams());
   }, [exams]);
 
-  const [isWritingEditorOpen, setIsWritingEditorOpen] = useState(false);
-  const [editingWritingExam, setEditingWritingExam] = useState<WritingExam | null>(null);
+  // Listen to unified PNO Navbar events
+  useEffect(() => {
+    const handleAddTest = () => onOpenSmartImport(undefined, activeTab);
+    const handleTestBank = () => onOpenTestManager();
+    const handleNewCol = () => setShowNewCollectionModal(true);
+    const handleSearch = (q: string) => setSearchQuery(q);
 
-  const [isSpeakingEditorOpen, setIsSpeakingEditorOpen] = useState(false);
-  const [editingSpeakingExam, setEditingSpeakingExam] = useState<SpeakingExam | null>(null);
+    menuEventChannel.on("openIeltsAddTest", handleAddTest);
+    menuEventChannel.on("openIeltsTestBank", handleTestBank);
+    menuEventChannel.on("openIeltsNewCollection", handleNewCol);
+    menuEventChannel.on("ieltsSearchChange", handleSearch);
+
+    return () => {
+      menuEventChannel.off("openIeltsAddTest", handleAddTest);
+      menuEventChannel.off("openIeltsTestBank", handleTestBank);
+      menuEventChannel.off("openIeltsNewCollection", handleNewCol);
+      menuEventChannel.off("ieltsSearchChange", handleSearch);
+    };
+  }, [activeTab, onOpenSmartImport, onOpenTestManager]);
 
   const refreshWriting = () => setWritingExams(getAllWritingExams());
   const refreshSpeaking = () => setSpeakingExams(getAllSpeakingExams());
-
-  const handleTabChange = (newTab: 'reading' | 'listening' | 'writing' | 'speaking') => {
-    setActiveTab(newTab);
-    setSearchQuery('');
-  };
 
   const handleSaveWriting = (examToSave: WritingExam) => {
     saveWritingExam(examToSave);
     setIsWritingEditorOpen(false);
     setEditingWritingExam(null);
     refreshWriting();
+    toast({
+      title: "Writing test saved",
+      status: "success",
+      duration: 2200,
+      isClosable: true,
+      position: "bottom-right",
+    });
   };
 
   const handleSaveSpeaking = (examToSave: SpeakingExam) => {
@@ -101,413 +404,182 @@ export const HomePage: FC<HomePageProps> = ({
     setIsSpeakingEditorOpen(false);
     setEditingSpeakingExam(null);
     refreshSpeaking();
+    toast({
+      title: "Speaking test saved",
+      status: "success",
+      duration: 2200,
+      isClosable: true,
+      position: "bottom-right",
+    });
   };
 
-  const handleDeleteExam = (e: React.MouseEvent, id: string, title: string) => {
-    e.stopPropagation();
-    if (window.confirm(`Are you sure you want to delete test "${title}"?`)) {
-      deleteExam(id);
-      onRefreshExams();
-    }
+  const handleDeleteExam = (id: string, title: string) => {
+    deleteExam(id);
+    onRefreshExams();
+    toast({
+      title: "Test deleted",
+      description: `Removed "${title}" from your Test Bank.`,
+      status: "info",
+      duration: 2500,
+      isClosable: true,
+      position: "bottom-right",
+    });
   };
 
-  const handleDeleteWritingExam = (e: React.MouseEvent, id: string, title: string) => {
-    e.stopPropagation();
-    if (window.confirm(`Are you sure you want to delete writing test "${title}"?`)) {
-      deleteWritingExam(id);
-      refreshWriting();
-    }
+  const handleDeleteWritingExam = (id: string, title: string) => {
+    deleteWritingExam(id);
+    refreshWriting();
+    toast({
+      title: "Writing test deleted",
+      description: `Removed "${title}".`,
+      status: "info",
+      duration: 2500,
+      isClosable: true,
+      position: "bottom-right",
+    });
   };
 
-  const handleDeleteSpeakingExam = (e: React.MouseEvent, id: string, title: string) => {
-    e.stopPropagation();
-    if (window.confirm(`Are you sure you want to delete speaking test "${title}"?`)) {
-      deleteSpeakingExam(id);
-      refreshSpeaking();
-    }
+  const handleDeleteSpeakingExam = (id: string, title: string) => {
+    deleteSpeakingExam(id);
+    refreshSpeaking();
+    toast({
+      title: "Speaking test deleted",
+      description: `Removed "${title}".`,
+      status: "info",
+      duration: 2500,
+      isClosable: true,
+      position: "bottom-right",
+    });
   };
 
-  const handleDeleteCollection = (e: React.MouseEvent, colName: string) => {
-    e.stopPropagation();
-    if (window.confirm(`Are you sure you want to delete collection "${colName}" and all tests inside it?`)) {
-      deleteCollection(colName, true);
-      if (selectedCollectionName === colName) {
-        setSelectedCollectionName(null);
-      }
-      onRefreshExams();
-    }
+  const handleDiscardExam = (examId: string, title: string) => {
+    clearExamProgress(examId);
+    setProgressVersion((v) => v + 1);
+    toast({
+      title: "Progress reset",
+      description: `"${title}" is ready to start from scratch.`,
+      status: "info",
+      duration: 2200,
+      isClosable: true,
+      position: "bottom-right",
+    });
+  };
+
+  const handleDiscardWriting = (examId: string, title: string) => {
+    clearWritingProgress(examId);
+    setProgressVersion((v) => v + 1);
+    toast({
+      title: "Draft discarded",
+      description: `"${title}" is ready to start from scratch.`,
+      status: "info",
+      duration: 2200,
+      isClosable: true,
+      position: "bottom-right",
+    });
+  };
+
+  const handleDiscardSpeaking = (examId: string, title: string) => {
+    clearSpeakingProgress(examId);
+    setProgressVersion((v) => v + 1);
+    toast({
+      title: "Session reset",
+      description: `"${title}" is ready to start from scratch.`,
+      status: "info",
+      duration: 2200,
+      isClosable: true,
+      position: "bottom-right",
+    });
   };
 
   const handleCreateCollection = (e: React.FormEvent) => {
     e.preventDefault();
     if (!newCollectionName.trim()) return;
-    try {
-      createCollection(newCollectionName.trim(), newCollectionDesc.trim());
-      setNewCollectionName('');
-      setNewCollectionDesc('');
-      setShowNewCollectionModal(false);
-      onRefreshExams();
-    } catch (err: any) {
-      alert(err.message || 'Failed to create collection');
-    }
+    createCollection(newCollectionName.trim(), newCollectionDesc.trim());
+    setNewCollectionName("");
+    setNewCollectionDesc("");
+    setShowNewCollectionModal(false);
+    onRefreshExams();
+    toast({
+      title: "Collection created",
+      status: "success",
+      duration: 2200,
+      isClosable: true,
+      position: "bottom-right",
+    });
   };
 
-  // Get tests for a specific collection name
-  const getTestsForCollection = (colName: string) => {
-    return exams.filter(
-      (e) => getExamCollection(e).toLowerCase() === colName.toLowerCase()
-    );
+  const handleDeleteCollection = (e: React.MouseEvent, name: string) => {
+    e.stopPropagation();
+    deleteCollection(name);
+    if (selectedCollectionName === name) setSelectedCollectionName(null);
+    onRefreshExams();
+    toast({
+      title: "Collection deleted",
+      description: `Removed collection "${name}".`,
+      status: "info",
+      duration: 2200,
+      isClosable: true,
+      position: "bottom-right",
+    });
   };
 
-  const activeCollectionTests = selectedCollectionName
-    ? getTestsForCollection(selectedCollectionName)
-    : [];
-
-  // Split by category for separate tabs
+  // Separate Reading and Listening exams
   const readingExams = exams.filter((e) => !isListeningExam(e));
   const listeningExams = exams.filter((e) => isListeningExam(e));
-  const customReadingTests = readingExams.filter((e) => e.isBuiltin === false || e.collection === 'My Tests');
-  const customListeningTests = listeningExams.filter((e) => e.isBuiltin === false || e.collection === 'My Tests');
 
-  // Filter exams matching search query across all 4 skills
-  const qClean = searchQuery.toLowerCase().trim();
-  const readingSearchResults = qClean
+  const qLower = searchQuery.trim().toLowerCase();
+  const filteredReading = qLower
     ? readingExams.filter(
         (e) =>
-          e.title.toLowerCase().includes(qClean) ||
-          (e.description && e.description.toLowerCase().includes(qClean))
+          e.title.toLowerCase().includes(qLower) ||
+          getExamCollection(e).toLowerCase().includes(qLower),
       )
-    : [];
+    : readingExams;
 
-  const listeningSearchResults = qClean
+  const filteredListening = qLower
     ? listeningExams.filter(
         (e) =>
-          e.title.toLowerCase().includes(qClean) ||
-          (e.description && e.description.toLowerCase().includes(qClean))
+          e.title.toLowerCase().includes(qLower) ||
+          getExamCollection(e).toLowerCase().includes(qLower),
       )
-    : [];
+    : listeningExams;
 
-  const writingSearchResults = qClean
+  const filteredWriting = qLower
     ? writingExams.filter(
         (w) =>
-          w.title.toLowerCase().includes(qClean) ||
-          (w.collection && w.collection.toLowerCase().includes(qClean)) ||
-          w.task1.prompt.toLowerCase().includes(qClean) ||
-          w.task2.prompt.toLowerCase().includes(qClean)
+          w.title.toLowerCase().includes(qLower) ||
+          (w.collection || "").toLowerCase().includes(qLower),
       )
-    : [];
+    : writingExams;
 
-  const speakingSearchResults = qClean
+  const filteredSpeaking = qLower
     ? speakingExams.filter(
         (s) =>
-          s.title.toLowerCase().includes(qClean) ||
-          (s.description && s.description.toLowerCase().includes(qClean)) ||
-          (s.collection && s.collection.toLowerCase().includes(qClean)) ||
-          (s.part2Question && s.part2Question.topic && s.part2Question.topic.toLowerCase().includes(qClean))
+          s.title.toLowerCase().includes(qLower) ||
+          (s.collection || "").toLowerCase().includes(qLower),
       )
-    : [];
+    : speakingExams;
 
-  const [progressVersion, setProgressVersion] = useState(0);
-
-  const handleDiscardExam = (id: string, title: string) => {
-    if (window.confirm(`Are you sure you want to discard your saved progress for "${title}"?\nYou will start fresh from question 1 next time.`)) {
-      clearExamProgress(id);
-      setProgressVersion((v) => v + 1);
-    }
-  };
-
-  const handleDiscardWriting = (id: string, title: string) => {
-    if (window.confirm(`Are you sure you want to discard your essay draft for "${title}"?\nAll written text in this draft will be deleted.`)) {
-      clearWritingProgress(id);
-      setProgressVersion((v) => v + 1);
-    }
-  };
-
-  const renderWritingCard = (test: WritingExam) => {
-    const savedWriting = getSavedWritingSummary(test.id);
-    return (
-      <article
-        key={`${test.id}-${progressVersion}`}
-        className={`bg-white border hover:shadow-md rounded-xl p-5 space-y-3.5 transition-all duration-150 flex flex-col justify-between ${
-          savedWriting
-            ? 'border-emerald-300 ring-1 ring-emerald-100 bg-emerald-50/15'
-            : 'border-slate-200 hover:border-slate-300'
-        }`}
-      >
-        <div className="space-y-2">
-          <header className="flex items-center justify-between flex-wrap gap-1">
-            <span className="text-xs font-semibold text-blue-600 uppercase tracking-wider">
-              {test.collection || 'IELTS Writing'}
-            </span>
-            <div className="flex items-center gap-1.5">
-              {savedWriting && (
-                <span className="text-[10px] font-bold text-emerald-700 bg-emerald-100/90 px-2 py-0.5 rounded border border-emerald-300 flex items-center gap-1 uppercase tracking-wider">
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-600 animate-pulse" aria-hidden="true" />
-                  <span>Draft ({savedWriting.task1Words + savedWriting.task2Words} words)</span>
-                </span>
-              )}
-              <span className="text-[11px] text-slate-500 flex items-center gap-1 font-medium">
-                <Clock className="w-3 h-3" aria-hidden="true" /> {test.durationMinutes} mins
-              </span>
-            </div>
-          </header>
-
-          <h3 className="text-sm font-bold text-slate-900 leading-snug">{test.title}</h3>
-
-          <div className="p-3 bg-slate-50/70 rounded-lg border border-slate-200/80 text-xs space-y-1.5">
-            <div className="text-slate-700 line-clamp-2">
-              <strong className="text-slate-900">Task 1:</strong> {test.task1.prompt}
-            </div>
-            <div className="text-slate-700 line-clamp-2">
-              <strong className="text-slate-900">Task 2:</strong> {test.task2.prompt}
-            </div>
-          </div>
-        </div>
-
-        <footer className="pt-2 flex items-center gap-2 border-t border-slate-100">
-          <button
-            type="button"
-            onClick={() => onStartWritingExam(test)}
-            className={`flex-1 py-2 text-white text-xs font-semibold rounded-lg flex items-center justify-center gap-1.5 transition shadow-xs focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-1 ${
-              savedWriting
-                ? 'bg-emerald-600 hover:bg-emerald-700'
-                : 'bg-blue-600 hover:bg-blue-700'
-            }`}
-            aria-label={savedWriting ? `Resume writing draft for ${test.title}` : `Start writing test ${test.title}`}
-          >
-            <Play className="w-3.5 h-3.5 fill-white" aria-hidden="true" />
-            <span>{savedWriting ? 'Resume Writing Draft' : 'Start Writing Test'}</span>
-          </button>
-          {savedWriting && (
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                handleDiscardWriting(test.id, test.title);
-              }}
-              className="px-2.5 py-1.5 bg-white hover:bg-rose-50 text-slate-500 hover:text-rose-600 rounded-lg border border-slate-200 hover:border-rose-300 transition shadow-2xs text-xs font-semibold flex items-center gap-1 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-rose-500 focus-visible:ring-offset-1"
-              title="Discard saved draft"
-              aria-label={`Discard saved draft for ${test.title}`}
-            >
-              <Trash2 className="w-3.5 h-3.5 text-rose-500" aria-hidden="true" />
-              <span>Discard</span>
-            </button>
-          )}
-          <button
-            type="button"
-            onClick={() => {
-              setEditingWritingExam(test);
-              setIsWritingEditorOpen(true);
-            }}
-            className="p-2 bg-white hover:bg-slate-50 text-slate-600 hover:text-emerald-700 rounded-lg border border-slate-200 transition shadow-2xs focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-slate-400 focus-visible:ring-offset-1"
-            title="Edit this writing test"
-            aria-label={`Edit ${test.title}`}
-          >
-            <Edit3 className="w-3.5 h-3.5" aria-hidden="true" />
-          </button>
-          <button
-            type="button"
-            onClick={(e) => handleDeleteWritingExam(e, test.id, test.title)}
-            className="p-2 bg-white hover:bg-rose-50 text-slate-400 hover:text-rose-600 rounded-lg border border-slate-200 transition shadow-2xs focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-rose-400 focus-visible:ring-offset-1"
-            title="Delete this writing test"
-            aria-label={`Delete ${test.title}`}
-          >
-            <Trash2 className="w-3.5 h-3.5" aria-hidden="true" />
-          </button>
-        </footer>
-      </article>
-    );
-  };
-
-  const renderSpeakingCard = (test: SpeakingExam) => (
-    <article
-      key={test.id}
-      className="bg-white border border-slate-200 hover:border-slate-300 hover:shadow-md rounded-xl p-5 space-y-3.5 transition-all duration-150 flex flex-col justify-between"
-    >
-      <div className="space-y-2">
-        <header className="flex items-center justify-between">
-          <span className="text-xs font-semibold text-blue-600 uppercase tracking-wider">
-            {test.collection || 'IELTS Speaking'}
-          </span>
-          <span className="text-[11px] text-slate-700 bg-slate-100 px-2 py-0.5 rounded border border-slate-200 flex items-center gap-1 font-medium">
-            <Award className="w-3 h-3 text-amber-600" aria-hidden="true" /> Band 8.0+ Sample
-          </span>
-        </header>
-
-        <h3 className="text-sm font-bold text-slate-900 leading-snug">{test.title}</h3>
-        {test.description && <p className="text-xs text-slate-500">{test.description}</p>}
-
-        <div className="p-3 bg-slate-50/70 rounded-lg border border-slate-200/80 text-xs space-y-1.5">
-          <div className="text-slate-700">
-            <strong className="text-slate-900">Part 1:</strong> {test.part1Questions.length} interview questions
-          </div>
-          <div className="text-slate-700">
-            <strong className="text-slate-900">Part 2 Cue Card:</strong> "{test.part2Question.questionText}"
-          </div>
-          <div className="text-slate-700">
-            <strong className="text-slate-900">Part 3:</strong> {test.part3Questions.length} in-depth discussion questions
-          </div>
-        </div>
-      </div>
-
-      <footer className="pt-2 flex items-center gap-2 border-t border-slate-100">
-        <button
-          type="button"
-          onClick={() => onStartSpeakingExam(test)}
-          className="flex-1 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-lg flex items-center justify-center gap-1.5 transition shadow-xs focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-1"
-          aria-label={`Start speaking practice for ${test.title}`}
-        >
-          <Mic className="w-3.5 h-3.5" aria-hidden="true" />
-          <span>Start Speaking Practice Now</span>
-        </button>
-        <button
-          type="button"
-          onClick={() => {
-            setEditingSpeakingExam(test);
-            setIsSpeakingEditorOpen(true);
-          }}
-          className="p-2 bg-white hover:bg-slate-50 text-slate-600 hover:text-indigo-700 rounded-lg border border-slate-200 transition shadow-2xs focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-slate-400 focus-visible:ring-offset-1"
-          title="Edit this speaking test"
-          aria-label={`Edit ${test.title}`}
-        >
-          <Edit3 className="w-3.5 h-3.5" aria-hidden="true" />
-        </button>
-        <button
-          type="button"
-          onClick={(e) => handleDeleteSpeakingExam(e, test.id, test.title)}
-          className="p-2 bg-white hover:bg-rose-50 text-slate-400 hover:text-rose-600 rounded-lg border border-slate-200 transition shadow-2xs focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-rose-400 focus-visible:ring-offset-1"
-          title="Delete this speaking test"
-          aria-label={`Delete ${test.title}`}
-        >
-          <Trash2 className="w-3.5 h-3.5" aria-hidden="true" />
-        </button>
-      </footer>
-    </article>
-  );
-
-  const renderTestCard = (test: Exam, isCustom: boolean = false) => {
-    const totalQ = test.parts.reduce(
-      (sum, p) =>
-        sum + (p.questionGroups || []).reduce((gSum, g) => gSum + (g.questions || []).length, 0),
-      0
-    );
-    const colName = getExamCollection(test);
-    const savedProgress = getSavedExamSummary(test.id);
-
-    return (
-      <article
-        key={`${test.id}-${progressVersion}`}
-        className={`bg-white border rounded-xl p-4 flex flex-col justify-between gap-3 transition-all duration-150 group shadow-2xs hover:shadow-md ${
-          savedProgress
-            ? 'border-emerald-300 ring-1 ring-emerald-100 bg-emerald-50/15'
-            : isCustom
-            ? 'border-blue-300 ring-1 ring-blue-100 bg-blue-50/20'
-            : 'border-slate-200 hover:border-slate-300'
-        }`}
-      >
-        <div className="min-w-0">
-          <header className="flex items-center gap-1.5 flex-wrap mb-1.5">
-            <span className="text-[10px] font-semibold text-slate-600 bg-slate-100 px-2 py-0.5 rounded border border-slate-200/80">
-              {colName}
-            </span>
-            {isCustom && (
-              <span className="text-[10px] font-bold text-blue-700 bg-blue-100 px-2 py-0.5 rounded border border-blue-200 uppercase tracking-wider">
-                CUSTOM / NEW
-              </span>
-            )}
-            {savedProgress && (
-              <span className="text-[10px] font-bold text-emerald-700 bg-emerald-100/80 px-2 py-0.5 rounded border border-emerald-300 flex items-center gap-1 uppercase tracking-wider">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-600 animate-pulse" aria-hidden="true" />
-                <span>In Progress ({savedProgress.answeredCount}/{totalQ})</span>
-              </span>
-            )}
-          </header>
-          <h3 className="text-sm font-bold text-slate-900 group-hover:text-blue-600 transition line-clamp-2 leading-snug">
-            {test.title}
-          </h3>
-          <div className="text-[11px] text-slate-500 mt-2 flex items-center gap-2">
-            <span>
-              {savedProgress
-                ? `${Math.ceil(savedProgress.timeRemaining / 60)} mins left`
-                : `${test.durationMinutes || (isListeningExam(test) ? 30 : 60)} mins`}
-            </span>
-            <span aria-hidden="true">•</span>
-            <span>{test.parts.length} {isListeningExam(test) ? 'Sections' : 'Parts'}</span>
-            <span aria-hidden="true">•</span>
-            <span className="text-slate-700 font-semibold">
-              {savedProgress ? `${savedProgress.answeredCount}/${totalQ} Answered` : `${totalQ} Questions`}
-            </span>
-          </div>
-        </div>
-        <footer className="flex items-center justify-between gap-2 pt-2 border-t border-slate-100 mt-1">
-          <button
-            type="button"
-            onClick={() => onSelectExam(test)}
-            className={`flex-1 py-1.5 text-white text-xs font-semibold rounded-lg shadow-xs flex items-center justify-center gap-1.5 transition focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-1 ${
-              savedProgress
-                ? 'bg-emerald-600 hover:bg-emerald-700'
-                : 'bg-blue-600 hover:bg-blue-700'
-            }`}
-            aria-label={savedProgress ? `Resume test ${test.title}` : `Start test ${test.title}`}
-          >
-            <Play className="w-3.5 h-3.5 fill-white" aria-hidden="true" />
-            <span>{savedProgress ? 'Resume Test' : 'Start Test'}</span>
-          </button>
-          {savedProgress && (
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                handleDiscardExam(test.id, test.title);
-              }}
-              className="px-2.5 py-1.5 bg-white hover:bg-rose-50 text-slate-500 hover:text-rose-600 rounded-lg border border-slate-200 hover:border-rose-300 transition shadow-2xs text-xs font-semibold flex items-center gap-1 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-rose-500 focus-visible:ring-offset-1"
-              title="Discard saved progress & restart from beginning"
-              aria-label={`Discard progress for ${test.title}`}
-            >
-              <Trash2 className="w-3.5 h-3.5 text-rose-500" aria-hidden="true" />
-              <span>Discard</span>
-            </button>
-          )}
-          <button
-            type="button"
-            onClick={(e) => {
-              e.stopPropagation();
-              onOpenEditor(test);
-            }}
-            className="p-1.5 bg-white hover:bg-slate-50 text-slate-600 rounded-lg border border-slate-200 transition shadow-2xs focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-slate-400 focus-visible:ring-offset-1"
-            title="Edit Test"
-            aria-label={`Edit ${test.title}`}
-          >
-            <Edit3 className="w-3.5 h-3.5" aria-hidden="true" />
-          </button>
-          <button
-            type="button"
-            onClick={(e) => handleDeleteExam(e, test.id, test.title)}
-            className="p-1.5 bg-white hover:bg-rose-50 text-slate-400 hover:text-rose-600 rounded-lg border border-slate-200 transition shadow-2xs focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-rose-400 focus-visible:ring-offset-1"
-            title="Delete Test"
-            aria-label={`Delete ${test.title}`}
-          >
-            <Trash2 className="w-3.5 h-3.5" aria-hidden="true" />
-          </button>
-        </footer>
-      </article>
-    );
-  };
-
-  // Build in-progress tests list across Reading, Listening, and Writing
+  // Build in-progress tests list across Reading, Listening, Writing, and Speaking
   const inProgressItems: InProgressItem[] = [];
+  void progressVersion;
 
   for (const exam of exams) {
     const summary = getSavedExamSummary(exam.id);
     if (summary) {
       const totalQ = exam.parts.reduce(
-        (sum, p) => sum + (p.questionGroups || []).reduce((gSum, g) => gSum + (g.questions || []).length, 0),
-        0
+        (sum, p) =>
+          sum +
+          (p.questionGroups || []).reduce(
+            (gSum, g) => gSum + (g.questions || []).length,
+            0,
+          ),
+        0,
       );
       inProgressItems.push({
         id: exam.id,
         title: exam.title,
-        skill: isListeningExam(exam) ? 'listening' : 'reading',
+        skill: isListeningExam(exam) ? "listening" : "reading",
         collection: getExamCollection(exam),
         answeredCount: summary.answeredCount,
         totalQuestions: totalQ,
@@ -526,7 +598,7 @@ export const HomePage: FC<HomePageProps> = ({
       inProgressItems.push({
         id: w.id,
         title: w.title,
-        skill: 'writing',
+        skill: "writing",
         collection: w.collection,
         answeredCount: 0,
         totalQuestions: 0,
@@ -539,821 +611,792 @@ export const HomePage: FC<HomePageProps> = ({
     }
   }
 
+  for (const s of speakingExams) {
+    const summary = loadSpeakingProgress(s.id);
+    if (summary) {
+      inProgressItems.push({
+        id: s.id,
+        title: s.title,
+        skill: "speaking",
+        collection: s.collection,
+        answeredCount: 0,
+        totalQuestions: 0,
+        timeRemaining: 0,
+        lastSavedAt: summary.lastSavedAt || 0,
+        speakingPart: summary.activePart,
+        rawSpeakingExam: s,
+      });
+    }
+  }
+
   inProgressItems.sort((a, b) => b.lastSavedAt - a.lastSavedAt);
 
-  const readingInProgressCount = inProgressItems.filter((i) => i.skill === 'reading').length;
-  const listeningInProgressCount = inProgressItems.filter((i) => i.skill === 'listening').length;
-  const writingInProgressCount = inProgressItems.filter((i) => i.skill === 'writing').length;
+  const readingInProgressCount = inProgressItems.filter(
+    (i) => i.skill === "reading",
+  ).length;
+  const listeningInProgressCount = inProgressItems.filter(
+    (i) => i.skill === "listening",
+  ).length;
+  const writingInProgressCount = inProgressItems.filter(
+    (i) => i.skill === "writing",
+  ).length;
+  const speakingInProgressCount = inProgressItems.filter(
+    (i) => i.skill === "speaking",
+  ).length;
+
+  const renderExamCardItem = (test: Exam) => {
+    const totalQ = test.parts.reduce(
+      (sum, p) =>
+        sum +
+        (p.questionGroups || []).reduce(
+          (gSum, g) => gSum + (g.questions || []).length,
+          0,
+        ),
+      0,
+    );
+    const colName = getExamCollection(test);
+    const savedProgress = getSavedExamSummary(test.id);
+    const isListen = isListeningExam(test);
+    const mins = savedProgress
+      ? `${Math.ceil(savedProgress.timeRemaining / 60)} mins left`
+      : `${test.durationMinutes || (isListen ? 30 : 60)} mins`;
+
+    return (
+      <GridItem key={`${test.id}-${progressVersion}`}>
+        <UnifiedIeltsCard
+          title={test.title}
+          collectionName={colName}
+          metaText={`${mins} • ${test.parts.length} ${
+            isListen ? "Sections" : "Parts"
+          } • ${totalQ} Questions`}
+          skillColor={isListen ? "purple.400" : "blue.400"}
+          skillBadgeLabel={isListen ? "Listening" : "Reading"}
+          skillIcon={isListen ? IconHeadphones : IconBook}
+          inProgressLabel={
+            savedProgress
+              ? `In Progress (${savedProgress.answeredCount}/${totalQ}) • Resume`
+              : undefined
+          }
+          isCustom={test.isBuiltin === false || colName === "My Tests"}
+          onStart={() => onSelectExam(test)}
+          onEdit={() => onOpenEditor(test)}
+          onDelete={() => handleDeleteExam(test.id, test.title)}
+          onDiscardProgress={
+            savedProgress
+              ? () => handleDiscardExam(test.id, test.title)
+              : undefined
+          }
+        />
+      </GridItem>
+    );
+  };
 
   return (
-    <div className="flex-1 bg-transparent text-slate-800 dark:text-gray-100 flex flex-col font-sans select-auto">
-      {/* 1. PNO IELTS SECTION HEADER (Unified with PNO Main Navbar) */}
-      <header className="px-4 sm:px-6 py-4 sm:py-5 border-b border-slate-200/80 dark:border-gray-800 bg-white/80 dark:bg-gray-900/80 backdrop-blur-md sticky top-0 z-20 shadow-2xs">
-        <div className="max-w-7xl mx-auto flex flex-col lg:flex-row lg:items-center justify-between gap-3 sm:gap-4">
-          {/* Brand Logo & Title */}
-          <div className="flex items-center gap-3">
-            <div className="flex items-center gap-2.5">
-              <span className="text-lg sm:text-xl font-extrabold text-slate-900 dark:text-white tracking-tight font-display">
-                PNO IELTS
-              </span>
-              <span className="text-[11px] sm:text-xs font-bold px-2.5 py-0.5 rounded-full bg-blue-600 text-white tracking-wide uppercase">
-                4 Skills
-              </span>
-            </div>
-            <div className="hidden sm:block h-4 w-[1px] bg-slate-200 dark:bg-gray-700" aria-hidden="true" />
-            <span className="hidden sm:inline text-xs text-slate-500 dark:text-gray-400 font-medium">
-              Phòng luyện thi IELTS 4 kỹ năng trên máy tính
-            </span>
-          </div>
-
-          {/* Search bar & Action buttons in semantic navigation landmark */}
-          <nav aria-label="Quick Actions" className="flex flex-wrap items-center gap-2 sm:gap-2.5 w-full lg:w-auto">
-            <div className="relative flex-1 min-w-[160px] sm:flex-none sm:w-56">
-              <label htmlFor="test-search-input" className="sr-only">
-                Search practice tests
-              </label>
-              <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-2.5" aria-hidden="true" />
-              <input
-                id="test-search-input"
-                type="search"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Search tests..."
-                className="w-full pl-8 pr-3 py-1.5 text-xs bg-slate-50 text-slate-800 placeholder-slate-400 border border-slate-200 rounded-lg focus:outline-hidden focus:bg-white focus:border-blue-600 focus:ring-2 focus:ring-blue-500/20 transition shadow-2xs"
-              />
-            </div>
-
-            {/* Create new Collection (Secondary) */}
-            <button
-              type="button"
-              onClick={() => setShowNewCollectionModal(true)}
-              className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 text-xs font-medium text-slate-700 bg-white hover:bg-slate-50 border border-slate-200 rounded-lg transition shadow-2xs focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-1 shrink-0"
-              title="Create a new collection folder"
-              aria-label="Create new collection folder"
-            >
-              <FolderPlus className="w-3.5 h-3.5 text-slate-500" aria-hidden="true" />
-              <span className="hidden xs:inline sm:inline">+ Collection</span>
-            </button>
-
-            {/* Test Manager Button (Secondary) */}
-            <button
-              type="button"
-              onClick={onOpenTestManager}
-              className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 text-xs font-medium text-slate-700 bg-white hover:bg-slate-50 border border-slate-200 rounded-lg transition shadow-2xs focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-1 shrink-0"
-              title="Manage all tests: Browse by collections, Edit, Delete, Export JSON"
-              aria-label="Open Test Bank manager"
-            >
-              <FolderOpen className="w-3.5 h-3.5 text-slate-500" aria-hidden="true" />
-              <span>Test Bank</span>
-            </button>
-
-            {/* Primary Call-to-action: Open 4-Skill Add Test Modal */}
-            <button
-              type="button"
-              onClick={() => onOpenSmartImport(undefined, activeTab)}
-              className="flex items-center gap-1.5 px-3 sm:px-3.5 py-1.5 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 active:bg-blue-800 rounded-lg transition shadow-xs focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-1 shrink-0"
-              title="Add a new practice test across any of the 4 IELTS skills"
-              aria-label="Add a new practice test"
-            >
-              <Plus className="w-3.5 h-3.5" aria-hidden="true" />
-              <span>+ Add Test</span>
-            </button>
-          </nav>
-        </div>
-      </header>
-
-      {/* 2. MAIN WORKSPACE CONTAINER */}
-      <main className="flex-1 max-w-7xl mx-auto w-full px-4 sm:px-6 py-5 sm:py-6 space-y-5 sm:space-y-6">
-
-        {/* In-Progress Banner: Prominently displays any test just exited / active */}
-        <InProgressBanner
-          items={inProgressItems}
-          onResumeExam={onSelectExam}
-          onResumeWriting={onStartWritingExam}
-          onDiscardExam={handleDiscardExam}
-          onDiscardWriting={handleDiscardWriting}
-        />
-
-        {/* Unified Category Tabs (Accessible Segmented Control) */}
-        <nav aria-label="IELTS Skills Navigation" className="w-full overflow-x-auto pb-1">
-          <div
-            role="tablist"
-            aria-label="IELTS Skills"
-            className="inline-flex items-center gap-1 p-1 bg-slate-200/70 dark:bg-gray-800 rounded-xl w-max min-w-full sm:min-w-0 sm:w-fit border border-slate-200/80 dark:border-gray-700"
-          >
-            <button
-              id="tab-reading"
-              role="tab"
-              aria-selected={activeTab === 'reading'}
-              aria-controls="reading-panel"
-              type="button"
-              onClick={() => handleTabChange('reading')}
-              className={`flex-1 sm:flex-none flex items-center justify-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2 rounded-lg text-xs font-semibold transition whitespace-nowrap focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-1 ${
-                activeTab === 'reading'
-                  ? 'bg-white text-slate-900 shadow-xs border border-slate-200/60'
-                  : 'text-slate-600 dark:text-gray-300 hover:text-slate-900 dark:hover:text-white'
-              }`}
-            >
-              <BookOpen className="w-4 h-4 shrink-0" aria-hidden="true" />
-              <span>Reading</span>
-              {readingInProgressCount > 0 && (
-                <span className="ml-1 px-1.5 py-0.5 rounded-full text-[10px] bg-emerald-600 text-white font-bold leading-none animate-pulse">
-                  {readingInProgressCount}
-                </span>
-              )}
-            </button>
-
-            <button
-              id="tab-listening"
-              role="tab"
-              aria-selected={activeTab === 'listening'}
-              aria-controls="listening-panel"
-              type="button"
-              onClick={() => handleTabChange('listening')}
-              className={`flex-1 sm:flex-none flex items-center justify-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2 rounded-lg text-xs font-semibold transition whitespace-nowrap focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-1 ${
-                activeTab === 'listening'
-                  ? 'bg-white text-slate-900 shadow-xs border border-slate-200/60'
-                  : 'text-slate-600 dark:text-gray-300 hover:text-slate-900 dark:hover:text-white'
-              }`}
-            >
-              <Headphones className="w-4 h-4 shrink-0" aria-hidden="true" />
-              <span>Listening</span>
-              {listeningInProgressCount > 0 && (
-                <span className="ml-1 px-1.5 py-0.5 rounded-full text-[10px] bg-emerald-600 text-white font-bold leading-none animate-pulse">
-                  {listeningInProgressCount}
-                </span>
-              )}
-            </button>
-
-            <button
-              id="tab-writing"
-              role="tab"
-              aria-selected={activeTab === 'writing'}
-              aria-controls="writing-panel"
-              type="button"
-              onClick={() => handleTabChange('writing')}
-              className={`flex-1 sm:flex-none flex items-center justify-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2 rounded-lg text-xs font-semibold transition whitespace-nowrap focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-1 ${
-                activeTab === 'writing'
-                  ? 'bg-white text-slate-900 shadow-xs border border-slate-200/60'
-                  : 'text-slate-600 dark:text-gray-300 hover:text-slate-900 dark:hover:text-white'
-              }`}
-            >
-              <PenTool className="w-4 h-4 shrink-0" aria-hidden="true" />
-              <span>Writing</span>
-              {writingInProgressCount > 0 && (
-                <span className="ml-1 px-1.5 py-0.5 rounded-full text-[10px] bg-emerald-600 text-white font-bold leading-none animate-pulse">
-                  {writingInProgressCount}
-                </span>
-              )}
-            </button>
-
-            <button
-              id="tab-speaking"
-              role="tab"
-              aria-selected={activeTab === 'speaking'}
-              aria-controls="speaking-panel"
-              type="button"
-              onClick={() => handleTabChange('speaking')}
-              className={`flex-1 sm:flex-none flex items-center justify-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2 rounded-lg text-xs font-semibold transition whitespace-nowrap focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-1 ${
-                activeTab === 'speaking'
-                  ? 'bg-white text-slate-900 shadow-xs border border-slate-200/60'
-                  : 'text-slate-600 dark:text-gray-300 hover:text-slate-900 dark:hover:text-white'
-              }`}
-            >
-              <Mic className="w-4 h-4 shrink-0" aria-hidden="true" />
-              <span>Speaking</span>
-            </button>
-          </div>
-        </nav>
-
-        {/* TAB 1: READING */}
-        {activeTab === 'reading' && (
-          <section id="reading-panel" role="tabpanel" aria-labelledby="tab-reading" className="space-y-6">
-            {/* Search Results if user is searching */}
-            {searchQuery.trim() && (
-              <div className="space-y-3 p-5 bg-white border border-slate-200 rounded-xl shadow-2xs">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-bold text-slate-800">
-                    Search results for "{searchQuery}" ({readingSearchResults.length} tests)
-                  </span>
-                  <button
-                    onClick={() => setSearchQuery('')}
-                    className="text-xs text-blue-600 hover:text-blue-700 font-semibold"
-                  >
-                    Clear Search
-                  </button>
-                </div>
-                {readingSearchResults.length === 0 ? (
-                  <p className="text-xs text-slate-500 py-4 text-center">No matching reading tests found.</p>
-                ) : (
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                    {readingSearchResults.map((test) => renderTestCard(test, !test.isBuiltin || test.collection === 'My Tests'))}
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* View Mode Toggle Header */}
-            <div className="flex flex-wrap items-center justify-between gap-3 pt-1">
-              <div>
-                <h2 className="text-sm font-bold text-slate-900">
-                  {viewMode === 'all_tests'
-                    ? `All Reading Tests (${readingExams.length} Tests Available)`
-                    : `IELTS Test Collections (${collections.length} Collections)`}
-                </h2>
-                <p className="text-xs text-slate-500">
-                  {viewMode === 'all_tests'
-                    ? 'Start any IELTS reading practice test immediately, or browse your custom imports below'
-                    : 'Practice tests organized by Cambridge volumes and official collections'}
-                </p>
-              </div>
-
-              {/* View Switcher: All Tests vs Collections */}
-              <div className="flex items-center gap-1 bg-slate-200/70 p-1 rounded-lg border border-slate-200">
-                <button
-                  onClick={() => setViewMode('all_tests')}
-                  className={`px-3 py-1 text-xs font-semibold rounded-md transition ${
-                    viewMode === 'all_tests'
-                      ? 'bg-white text-slate-900 shadow-xs'
-                      : 'text-slate-600 hover:text-slate-900'
-                  }`}
+    <Container maxW="7xl" py={{ base: 4, md: 6 }} flex="1">
+      <Stack spacing={10}>
+        {/* 1. In-Progress Tests Section (Same style as Anki Decks section in Quiz) */}
+        {inProgressItems.length > 0 && (
+          <Stack spacing={4}>
+            <HStack justify="space-between" align="center" flexWrap="wrap">
+              <HStack spacing={2.5}>
+                <Icon as={IconClock} boxSize={6} color="green.400" />
+                <Heading size="lg" fontFamily={outfit.style.fontFamily}>
+                  In Progress ({inProgressItems.length})
+                </Heading>
+                <Badge
+                  colorScheme="green"
+                  fontSize="sm"
+                  px={2}
+                  py={0.5}
+                  rounded="md"
                 >
-                  All Tests ({readingExams.length})
-                </button>
-                <button
-                  onClick={() => setViewMode('by_collection')}
-                  className={`px-3 py-1 text-xs font-semibold rounded-md transition ${
-                    viewMode === 'by_collection'
-                      ? 'bg-white text-slate-900 shadow-xs'
-                      : 'text-slate-600 hover:text-slate-900'
-                  }`}
+                  Auto-saved
+                </Badge>
+              </HStack>
+              <Text fontSize="sm" color={secondaryColor}>
+                Click any test card to resume right where you left off
+              </Text>
+            </HStack>
+
+            <Grid
+              templateColumns="repeat(auto-fill, minmax(280px, 1fr))"
+              gap={4}
+            >
+              {inProgressItems.map((item) => {
+                if (item.skill === "writing" && item.rawWritingExam) {
+                  return (
+                    <GridItem key={`inprog-${item.id}`}>
+                      <UnifiedIeltsCard
+                        title={item.title}
+                        collectionName={item.collection || "IELTS Writing"}
+                        metaText={`${Math.ceil(
+                          item.timeRemaining / 60,
+                        )} mins left • Task 1 (${item.task1Words || 0} words) • Task 2 (${
+                          item.task2Words || 0
+                        } words)`}
+                        skillColor="orange.400"
+                        skillBadgeLabel="Writing"
+                        skillIcon={IconPencil}
+                        inProgressLabel="In Progress • Resume"
+                        onStart={() =>
+                          onStartWritingExam(item.rawWritingExam!)
+                        }
+                        onEdit={() => {
+                          setEditingWritingExam(item.rawWritingExam!);
+                          setIsWritingEditorOpen(true);
+                        }}
+                        onDelete={() =>
+                          handleDeleteWritingExam(item.id, item.title)
+                        }
+                        onDiscardProgress={() =>
+                          handleDiscardWriting(item.id, item.title)
+                        }
+                      />
+                    </GridItem>
+                  );
+                }
+                if (item.skill === "speaking" && item.rawSpeakingExam) {
+                  return (
+                    <GridItem key={`inprog-${item.id}`}>
+                      <UnifiedIeltsCard
+                        title={item.title}
+                        collectionName={item.collection || "IELTS Speaking"}
+                        metaText={`Part ${item.speakingPart || 1} in progress • Part 1, 2 & 3`}
+                        skillColor="pink.400"
+                        skillBadgeLabel="Speaking"
+                        skillIcon={IconMicrophone}
+                        inProgressLabel="In Progress • Resume"
+                        onStart={() =>
+                          onStartSpeakingExam(item.rawSpeakingExam!)
+                        }
+                        onEdit={() => {
+                          setEditingSpeakingExam(item.rawSpeakingExam!);
+                          setIsSpeakingEditorOpen(true);
+                        }}
+                        onDelete={() =>
+                          handleDeleteSpeakingExam(item.id, item.title)
+                        }
+                        onDiscardProgress={() =>
+                          handleDiscardSpeaking(item.id, item.title)
+                        }
+                      />
+                    </GridItem>
+                  );
+                }
+                if (item.rawExam) {
+                  return renderExamCardItem(item.rawExam);
+                }
+                return null;
+              })}
+            </Grid>
+          </Stack>
+        )}
+
+        {/* 2. Skill Switcher & Quick Controls Row (Unified Chakra UI) */}
+        <Flex
+          justify="space-between"
+          align={{ base: "stretch", md: "center" }}
+          direction={{ base: "column", md: "row" }}
+          gap={4}
+        >
+          {/* 4 IELTS Skill Tabs */}
+          <HStack
+            spacing={2}
+            overflowX="auto"
+            pb={{ base: 1, md: 0 }}
+            flexWrap={{ base: "nowrap", sm: "wrap" }}
+          >
+            {(
+              [
+                {
+                  id: "reading",
+                  label: "Reading",
+                  icon: IconBook,
+                  count: readingExams.length,
+                  inProg: readingInProgressCount,
+                },
+                {
+                  id: "listening",
+                  label: "Listening",
+                  icon: IconHeadphones,
+                  count: listeningExams.length,
+                  inProg: listeningInProgressCount,
+                },
+                {
+                  id: "writing",
+                  label: "Writing",
+                  icon: IconPencil,
+                  count: writingExams.length,
+                  inProg: writingInProgressCount,
+                },
+                {
+                  id: "speaking",
+                  label: "Speaking",
+                  icon: IconMicrophone,
+                  count: speakingExams.length,
+                  inProg: speakingInProgressCount,
+                },
+              ] as const
+            ).map((tab) => {
+              const isSelected = activeTab === tab.id;
+              return (
+                <Button
+                  key={tab.id}
+                  onClick={() => {
+                    setActiveTab(tab.id);
+                    setSelectedCollectionName(null);
+                  }}
+                  leftIcon={<Icon as={tab.icon} boxSize={4} />}
+                  variant={isSelected ? "solid" : "outline"}
+                  colorScheme={isSelected ? "blue" : "gray"}
+                  bg={isSelected ? undefined : cardBg}
+                  borderColor={isSelected ? undefined : cardBorder}
+                  borderWidth="2px"
+                  rounded="xl"
+                  fontWeight={700}
+                  fontSize="sm"
+                  flexShrink={0}
+                >
+                  <HStack spacing={2}>
+                    <Text>{tab.label}</Text>
+                    <Badge
+                      colorScheme={isSelected ? "blue" : "gray"}
+                      variant={isSelected ? "solid" : "subtle"}
+                      rounded="md"
+                      px={1.5}
+                      fontSize="xs"
+                    >
+                      {tab.count}
+                    </Badge>
+                    {tab.inProg > 0 && (
+                      <Badge
+                        colorScheme="green"
+                        variant="solid"
+                        rounded="full"
+                        px={1.5}
+                        fontSize="10px"
+                      >
+                        {tab.inProg}
+                      </Badge>
+                    )}
+                  </HStack>
+                </Button>
+              );
+            })}
+          </HStack>
+
+          {/* Right side controls: View Switcher (All vs Collections) + Quick Add */}
+          <HStack spacing={2} flexWrap="wrap">
+            {(activeTab === "reading" || activeTab === "listening") && (
+              <HStack
+                bg={pillBg}
+                p={1}
+                rounded="xl"
+                borderWidth="2px"
+                borderColor={cardBorder}
+                spacing={1}
+              >
+                <Button
+                  size="sm"
+                  rounded="lg"
+                  fontWeight={700}
+                  variant={viewMode === "all_tests" ? "solid" : "ghost"}
+                  colorScheme={viewMode === "all_tests" ? "blue" : "gray"}
+                  onClick={() => {
+                    setViewMode("all_tests");
+                    setSelectedCollectionName(null);
+                  }}
+                >
+                  All Tests (
+                  {activeTab === "reading"
+                    ? readingExams.length
+                    : listeningExams.length}
+                  )
+                </Button>
+                <Button
+                  size="sm"
+                  rounded="lg"
+                  fontWeight={700}
+                  variant={viewMode === "by_collection" ? "solid" : "ghost"}
+                  colorScheme={viewMode === "by_collection" ? "blue" : "gray"}
+                  onClick={() => setViewMode("by_collection")}
                 >
                   Collections ({collections.length})
-                </button>
-              </div>
-            </div>
-
-            {/* VIEW MODE 1: ALL TESTS (DEFAULT) */}
-            {viewMode === 'all_tests' && (
-              <div className="space-y-6">
-                {/* Pinned Custom Tests Section */}
-                {customReadingTests.length > 0 && (
-                  <div className="space-y-3 bg-blue-50/50 border border-blue-200/80 rounded-xl p-4 shadow-2xs">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <span className="text-amber-500 text-sm">⭐</span>
-                        <h3 className="text-xs font-bold text-blue-950 uppercase tracking-wider">
-                          My Custom Reading Tests ({customReadingTests.length})
-                        </h3>
-                      </div>
-                      <button
-                        onClick={() => onOpenSmartImport(undefined, 'reading')}
-                        className="text-xs text-blue-600 hover:text-blue-800 font-semibold flex items-center gap-1"
-                      >
-                        <Plus className="w-3 h-3" />
-                        <span>Add Another Test</span>
-                      </button>
-                    </div>
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                      {customReadingTests.map((t) => renderTestCard(t, true))}
-                    </div>
-                  </div>
-                )}
-
-                {/* All Tests Grid */}
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between">
-                    <h3 className="text-xs font-bold text-slate-700 uppercase tracking-wider">
-                      Complete Reading Test Bank ({readingExams.length})
-                    </h3>
-                  </div>
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                    {readingExams.map((t) => renderTestCard(t, !t.isBuiltin || t.collection === 'My Tests'))}
-                  </div>
-                </div>
-              </div>
+                </Button>
+              </HStack>
             )}
 
-            {/* VIEW MODE 2: BY COLLECTION */}
-            {viewMode === 'by_collection' && (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {collections.map((col) => {
-                  const colTests = getTestsForCollection(col.name);
-                  const hasCustom = colTests.some((t) => t.isBuiltin === false);
+            {activeTab === "writing" && (
+              <Button
+                size="sm"
+                rounded="xl"
+                colorScheme="blue"
+                fontWeight={700}
+                leftIcon={<IconPlus size={16} />}
+                onClick={() => {
+                  setEditingWritingExam(null);
+                  setIsWritingEditorOpen(true);
+                }}
+              >
+                Add Writing Test
+              </Button>
+            )}
 
-                  return (
-                    <div
-                      key={col.id}
-                      onClick={() => setSelectedCollectionName(col.name)}
-                      className="bg-white border border-slate-200 hover:border-slate-300 hover:shadow-md rounded-xl p-5 transition-all cursor-pointer group shadow-2xs"
+            {activeTab === "speaking" && (
+              <Button
+                size="sm"
+                rounded="xl"
+                colorScheme="blue"
+                fontWeight={700}
+                leftIcon={<IconPlus size={16} />}
+                onClick={() => {
+                  setEditingSpeakingExam(null);
+                  setIsSpeakingEditorOpen(true);
+                }}
+              >
+                Add Speaking Test
+              </Button>
+            )}
+          </HStack>
+        </Flex>
+
+        {/* Active Search Filter Notice */}
+        {searchQuery.trim() && (
+          <HStack
+            justify="space-between"
+            bg={cardBg}
+            borderWidth="2px"
+            borderColor={cardBorder}
+            rounded="xl"
+            px={4}
+            py={3}
+          >
+            <Text fontSize="sm" fontWeight={600}>
+              Search results for &ldquo;{searchQuery}&rdquo;
+            </Text>
+            <Button
+              size="xs"
+              variant="ghost"
+              colorScheme="blue"
+              leftIcon={<IconX size={14} />}
+              onClick={() => {
+                setSearchQuery("");
+                menuEventChannel.emit("ieltsSearchChange", "");
+              }}
+            >
+              Clear Filter
+            </Button>
+          </HStack>
+        )}
+
+        {/* 3. TAB 1 & 2: READING & LISTENING SECTIONS */}
+        {(activeTab === "reading" || activeTab === "listening") && (
+          <Stack spacing={6}>
+            <HStack justify="space-between" align="center" flexWrap="wrap">
+              <HStack spacing={2.5}>
+                <Icon
+                  as={activeTab === "reading" ? IconBook : IconHeadphones}
+                  boxSize={6}
+                  color={activeTab === "reading" ? "blue.400" : "purple.400"}
+                />
+                <Heading size="lg" fontFamily={outfit.style.fontFamily}>
+                  {activeTab === "reading"
+                    ? "IELTS Reading Tests"
+                    : "IELTS Listening Tests"}
+                </Heading>
+                <Badge
+                  colorScheme={activeTab === "reading" ? "blue" : "purple"}
+                  fontSize="sm"
+                  px={2}
+                  py={0.5}
+                  rounded="md"
+                >
+                  {activeTab === "reading"
+                    ? `${filteredReading.length} Tests`
+                    : `${filteredListening.length} Tests`}
+                </Badge>
+              </HStack>
+              <Text fontSize="sm" color={secondaryColor}>
+                {activeTab === "reading"
+                  ? "Split-screen passage & questions, 4-color text highlighter, and instant Band 9.0 scoring"
+                  : "4-Section audio player with playback speed controls and automated scoring"}
+              </Text>
+            </HStack>
+
+            {viewMode === "all_tests" ? (
+              <Grid
+                templateColumns="repeat(auto-fill, minmax(280px, 1fr))"
+                gap={4}
+              >
+                {(activeTab === "reading"
+                  ? filteredReading
+                  : filteredListening
+                ).map((test) => renderExamCardItem(test))}
+              </Grid>
+            ) : selectedCollectionName ? (
+              /* Inside a selected collection folder */
+              <Stack spacing={5}>
+                <HStack justify="space-between" flexWrap="wrap">
+                  <HStack spacing={3}>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      rounded="xl"
+                      leftIcon={<IconArrowLeft size={16} />}
+                      onClick={() => setSelectedCollectionName(null)}
                     >
-                      <div className="flex items-center justify-between mb-2">
-                        <div className="flex items-center gap-3 min-w-0 flex-1">
-                          <div className="w-8 h-8 rounded-lg bg-slate-100 text-slate-700 flex items-center justify-center shrink-0 group-hover:bg-blue-50 group-hover:text-blue-600 transition">
-                            <Folder className="w-4 h-4" />
-                          </div>
-                          <h3 className="text-sm font-bold text-slate-900 group-hover:text-blue-600 transition truncate">
-                            {col.name}
-                          </h3>
-                        </div>
-                        <div className="flex items-center gap-1.5 shrink-0">
-                          {hasCustom && (
-                            <span className="text-[10px] text-blue-700 bg-blue-50 px-2 py-0.5 rounded border border-blue-200 font-semibold">
-                              Custom Tests Added
-                            </span>
-                          )}
-                          <button
-                            onClick={(e) => handleDeleteCollection(e, col.name)}
-                            className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition"
-                            title={`Delete collection "${col.name}"`}
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
-                        </div>
-                      </div>
+                      All Collections
+                    </Button>
+                    <Heading size="md" fontFamily={outfit.style.fontFamily}>
+                      {selectedCollectionName}
+                    </Heading>
+                  </HStack>
+                  <Button
+                    size="sm"
+                    colorScheme="blue"
+                    rounded="xl"
+                    leftIcon={<IconPlus size={16} />}
+                    onClick={() =>
+                      onOpenSmartImport(selectedCollectionName, activeTab)
+                    }
+                  >
+                    Add Test to {selectedCollectionName}
+                  </Button>
+                </HStack>
 
-                      <p className="text-xs text-slate-500 line-clamp-1 mb-4">
-                        {col.description || `IELTS collection: ${col.name}`}
-                      </p>
+                <Grid
+                  templateColumns="repeat(auto-fill, minmax(280px, 1fr))"
+                  gap={4}
+                >
+                  {(activeTab === "reading" ? readingExams : listeningExams)
+                    .filter(
+                      (e) => getExamCollection(e) === selectedCollectionName,
+                    )
+                    .map((test) => renderExamCardItem(test))}
+                </Grid>
+              </Stack>
+            ) : (
+              /* Collections Folder Grid (Matches FolderCard style from Quiz) */
+              <Grid
+                templateColumns="repeat(auto-fill, minmax(260px, 1fr))"
+                gap={4}
+              >
+                {collections.map((col) => {
+                  const colExams = (
+                    activeTab === "reading" ? readingExams : listeningExams
+                  ).filter((e) => getExamCollection(e) === col.name);
+                  return (
+                    <GridItem key={col.name}>
+                      <Box
+                        as="article"
+                        h="full"
+                        minH="148px"
+                        rounded="xl"
+                        p="5"
+                        bg={cardBg}
+                        borderColor={cardBorder}
+                        borderWidth="2px"
+                        shadow="lg"
+                        cursor="pointer"
+                        transition="all ease-in-out 150ms"
+                        onClick={() => setSelectedCollectionName(col.name)}
+                        _hover={{
+                          transform: "translateY(-2px)",
+                          borderBottomColor: "blue.300",
+                        }}
+                      >
+                        <Flex
+                          justify="space-between"
+                          direction="column"
+                          h="full"
+                          gap={4}
+                        >
+                          <Stack spacing={2}>
+                            <HStack justify="space-between">
+                              <HStack spacing={2}>
+                                <Icon
+                                  as={IconFolder}
+                                  boxSize={5}
+                                  color="blue.400"
+                                />
+                                <Heading
+                                  size="md"
+                                  fontFamily={outfit.style.fontFamily}
+                                  noOfLines={1}
+                                >
+                                  {col.name}
+                                </Heading>
+                              </HStack>
+                              {!col.isBuiltin && (
+                                <IconButton
+                                  size="xs"
+                                  variant="ghost"
+                                  aria-label={`Delete ${col.name}`}
+                                  icon={<IconTrash size={14} />}
+                                  onClick={(e) =>
+                                    handleDeleteCollection(e, col.name)
+                                  }
+                                />
+                              )}
+                            </HStack>
+                            <Text
+                              fontSize="sm"
+                              color={secondaryColor}
+                              noOfLines={2}
+                            >
+                              {col.description ||
+                                "Curated IELTS practice collection"}
+                            </Text>
+                          </Stack>
 
-                      {/* Reading & Listening Pills */}
-                      <div className="flex items-center gap-2">
-                        {(() => {
-                          const readingCount = colTests.filter((t) => !isListeningExam(t)).length;
-                          const listeningCount = colTests.filter((t) => isListeningExam(t)).length;
-                          return (
-                            <>
-                              <div className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-slate-50 border border-slate-200 text-slate-700 text-xs font-medium group-hover:bg-blue-50 group-hover:text-blue-700 group-hover:border-blue-200 transition">
-                                <BookOpen className="w-3.5 h-3.5 shrink-0 text-blue-600" />
-                                <span>{readingCount} Reading</span>
-                              </div>
-
-                              <div className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-slate-50 border border-slate-200 text-slate-700 text-xs font-medium group-hover:bg-slate-100 transition">
-                                <Headphones className="w-3.5 h-3.5 shrink-0 text-indigo-600" />
-                                <span>{listeningCount} Listening</span>
-                              </div>
-                            </>
-                          );
-                        })()}
-                      </div>
-                    </div>
+                          <HStack justify="space-between">
+                            <Badge
+                              colorScheme="blue"
+                              variant="subtle"
+                              rounded="md"
+                              px={2}
+                              py={0.5}
+                            >
+                              {colExams.length}{" "}
+                              {activeTab === "reading"
+                                ? "Reading"
+                                : "Listening"}{" "}
+                              Tests
+                            </Badge>
+                            <Icon
+                              as={IconArrowRight}
+                              boxSize={4}
+                              color={secondaryColor}
+                            />
+                          </HStack>
+                        </Flex>
+                      </Box>
+                    </GridItem>
                   );
                 })}
-              </div>
+              </Grid>
             )}
-          </section>
+          </Stack>
         )}
 
-        {/* TAB 2: LISTENING */}
-        {activeTab === 'listening' && (
-          <section id="listening-panel" role="tabpanel" aria-labelledby="tab-listening" className="space-y-6">
-            {/* Search results */}
-            {searchQuery.trim() && (
-              <div className="space-y-3 p-5 bg-white border border-slate-200 rounded-xl shadow-2xs">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-bold text-slate-800">
-                    Search results for "{searchQuery}" ({listeningSearchResults.length} tests)
-                  </span>
-                  <button onClick={() => setSearchQuery('')} className="text-xs text-blue-600 hover:text-blue-700 font-semibold">
-                    Clear Search
-                  </button>
-                </div>
-                {listeningSearchResults.length === 0 ? (
-                  <p className="text-xs text-slate-500 py-4 text-center">No matching listening tests found.</p>
-                ) : (
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                    {listeningSearchResults.map(t => renderTestCard(t, !t.isBuiltin))}
-                  </div>
-                )}
-              </div>
-            )}
+        {/* 4. TAB 3: WRITING SECTION */}
+        {activeTab === "writing" && (
+          <Stack spacing={6}>
+            <HStack justify="space-between" align="center" flexWrap="wrap">
+              <HStack spacing={2.5}>
+                <Icon as={IconPencil} boxSize={6} color="orange.400" />
+                <Heading size="lg" fontFamily={outfit.style.fontFamily}>
+                  IELTS Writing Tests (Task 1 &amp; Task 2)
+                </Heading>
+                <Badge
+                  colorScheme="orange"
+                  fontSize="sm"
+                  px={2}
+                  py={0.5}
+                  rounded="md"
+                >
+                  {filteredWriting.length} Tests
+                </Badge>
+              </HStack>
+              <Text fontSize="sm" color={secondaryColor}>
+                Split-screen essay room, interactive charts, live word counter, Band 8.5+ model essays &amp; AI Coach
+              </Text>
+            </HStack>
 
-            {/* Header */}
-            <div className="flex flex-wrap items-center justify-between gap-3 pt-1">
-              <div>
-                <h2 className="text-sm font-bold text-slate-900 flex items-center gap-2">
-                  <Headphones className="w-4 h-4 text-blue-600" />
-                  Listening Practice Tests ({listeningExams.length} Available)
-                </h2>
-                <p className="text-xs text-slate-500 mt-0.5">
-                  4 sections · 40 questions · Audio player with MP3 support · Instant band scoring
-                </p>
-              </div>
-              <button
-                onClick={() => onOpenSmartImport(undefined, 'listening')}
-                className="flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition shadow-xs"
+            <Grid
+              templateColumns="repeat(auto-fill, minmax(280px, 1fr))"
+              gap={4}
+            >
+              {filteredWriting.map((test) => {
+                const savedW = getSavedWritingSummary(test.id);
+                return (
+                  <GridItem key={`${test.id}-${progressVersion}`}>
+                    <UnifiedIeltsCard
+                      title={test.title}
+                      collectionName={test.collection || "IELTS Writing"}
+                      metaText={
+                        savedW
+                          ? `${Math.ceil(
+                              savedW.timeRemaining / 60,
+                            )} mins left • T1: ${savedW.task1Words} words • T2: ${
+                              savedW.task2Words
+                            } words`
+                          : `${test.durationMinutes} mins • Task 1 (150+ words) & Task 2 (250+ words)`
+                      }
+                      subText={test.task2.prompt}
+                      skillColor="orange.400"
+                      skillBadgeLabel="Writing"
+                      skillIcon={IconPencil}
+                      inProgressLabel={savedW ? "In Progress • Resume" : undefined}
+                      onStart={() => onStartWritingExam(test)}
+                      onEdit={() => {
+                        setEditingWritingExam(test);
+                        setIsWritingEditorOpen(true);
+                      }}
+                      onDelete={() =>
+                        handleDeleteWritingExam(test.id, test.title)
+                      }
+                      onDiscardProgress={
+                        savedW
+                          ? () => handleDiscardWriting(test.id, test.title)
+                          : undefined
+                      }
+                    />
+                  </GridItem>
+                );
+              })}
+            </Grid>
+          </Stack>
+        )}
+
+        {/* 5. TAB 4: SPEAKING SECTION */}
+        {activeTab === "speaking" && (
+          <Stack spacing={6}>
+            <HStack justify="space-between" align="center" flexWrap="wrap">
+              <HStack spacing={2.5}>
+                <Icon as={IconMicrophone} boxSize={6} color="pink.400" />
+                <Heading size="lg" fontFamily={outfit.style.fontFamily}>
+                  IELTS Speaking Tests (Part 1, 2 &amp; 3)
+                </Heading>
+                <Badge
+                  colorScheme="pink"
+                  fontSize="sm"
+                  px={2}
+                  py={0.5}
+                  rounded="md"
+                >
+                  {filteredSpeaking.length} Tests
+                </Badge>
+              </HStack>
+              <Text fontSize="sm" color={secondaryColor}>
+                Interactive voice recording studio, live Speech-to-Text transcript, 1-minute Cue Card timer &amp; Band 8.0+ sample answers
+              </Text>
+            </HStack>
+
+            <Grid
+              templateColumns="repeat(auto-fill, minmax(280px, 1fr))"
+              gap={4}
+            >
+              {filteredSpeaking.map((test) => {
+                const savedS = loadSpeakingProgress(test.id);
+                return (
+                  <GridItem key={`${test.id}-${progressVersion}`}>
+                    <UnifiedIeltsCard
+                      title={test.title}
+                      collectionName={test.collection || "IELTS Speaking"}
+                      metaText={`Part 1 (${test.part1Questions.length} Qs) • Part 2 Cue Card • Part 3 (${test.part3Questions.length} Qs)`}
+                      subText={`Cue Card: "${test.part2Question.questionText}"`}
+                      skillColor="pink.400"
+                      skillBadgeLabel="Speaking"
+                      skillIcon={IconMicrophone}
+                      inProgressLabel={
+                        savedS ? "In Progress • Resume" : undefined
+                      }
+                      onStart={() => onStartSpeakingExam(test)}
+                      onEdit={() => {
+                        setEditingSpeakingExam(test);
+                        setIsSpeakingEditorOpen(true);
+                      }}
+                      onDelete={() =>
+                        handleDeleteSpeakingExam(test.id, test.title)
+                      }
+                      onDiscardProgress={
+                        savedS
+                          ? () => handleDiscardSpeaking(test.id, test.title)
+                          : undefined
+                      }
+                    />
+                  </GridItem>
+                );
+              })}
+            </Grid>
+          </Stack>
+        )}
+      </Stack>
+
+      {/* New Collection Modal (Chakra UI) */}
+      <Modal
+        isOpen={showNewCollectionModal}
+        onClose={() => setShowNewCollectionModal(false)}
+        isCentered
+      >
+        <ModalOverlay backdropFilter="blur(6px)" />
+        <ModalContent
+          bg={cardBg}
+          borderWidth="2px"
+          borderColor={cardBorder}
+          rounded="2xl"
+        >
+          <form onSubmit={handleCreateCollection}>
+            <ModalHeader fontFamily={outfit.style.fontFamily}>
+              Create New Collection
+            </ModalHeader>
+            <ModalCloseButton />
+            <ModalBody>
+              <Stack spacing={4}>
+                <Box>
+                  <Text fontSize="xs" fontWeight={700} mb={1}>
+                    Collection Name (e.g., Cambridge 20, Q2 Forecast...)
+                  </Text>
+                  <Input
+                    required
+                    value={newCollectionName}
+                    onChange={(e) => setNewCollectionName(e.target.value)}
+                    placeholder="Enter collection name..."
+                    rounded="xl"
+                  />
+                </Box>
+                <Box>
+                  <Text fontSize="xs" fontWeight={700} mb={1}>
+                    Short Description (Optional)
+                  </Text>
+                  <Textarea
+                    value={newCollectionDesc}
+                    onChange={(e) => setNewCollectionDesc(e.target.value)}
+                    placeholder="Notes about this collection..."
+                    rows={2}
+                    rounded="xl"
+                  />
+                </Box>
+              </Stack>
+            </ModalBody>
+            <ModalFooter gap={2}>
+              <Button
+                variant="ghost"
+                onClick={() => setShowNewCollectionModal(false)}
               >
-                <Plus className="w-3.5 h-3.5" />
-                <span>+ Add Listening Test</span>
-              </button>
-            </div>
+                Cancel
+              </Button>
+              <Button type="submit" colorScheme="blue" rounded="xl">
+                Create Collection
+              </Button>
+            </ModalFooter>
+          </form>
+        </ModalContent>
+      </Modal>
 
-            {/* Custom (user-added) listening tests */}
-            {customListeningTests.length > 0 && (
-              <div className="space-y-3 bg-blue-50/50 border border-blue-200/80 rounded-xl p-4 shadow-2xs">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <span className="text-amber-500 text-sm">⭐</span>
-                    <h3 className="text-xs font-bold text-blue-950 uppercase tracking-wider">
-                      My Custom Listening Tests ({customListeningTests.length})
-                    </h3>
-                  </div>
-                  <button onClick={() => onOpenSmartImport(undefined, 'listening')} className="text-xs text-blue-600 hover:text-blue-800 font-semibold flex items-center gap-1">
-                    <Plus className="w-3 h-3" />
-                    <span>Add Another</span>
-                  </button>
-                </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                  {customListeningTests.map(t => renderTestCard(t, true))}
-                </div>
-              </div>
-            )}
+      {/* Writing & Speaking Editor Modals */}
+      <WritingEditorModal
+        key={editingWritingExam?.id || "new-writing"}
+        isOpen={isWritingEditorOpen}
+        onClose={() => {
+          setIsWritingEditorOpen(false);
+          setEditingWritingExam(null);
+        }}
+        initialExam={editingWritingExam}
+        onSave={handleSaveWriting}
+      />
 
-            {/* All listening tests */}
-            <div className="space-y-3">
-              <h3 className="text-xs font-bold text-slate-700 uppercase tracking-wider">
-                Built-in Listening Tests ({listeningExams.filter(e => e.isBuiltin !== false).length})
-              </h3>
-              {listeningExams.filter(e => e.isBuiltin !== false).length === 0 ? (
-                <div className="flex flex-col items-center justify-center py-12 space-y-3 border-2 border-dashed border-slate-200 rounded-xl bg-slate-50/40">
-                  <Headphones className="w-10 h-10 text-slate-300" />
-                  <div className="text-center space-y-1">
-                    <p className="text-sm font-semibold text-slate-700">No listening tests yet</p>
-                    <p className="text-xs text-slate-500">Import a Listening test via TXT format to get started.</p>
-                  </div>
-                  <button onClick={() => onOpenSmartImport(undefined, 'listening')} className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-lg shadow-xs flex items-center gap-1.5 transition">
-                    <Plus className="w-3.5 h-3.5" />
-                    <span>Import First Listening Test</span>
-                  </button>
-                </div>
-              ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                  {listeningExams.filter(e => e.isBuiltin !== false).map(t => renderTestCard(t, false))}
-                </div>
-              )}
-            </div>
-          </section>
-        )}
-
-        {/* TAB 3: WRITING SECTION */}
-        {activeTab === 'writing' && (
-          <section id="writing-panel" role="tabpanel" aria-labelledby="tab-writing" className="space-y-6">
-            <div className="bg-white border border-slate-200 rounded-xl p-4 sm:p-6 space-y-4 shadow-2xs">
-              <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 pb-4">
-                <div>
-                  <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
-                    <PenTool className="w-4 h-4 text-blue-600 shrink-0" />
-                    <span>Computer-Delivered IELTS Writing Room</span>
-                  </h3>
-                  <p className="text-xs text-slate-500 mt-1">
-                    Split-screen layout, visual charts, live word counters, Band 8.5+ model essays & AI coaching prompts
-                  </p>
-                </div>
-
-                <div className="flex flex-wrap items-center gap-2">
-                  <button
-                    onClick={() => {
-                      setEditingWritingExam(null);
-                      setIsWritingEditorOpen(true);
-                    }}
-                    className="px-3.5 py-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-300 text-xs font-semibold rounded-lg shadow-2xs flex items-center gap-1.5 transition"
-                  >
-                    <Plus className="w-3.5 h-3.5" />
-                    <span>+ Add Writing Test</span>
-                  </button>
-                  <button
-                    disabled={writingExams.length === 0}
-                    onClick={() => writingExams[0] && onStartWritingExam(writingExams[0])}
-                    className={`px-4 py-2 text-xs font-semibold rounded-lg shadow-xs flex items-center gap-1.5 transition ${
-                      writingExams.length === 0
-                        ? 'bg-slate-200 text-slate-400 cursor-not-allowed'
-                        : 'bg-blue-600 hover:bg-blue-700 text-white'
-                    }`}
-                  >
-                    <Play className="w-3.5 h-3.5 fill-current" />
-                    <span>Enter Writing Room</span>
-                  </button>
-                </div>
-              </div>
-
-              {/* Search results */}
-              {searchQuery.trim() && (
-                <div className="space-y-3 p-5 bg-white border border-slate-200 rounded-xl shadow-2xs">
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-bold text-slate-800">
-                      Search results for "{searchQuery}" ({writingSearchResults.length} tests)
-                    </span>
-                    <button onClick={() => setSearchQuery('')} className="text-xs text-blue-600 hover:text-blue-700 font-semibold">
-                      Clear Search
-                    </button>
-                  </div>
-                  {writingSearchResults.length === 0 ? (
-                    <p className="text-xs text-slate-500 py-4 text-center">No matching writing tests found.</p>
-                  ) : (
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      {writingSearchResults.map((test) => renderWritingCard(test))}
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {/* Writing Tests Grid */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-1">
-                {writingExams.map((test) => renderWritingCard(test))}
-              </div>
-            </div>
-          </section>
-        )}
-
-        {/* TAB 4: SPEAKING SECTION */}
-        {activeTab === 'speaking' && (
-          <section id="speaking-panel" role="tabpanel" aria-labelledby="tab-speaking" className="space-y-6">
-            <div className="bg-white border border-slate-200 rounded-xl p-4 sm:p-6 space-y-4 shadow-2xs">
-              <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 pb-4">
-                <div>
-                  <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
-                    <Mic className="w-4 h-4 text-blue-600 shrink-0" />
-                    <span>IELTS Speaking Room (Live Audio Recording & Transcript)</span>
-                  </h3>
-                  <p className="text-xs text-slate-500 mt-1">
-                    Real audio recorder, speech-to-text live transcripts, 1-minute cue card prep timer & Band 8.0+ sample responses
-                  </p>
-                </div>
-
-                <div className="flex flex-wrap items-center gap-2">
-                  <button
-                    onClick={() => {
-                      setEditingSpeakingExam(null);
-                      setIsSpeakingEditorOpen(true);
-                    }}
-                    className="px-3.5 py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-300 text-xs font-semibold rounded-lg shadow-2xs flex items-center gap-1.5 transition"
-                  >
-                    <Plus className="w-3.5 h-3.5" />
-                    <span>+ Add Speaking Test</span>
-                  </button>
-                  <button
-                    disabled={speakingExams.length === 0}
-                    onClick={() => speakingExams[0] && onStartSpeakingExam(speakingExams[0])}
-                    className={`px-4 py-2 text-xs font-semibold rounded-lg shadow-xs flex items-center gap-1.5 transition ${
-                      speakingExams.length === 0
-                        ? 'bg-slate-200 text-slate-400 cursor-not-allowed'
-                        : 'bg-blue-600 hover:bg-blue-700 text-white'
-                    }`}
-                  >
-                    <Play className="w-3.5 h-3.5 fill-current" />
-                    <span>Enter Speaking Room</span>
-                  </button>
-                </div>
-              </div>
-
-              {/* Search results */}
-              {searchQuery.trim() && (
-                <div className="space-y-3 p-5 bg-white border border-slate-200 rounded-xl shadow-2xs">
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-bold text-slate-800">
-                      Search results for "{searchQuery}" ({speakingSearchResults.length} tests)
-                    </span>
-                    <button onClick={() => setSearchQuery('')} className="text-xs text-blue-600 hover:text-blue-700 font-semibold">
-                      Clear Search
-                    </button>
-                  </div>
-                  {speakingSearchResults.length === 0 ? (
-                    <p className="text-xs text-slate-500 py-4 text-center">No matching speaking tests found.</p>
-                  ) : (
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      {speakingSearchResults.map((test) => renderSpeakingCard(test))}
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {/* Speaking Tests Grid */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-1">
-                {speakingExams.map((test) => renderSpeakingCard(test))}
-              </div>
-            </div>
-          </section>
-        )}
-      </main>
-
-      {/* Tests Modal for Selected Collection */}
-      {selectedCollectionName !== null && (
-        <div className="fixed inset-0 z-50 bg-black/30 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white border border-slate-200 rounded-xl max-w-2xl w-full max-h-[85vh] flex flex-col overflow-hidden shadow-xl animate-in fade-in zoom-in-95">
-            {/* Modal Header */}
-            <div className="p-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
-              <div className="flex items-center gap-2.5">
-                <div className="w-8 h-8 rounded-lg bg-slate-100 text-slate-700 flex items-center justify-center">
-                  <Folder className="w-4 h-4" />
-                </div>
-                <div>
-                  <h3 className="text-sm font-bold text-slate-900">
-                    Collection: {selectedCollectionName}
-                  </h3>
-                  <p className="text-xs text-slate-500 mt-0.5">
-                    {activeCollectionTests.length} tests available in this collection
-                  </p>
-                </div>
-              </div>
-
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => {
-                    const col = selectedCollectionName || undefined;
-                    setSelectedCollectionName(null);
-                    onOpenSmartImport(col, activeTab === 'listening' ? 'listening' : 'reading');
-                  }}
-                  className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-lg flex items-center gap-1 shadow-xs transition"
-                  title="Add a new test to this collection"
-                >
-                  <Plus className="w-3.5 h-3.5" />
-                  <span>+ Add Test</span>
-                </button>
-
-                <button
-                  onClick={() => setSelectedCollectionName(null)}
-                  className="text-slate-400 hover:text-slate-700 p-1 rounded-md hover:bg-slate-100 transition"
-                >
-                  <X className="w-5 h-5" />
-                </button>
-              </div>
-            </div>
-
-            {/* Tests List inside Selected Collection */}
-            <div className="flex-1 overflow-y-auto p-4 space-y-2.5">
-              {activeCollectionTests.length > 0 ? (
-                activeCollectionTests.map((test) => {
-                  const totalQ = test.parts.reduce(
-                    (sum, p) =>
-                      sum + (p.questionGroups || []).reduce((gSum, g) => gSum + (g.questions || []).length, 0),
-                    0
-                  );
-
-                  return (
-                    <div
-                      key={test.id}
-                      className="bg-white border border-slate-200 hover:border-slate-300 rounded-lg p-3.5 flex items-center justify-between gap-4 transition group shadow-2xs"
-                    >
-                      <div className="min-w-0 flex-1">
-                        <h4 className="text-sm font-bold text-slate-900 group-hover:text-blue-600 transition truncate">
-                          {test.title}
-                        </h4>
-                        <div className="flex items-center gap-3 text-xs text-slate-500 mt-1">
-                          <span className="flex items-center gap-1">
-                            <Clock className="w-3 h-3 text-slate-400" /> {test.durationMinutes || (isListeningExam(test) ? 30 : 60)} mins
-                          </span>
-                          <span>•</span>
-                          <span>{test.parts.length} {isListeningExam(test) ? 'Sections' : 'Reading Parts'}</span>
-                          <span>•</span>
-                          <span className="text-slate-700 font-semibold">{totalQ} Questions</span>
-                        </div>
-                      </div>
-
-                      <div className="flex items-center gap-1.5 shrink-0">
-                        <button
-                          onClick={() => {
-                            setSelectedCollectionName(null);
-                            onSelectExam(test);
-                          }}
-                          className="px-3.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-lg shadow-xs flex items-center gap-1 transition"
-                        >
-                          <Play className="w-3.5 h-3.5 fill-white" />
-                          <span>Start Test</span>
-                        </button>
-                        <button
-                          onClick={() => {
-                            setSelectedCollectionName(null);
-                            onOpenEditor(test);
-                          }}
-                          className="p-1.5 bg-white hover:bg-slate-50 text-slate-600 rounded-lg border border-slate-200 transition shadow-2xs"
-                          title="Edit Test"
-                        >
-                          <Edit3 className="w-3.5 h-3.5" />
-                        </button>
-                        <button
-                          onClick={(e) => handleDeleteExam(e, test.id, test.title)}
-                          className="p-1.5 bg-white hover:bg-rose-50 text-slate-400 hover:text-rose-600 rounded-lg border border-slate-200 transition shadow-2xs"
-                          title="Delete Test"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-                    </div>
-                  );
-                })
-              ) : (
-                <div className="text-center py-8 space-y-2.5">
-                  <BookOpen className="w-8 h-8 text-slate-300 mx-auto" />
-                  <p className="text-xs text-slate-600 font-medium">
-                    No tests in {selectedCollectionName} yet.
-                  </p>
-                  <button
-                    onClick={() => {
-                      const col = selectedCollectionName || undefined;
-                      setSelectedCollectionName(null);
-                      onOpenSmartImport(col, activeTab === 'listening' ? 'listening' : 'reading');
-                    }}
-                    className="px-3.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-lg inline-flex items-center gap-1.5 shadow-xs"
-                  >
-                    <Plus className="w-3.5 h-3.5" />
-                    <span>Import New Test to this Collection</span>
-                  </button>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* New Collection Modal */}
-      {showNewCollectionModal && (
-        <div className="fixed inset-0 z-50 bg-black/30 flex items-center justify-center p-4 backdrop-blur-xs">
-          <div className="bg-white border border-slate-200 rounded-xl max-w-md w-full p-5 space-y-4 shadow-xl">
-            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-              <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
-                <FolderPlus className="w-4 h-4 text-blue-600" />
-                <span>Create New Collection</span>
-              </h3>
-              <button onClick={() => setShowNewCollectionModal(false)} className="text-slate-400 hover:text-slate-700">
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            <form onSubmit={handleCreateCollection} className="space-y-3.5">
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">
-                  Collection Name <span className="text-rose-500">*</span>
-                </label>
-                <input
-                  type="text"
-                  required
-                  value={newCollectionName}
-                  onChange={(e) => setNewCollectionName(e.target.value)}
-                  placeholder="e.g., Cambridge 18, Mock Tests 2026..."
-                  className="w-full text-xs p-2.5 bg-slate-50 border border-slate-200 rounded-lg text-slate-900 focus:bg-white focus:border-blue-600 outline-none transition"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">
-                  Description (optional)
-                </label>
-                <input
-                  type="text"
-                  value={newCollectionDesc}
-                  onChange={(e) => setNewCollectionDesc(e.target.value)}
-                  placeholder="e.g., Authentic IELTS practice exams..."
-                  className="w-full text-xs p-2.5 bg-slate-50 border border-slate-200 rounded-lg text-slate-900 focus:bg-white focus:border-blue-600 outline-none transition"
-                />
-              </div>
-
-              <div className="flex items-center justify-end gap-2 pt-2">
-                <button
-                  type="button"
-                  onClick={() => setShowNewCollectionModal(false)}
-                  className="px-3 py-1.5 text-xs text-slate-500 hover:text-slate-800 font-medium"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="px-4 py-1.5 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-lg shadow-xs transition"
-                >
-                  Create Collection
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* Writing Editor Modal */}
-      {isWritingEditorOpen && (
-        <WritingEditorModal
-          key={editingWritingExam?.id || 'new-writing'}
-          isOpen={isWritingEditorOpen}
-          initialExam={editingWritingExam}
-          onClose={() => {
-            setIsWritingEditorOpen(false);
-            setEditingWritingExam(null);
-          }}
-          onSave={handleSaveWriting}
-        />
-      )}
-
-      {/* Speaking Editor Modal */}
-      {isSpeakingEditorOpen && (
-        <SpeakingEditorModal
-          key={editingSpeakingExam?.id || 'new-speaking'}
-          isOpen={isSpeakingEditorOpen}
-          initialExam={editingSpeakingExam}
-          onClose={() => {
-            setIsSpeakingEditorOpen(false);
-            setEditingSpeakingExam(null);
-          }}
-          onSave={handleSaveSpeaking}
-        />
-      )}
-    </div>
+      <SpeakingEditorModal
+        key={editingSpeakingExam?.id || "new-speaking"}
+        isOpen={isSpeakingEditorOpen}
+        onClose={() => {
+          setIsSpeakingEditorOpen(false);
+          setEditingSpeakingExam(null);
+        }}
+        initialExam={editingSpeakingExam}
+        onSave={handleSaveSpeaking}
+      />
+    </Container>
   );
 };

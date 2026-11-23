@@ -97,23 +97,23 @@ export const QuestionItem: FC<QuestionItemProps> = ({
   return (
     <div
       id={`q-card-${question.orderNumber}`}
-      className={`border rounded-none bg-white p-4 md:p-5 transition-all scroll-mt-6 mb-3 shadow-none font-sans text-gray-900 ${
+      className={`border-2 rounded-2xl bg-white p-5 md:p-6 transition-all scroll-mt-6 mb-3.5 shadow-xs font-sans text-gray-900 ${
         isReviewMode
           ? isCorrect
             ? 'border-emerald-500 bg-emerald-50/30'
             : 'border-rose-400 bg-rose-50/30'
           : isFlagged
           ? 'border-amber-400 bg-amber-50/20'
-          : 'border-gray-300 hover:border-gray-400'
+          : 'border-gray-200 hover:border-gray-300'
       }`}
     >
       {/* Question Header & Prompt */}
-      <div className="flex items-start justify-between gap-3 mb-3">
-        <div className="flex items-start gap-3.5 flex-1">
-          <span className={`font-bold text-black ${orderNumClass} min-w-[24px] pt-0.5 select-none`}>
+      <div className="flex items-start justify-between gap-3 mb-3.5">
+        <div className="flex items-start gap-3 flex-1">
+          <span className={`inline-flex items-center justify-center font-extrabold text-blue-700 bg-blue-50 border border-blue-200 rounded-lg px-2.5 py-0.5 ${orderNumClass} select-none shrink-0`}>
             {question.orderNumber}
           </span>
-          <div className={`text-gray-900 font-normal ${textSizeClass} flex-1`}>
+          <div className={`text-gray-900 font-medium ${textSizeClass} flex-1 pt-0.5`}>
             {renderMarkdownText(question.prompt)}
           </div>
         </div>
@@ -123,8 +123,10 @@ export const QuestionItem: FC<QuestionItemProps> = ({
           <button
             onClick={() => onToggleFlag(question.orderNumber)}
             title={isFlagged ? 'Remove flag' : 'Flag for review'}
-            className={`p-1 transition ${
-              isFlagged ? 'text-amber-500 hover:text-amber-600' : 'text-gray-300 hover:text-gray-500'
+            className={`p-1.5 rounded-xl border transition ${
+              isFlagged
+                ? 'text-amber-600 bg-amber-50 border-amber-300 hover:bg-amber-100'
+                : 'text-gray-400 border-transparent hover:text-gray-600 hover:bg-gray-100'
             }`}
           >
             <Bookmark className={`w-4 h-4 ${isFlagged ? 'fill-amber-500' : ''}`} />
@@ -135,11 +137,11 @@ export const QuestionItem: FC<QuestionItemProps> = ({
         {isReviewMode && (
           <div className="flex items-center gap-1 shrink-0">
             {isCorrect ? (
-              <span className="flex items-center text-xs font-bold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-none">
+              <span className="flex items-center text-xs font-bold text-emerald-700 bg-emerald-100 border border-emerald-300 px-2.5 py-1 rounded-xl">
                 <CheckCircle2 className="w-3.5 h-3.5 mr-1" /> Correct
               </span>
             ) : (
-              <span className="flex items-center text-xs font-bold text-rose-700 bg-rose-100 px-2 py-0.5 rounded-none">
+              <span className="flex items-center text-xs font-bold text-rose-700 bg-rose-100 border border-rose-300 px-2.5 py-1 rounded-xl">
                 <XCircle className="w-3.5 h-3.5 mr-1" /> Incorrect
               </span>
             )}
@@ -147,9 +149,9 @@ export const QuestionItem: FC<QuestionItemProps> = ({
         )}
       </div>
 
-      {/* Question Body / Inputs */}
+      {/* Question Body / Inputs — PNO Quiz <Clickable> Option Cards */}
       {isRadioType && (
-        <div className="space-y-2.5 pl-8 md:pl-9 mt-2">
+        <div className="space-y-2.5 mt-3">
           {defaultOptions.map((opt) => {
             const isSelected = userAnswer === opt.id;
             const normTarget = Array.isArray(question.correctAnswer)
@@ -161,18 +163,19 @@ export const QuestionItem: FC<QuestionItemProps> = ({
             return (
               <label
                 key={opt.id}
-                className={`flex items-start space-x-3 cursor-pointer select-none py-1.5 transition ${
+                className={`flex items-start gap-3 cursor-pointer select-none px-4 py-3 rounded-xl border-2 transition ${
                   isReviewMode
                     ? isTargetCorrect
-                      ? 'bg-emerald-100/60 font-semibold text-emerald-900 px-2'
+                      ? 'bg-emerald-50 border-emerald-500 font-bold text-emerald-900'
                       : isSelected && !isCorrect
-                      ? 'bg-rose-100/60 line-through text-rose-800 px-2'
-                      : ''
-                    : ''
+                      ? 'bg-rose-50 border-rose-400 line-through text-rose-800'
+                      : 'border-gray-200 bg-white opacity-75'
+                    : isSelected
+                    ? 'border-blue-600 bg-blue-50/70 text-blue-950 font-semibold shadow-2xs'
+                    : 'border-gray-200 bg-white hover:border-blue-300 hover:bg-slate-50/70'
                 }`}
               >
-                {/* Official IELTS Radio Button: Circle with centered solid black dot */}
-                <div className="relative flex items-center justify-center shrink-0 mt-0.5">
+                <div className="relative flex items-center justify-center shrink-0 mt-1">
                   <input
                     type="radio"
                     name={`q-${question.orderNumber}`}
@@ -183,17 +186,17 @@ export const QuestionItem: FC<QuestionItemProps> = ({
                     className="sr-only"
                   />
                   {isSelected ? (
-                    <span className="w-4 h-4 rounded-full border border-black bg-white inline-flex items-center justify-center shrink-0">
-                      <span className="w-2 h-2 rounded-full bg-black"></span>
+                    <span className="w-4.5 h-4.5 rounded-full border-2 border-blue-600 bg-blue-600 inline-flex items-center justify-center shrink-0">
+                      <span className="w-2 h-2 rounded-full bg-white"></span>
                     </span>
                   ) : (
-                    <span className="w-4 h-4 rounded-full border border-gray-500 bg-white hover:border-black inline-flex items-center justify-center shrink-0"></span>
+                    <span className="w-4.5 h-4.5 rounded-full border-2 border-gray-300 bg-white inline-flex items-center justify-center shrink-0"></span>
                   )}
                 </div>
 
-                <span className={`text-gray-900 font-normal tracking-wide ${textSizeClass}`}>
+                <span className={`text-gray-900 tracking-wide ${textSizeClass}`}>
                   {opt.id && !['TRUE', 'FALSE', 'NOT GIVEN', 'YES', 'NO'].includes(opt.id) && (
-                    <strong className="mr-1.5">{opt.id}.</strong>
+                    <strong className="mr-1.5 text-blue-700">{opt.id}.</strong>
                   )}
                   {renderMarkdownText(opt.text)}
                 </span>
@@ -203,9 +206,9 @@ export const QuestionItem: FC<QuestionItemProps> = ({
         </div>
       )}
 
-      {/* Multiple Choice Multi (e.g. Choose TWO / THREE) */}
+      {/* Multiple Choice Multi (e.g. Choose TWO / THREE) — PNO Quiz <Clickable> Option Cards */}
       {question.type === 'MULTIPLE_CHOICE_MULTI' && (
-        <div className="space-y-2.5 pl-8 md:pl-9 mt-2">
+        <div className="space-y-2.5 mt-3">
           {(question.options || []).map((opt) => {
             const currentAnswers = Array.isArray(userAnswer) ? userAnswer : [];
             const isSelected = currentAnswers.includes(opt.id);
@@ -235,17 +238,19 @@ export const QuestionItem: FC<QuestionItemProps> = ({
             return (
               <label
                 key={opt.id}
-                className={`flex items-start space-x-3 cursor-pointer select-none py-1.5 transition ${
+                className={`flex items-start gap-3 cursor-pointer select-none px-4 py-3 rounded-xl border-2 transition ${
                   isReviewMode
                     ? isTargetCorrect
-                      ? 'bg-emerald-100/60 font-semibold text-emerald-900 px-2'
+                      ? 'bg-emerald-50 border-emerald-500 font-bold text-emerald-900'
                       : isSelected && !isTargetCorrect
-                      ? 'bg-rose-100/60 line-through text-rose-800 px-2'
-                      : ''
-                    : ''
+                      ? 'bg-rose-50 border-rose-400 line-through text-rose-800'
+                      : 'border-gray-200 bg-white opacity-75'
+                    : isSelected
+                    ? 'border-blue-600 bg-blue-50/70 text-blue-950 font-semibold shadow-2xs'
+                    : 'border-gray-200 bg-white hover:border-blue-300 hover:bg-slate-50/70'
                 }`}
               >
-                <div className="relative flex items-center justify-center shrink-0 mt-0.5">
+                <div className="relative flex items-center justify-center shrink-0 mt-1">
                   <input
                     type="checkbox"
                     checked={isSelected}
@@ -254,15 +259,15 @@ export const QuestionItem: FC<QuestionItemProps> = ({
                     className="sr-only"
                   />
                   {isSelected ? (
-                    <span className="w-4 h-4 rounded-none border border-black bg-black text-white inline-flex items-center justify-center shrink-0 text-[10px] font-bold">
+                    <span className="w-4.5 h-4.5 rounded-md border-2 border-blue-600 bg-blue-600 text-white inline-flex items-center justify-center shrink-0 text-[11px] font-bold">
                       ✓
                     </span>
                   ) : (
-                    <span className="w-4 h-4 rounded-none border border-gray-500 bg-white hover:border-black inline-flex items-center justify-center shrink-0"></span>
+                    <span className="w-4.5 h-4.5 rounded-md border-2 border-gray-300 bg-white inline-flex items-center justify-center shrink-0"></span>
                   )}
                 </div>
-                <span className={`text-gray-900 font-normal ${textSizeClass}`}>
-                  <strong className="mr-1.5">{opt.id}.</strong> {renderMarkdownText(opt.text)}
+                <span className={`text-gray-900 ${textSizeClass}`}>
+                  <strong className="mr-1.5 text-blue-700">{opt.id}.</strong> {renderMarkdownText(opt.text)}
                 </span>
               </label>
             );
@@ -270,40 +275,46 @@ export const QuestionItem: FC<QuestionItemProps> = ({
         </div>
       )}
 
-      {/* Fill in Blank / Sentence completion */}
+      {/* Fill in Blank / Sentence completion — PNO Quiz WriteCard Input Style */}
       {question.type === 'FILL_IN_BLANK' && (
-        <div className="pl-8 md:pl-9 mt-3">
-          <div className="flex flex-wrap items-center gap-2.5 max-w-md">
-            <span className={`font-semibold text-gray-900 ${textSizeClass}`}>Answer:</span>
+        <div className="mt-3.5">
+          <div className="flex flex-wrap items-center gap-2.5 max-w-lg">
+            <span className={`font-bold text-gray-600 text-sm uppercase tracking-wider`}>Your Answer:</span>
             <input
               type="text"
               disabled={isReviewMode}
               value={typeof userAnswer === 'string' ? userAnswer : ''}
               onChange={(e) => onAnswerChange(question.orderNumber, e.target.value)}
               placeholder="Type your answer..."
-              className={`w-full sm:w-auto flex-1 border rounded-none focus:outline-none focus:border-black focus:ring-1 focus:ring-black transition font-medium ${inputFieldClass} ${
+              className={`w-full sm:w-auto flex-1 border-2 rounded-xl focus:outline-none transition font-bold ${inputFieldClass} ${
                 isReviewMode
                   ? isCorrect
-                    ? 'border-emerald-500 bg-emerald-50 font-bold text-emerald-900'
+                    ? 'border-emerald-500 bg-emerald-50 text-emerald-900'
                     : 'border-rose-400 bg-rose-50 text-rose-900'
-                  : 'border-gray-400 focus:border-black bg-white text-gray-900'
+                  : userAnswer
+                  ? 'border-blue-600 bg-blue-50/50 text-blue-950 focus:bg-white'
+                  : 'border-gray-200 bg-gray-100 hover:border-blue-300 focus:border-blue-500 focus:bg-white text-gray-900 placeholder:font-medium'
               }`}
             />
           </div>
         </div>
       )}
 
-      {/* Matching Dropdown / Select */}
+      {/* Matching Dropdown / Select — PNO Quiz Select Style */}
       {question.type === 'MATCHING' && (
-        <div className="pl-8 md:pl-9 mt-3 flex flex-wrap items-center gap-3">
-          <span className={`font-semibold text-gray-900 ${textSizeClass}`}>Select answer:</span>
+        <div className="mt-3.5 flex flex-wrap items-center gap-3">
+          <span className={`font-bold text-gray-600 text-sm uppercase tracking-wider`}>Select Answer:</span>
           <select
             disabled={isReviewMode}
             value={typeof userAnswer === 'string' ? userAnswer : ''}
             onChange={(e) => onAnswerChange(question.orderNumber, e.target.value)}
-            className={`font-medium border border-gray-400 rounded-none focus:outline-none focus:border-black focus:ring-1 focus:ring-black bg-white min-w-[220px] max-w-full text-gray-900 shadow-sm cursor-pointer ${inputFieldClass}`}
+            className={`font-bold border-2 rounded-xl focus:outline-none min-w-[230px] max-w-full shadow-2xs cursor-pointer transition ${inputFieldClass} ${
+              userAnswer
+                ? 'border-blue-600 bg-blue-50/60 text-blue-950'
+                : 'border-gray-200 bg-gray-100 hover:border-blue-300 focus:border-blue-500 focus:bg-white text-gray-900'
+            }`}
           >
-            <option value="">-- Select an answer --</option>
+            <option value="">-- Choose an option --</option>
             {(question.options || []).map((opt) => (
               <option key={opt.id} value={opt.id}>
                 {opt.id} {opt.text ? ` - ${opt.text}` : ''}
@@ -315,7 +326,7 @@ export const QuestionItem: FC<QuestionItemProps> = ({
 
       {/* Review Mode Explanation & Answers Details */}
       {isReviewMode && (
-        <div className={`mt-3 pt-3 border-t border-gray-200 pl-8 md:pl-9 space-y-1.5 ${reviewExplClass}`}>
+        <div className={`mt-4 pt-3.5 border-t-2 border-gray-100 space-y-2 ${reviewExplClass}`}>
           <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
             <div className="text-gray-700">
               <span className="font-semibold text-gray-500">Your answer: </span>
@@ -339,7 +350,7 @@ export const QuestionItem: FC<QuestionItemProps> = ({
           </div>
 
           {question.explanation && (
-            <div className={`mt-2.5 p-3 bg-blue-50 border border-blue-200 rounded-none text-blue-900 flex items-start gap-2.5 leading-relaxed ${reviewExplClass}`}>
+            <div className={`mt-2.5 p-3.5 bg-blue-50/80 border-2 border-blue-200 rounded-xl text-blue-900 flex items-start gap-2.5 leading-relaxed ${reviewExplClass}`}>
               <Info className="w-4 h-4 text-blue-600 shrink-0 mt-0.5" />
               <div>
                 <span className="font-bold mr-1">Explanation:</span>

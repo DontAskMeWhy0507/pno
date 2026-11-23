@@ -1,5 +1,6 @@
 import { useState, useEffect, type FC } from 'react';
-import { Clock, Maximize2, Minimize2, Pause, Play, Settings, ArrowLeft, CheckCircle2 } from 'lucide-react';
+import { useColorMode } from '@chakra-ui/react';
+import { Clock, Maximize2, Minimize2, Pause, Play, Settings, ArrowLeft, CheckCircle2, Sun, Moon } from 'lucide-react';
 
 interface ExamHeaderProps {
   examTitle: string;
@@ -26,6 +27,7 @@ export const ExamHeader: FC<ExamHeaderProps> = ({
   onChangeFontSize,
 }) => {
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const { colorMode, toggleColorMode } = useColorMode();
 
   useEffect(() => {
     const handleFullscreenChange = () => {
@@ -51,19 +53,17 @@ export const ExamHeader: FC<ExamHeaderProps> = ({
     if (onOpenLeaveModal) {
       onOpenLeaveModal();
     } else {
-      if (window.confirm('Return to Home? Your exam progress is automatically saved and you can resume anytime.')) {
-        onBackToHome();
-      }
+      onBackToHome();
     }
   };
 
   return (
-    <header className="min-h-14 py-1.5 sm:py-0 sm:h-14 bg-white border-b border-gray-200 px-2.5 sm:px-4 flex items-center justify-between gap-2 shadow-xs select-none shrink-0">
+    <header className="min-h-14 py-1.5 sm:py-0 sm:h-14 bg-white border-b-2 border-gray-200 px-2.5 sm:px-4 flex items-center justify-between gap-2 shadow-xs select-none shrink-0">
       {/* Left side: Back to Home & Logo & Title */}
       <div className="flex items-center space-x-2 sm:space-x-3 min-w-0 flex-1">
         <button
           onClick={handleHomeClick}
-          className="flex items-center gap-1.5 text-xs text-gray-700 hover:text-gray-900 px-2 sm:px-3 py-1.5 rounded-lg bg-gray-100 hover:bg-gray-200 transition font-semibold shrink-0"
+          className="flex items-center gap-1.5 text-xs text-gray-700 hover:text-gray-900 px-2 sm:px-3 py-1.5 rounded-xl bg-gray-100 hover:bg-gray-200 transition font-semibold shrink-0"
           title="Return to Home (Progress is auto-saved)"
         >
           <ArrowLeft className="w-3.5 h-3.5" />
@@ -71,7 +71,7 @@ export const ExamHeader: FC<ExamHeaderProps> = ({
         </button>
 
         {/* PNO Badge */}
-        <div className="hidden xs:flex sm:flex px-2 sm:px-2.5 h-7 sm:h-8 rounded-lg bg-blue-600 items-center justify-center text-white font-extrabold text-[11px] sm:text-xs shadow-xs tracking-wider shrink-0">
+        <div className="hidden xs:flex sm:flex px-2 sm:px-2.5 h-7 sm:h-8 rounded-xl bg-blue-600 items-center justify-center text-white font-extrabold text-[11px] sm:text-xs shadow-xs tracking-wider shrink-0">
           PNO
         </div>
         <div className="flex flex-col min-w-0">
@@ -114,34 +114,43 @@ export const ExamHeader: FC<ExamHeaderProps> = ({
       {/* Right side: Tools & Navigation */}
       <div className="flex items-center space-x-1.5 sm:space-x-2 shrink-0">
         {/* Font size picker */}
-        <div className="flex items-center bg-gray-100 rounded-md p-0.5 border border-gray-200 text-[11px] sm:text-xs">
+        <div className="flex items-center bg-gray-100 rounded-xl p-0.5 border border-gray-200 text-[11px] sm:text-xs">
           <button
             onClick={() => onChangeFontSize('sm')}
-            className={`px-1.5 sm:px-2 py-0.5 rounded ${fontSize === 'sm' ? 'bg-white shadow-xs font-bold text-gray-900' : 'text-gray-500'}`}
+            className={`px-1.5 sm:px-2 py-0.5 rounded-lg ${fontSize === 'sm' ? 'bg-white shadow-xs font-bold text-gray-900' : 'text-gray-500'}`}
             title="Small text"
           >
             A-
           </button>
           <button
             onClick={() => onChangeFontSize('base')}
-            className={`px-1.5 sm:px-2 py-0.5 rounded ${fontSize === 'base' ? 'bg-white shadow-xs font-bold text-gray-900' : 'text-gray-500'}`}
+            className={`px-1.5 sm:px-2 py-0.5 rounded-lg ${fontSize === 'base' ? 'bg-white shadow-xs font-bold text-gray-900' : 'text-gray-500'}`}
             title="Normal text"
           >
             A
           </button>
           <button
             onClick={() => onChangeFontSize('lg')}
-            className={`px-1.5 sm:px-2 py-0.5 rounded ${fontSize === 'lg' ? 'bg-white shadow-xs font-bold text-gray-900' : 'text-gray-500'}`}
+            className={`px-1.5 sm:px-2 py-0.5 rounded-lg ${fontSize === 'lg' ? 'bg-white shadow-xs font-bold text-gray-900' : 'text-gray-500'}`}
             title="Large text"
           >
             A+
           </button>
         </div>
 
+        {/* Light / Dark Mode Switcher */}
+        <button
+          onClick={toggleColorMode}
+          className="p-1.5 rounded-xl text-gray-600 hover:bg-gray-100 transition"
+          title={colorMode === 'dark' ? 'Switch to Light mode' : 'Switch to Dark mode'}
+        >
+          {colorMode === 'dark' ? <Sun className="w-4 h-4 text-amber-400" /> : <Moon className="w-4 h-4" />}
+        </button>
+
         {/* Fullscreen Button (Desktop) */}
         <button
           onClick={toggleFullscreen}
-          className="hidden md:inline-flex p-1.5 rounded text-gray-600 hover:bg-gray-100 transition"
+          className="hidden md:inline-flex p-1.5 rounded-xl text-gray-600 hover:bg-gray-100 transition"
           title={isFullscreen ? 'Exit fullscreen' : 'Enter fullscreen'}
         >
           {isFullscreen ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
@@ -150,7 +159,7 @@ export const ExamHeader: FC<ExamHeaderProps> = ({
         {/* Test Library / Admin Button */}
         <button
           onClick={onOpenTestManager}
-          className="flex items-center gap-1.5 px-2 sm:px-3 py-1.5 text-xs font-semibold text-gray-700 bg-gray-100 hover:bg-gray-200 rounded border border-gray-300 transition"
+          className="flex items-center gap-1.5 px-2 sm:px-3 py-1.5 text-xs font-semibold text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-xl border border-gray-300 transition"
           title="Manage and create tests"
         >
           <Settings className="w-3.5 h-3.5 text-gray-600" />

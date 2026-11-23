@@ -1,6 +1,12 @@
 import { useState, useEffect, useRef, type FC } from 'react';
+import { useColorMode, useToast } from '@chakra-ui/react';
 import type { SpeakingExam, SpeakingQuestion } from '../../types/speaking';
 import { AiCoachPromptModal } from '../common/AiCoachPromptModal';
+import {
+  loadSpeakingProgress,
+  saveSpeakingProgress,
+  clearSpeakingProgress,
+} from '../../utils/writingProgress';
 import {
   Mic,
   MicOff,
@@ -13,6 +19,9 @@ import {
   Volume2,
   BookOpen,
   Award,
+  Sun,
+  Moon,
+  CheckCircle2,
 } from 'lucide-react';
 
 interface SpeakingExamRoomProps {
@@ -21,22 +30,40 @@ interface SpeakingExamRoomProps {
 }
 
 export const SpeakingExamRoom: FC<SpeakingExamRoomProps> = ({ exam, onBackToHome }) => {
-  const [activePart, setActivePart] = useState<1 | 2 | 3>(1);
-  const [selectedQuestionIndex, setSelectedQuestionIndex] = useState<number>(0);
+  const savedSpeaking = loadSpeakingProgress(exam.id);
+  const [activePart, setActivePart] = useState<1 | 2 | 3>(savedSpeaking?.activePart ?? 1);
+  const [selectedQuestionIndex, setSelectedQuestionIndex] = useState<number>(
+    savedSpeaking?.selectedQuestionIndex ?? 0
+  );
   const [showAiCoachModal, setShowAiCoachModal] = useState(false);
   const [mobilePane, setMobilePane] = useState<'question' | 'recorder'>('question');
+  const { colorMode, toggleColorMode } = useColorMode();
+  const toast = useToast();
 
   // Voice Recording state
   const [isRecording, setIsRecording] = useState(false);
   const [recordingSeconds, setRecordingSeconds] = useState(0);
   const [audioUrlMap, setAudioUrlMap] = useState<Record<string, string>>({});
-  const [transcriptsMap, setTranscriptsMap] = useState<Record<string, string>>({});
+  const [transcriptsMap, setTranscriptsMap] = useState<Record<string, string>>(
+    savedSpeaking?.transcriptsMap ?? {}
+  );
 
   // Part 2 prep timer state
   const defaultPrepSeconds = exam.part2Question?.prepTimeSeconds || 60;
   const [isPrepRunning, setIsPrepRunning] = useState(false);
   const [prepSecondsLeft, setPrepSecondsLeft] = useState(defaultPrepSeconds);
-  const [prepNotes, setPrepNotes] = useState('');
+  const [prepNotes, setPrepNotes] = useState(savedSpeaking?.prepNotes ?? '');
+
+  // Auto-save Speaking progress immediately on mount and whenever state changes
+  useEffect(() => {
+    saveSpeakingProgress(exam.id, {
+      activePart,
+      selectedQuestionIndex,
+      prepNotes,
+      transcriptsMap,
+      lastSavedAt: Date.now(),
+    });
+  }, [exam.id, activePart, selectedQuestionIndex, prepNotes, transcriptsMap]);
 
   // Sample answer visibility
   const [showSampleMap, setShowSampleMap] = useState<Record<string, boolean>>({});
@@ -180,7 +207,14 @@ export const SpeakingExamRoom: FC<SpeakingExamRoomProps> = ({ exam, onBackToHome
         }
       }
     } catch (err: any) {
-      alert('Cannot connect to Microphone: ' + (err.message || 'Please grant microphone access to your browser.'));
+      toast({
+        title: 'Microphone access required',
+        description: err.message || 'Please grant microphone access in your browser settings.',
+        status: 'error',
+        duration: 3000,
+        isClosable: true,
+        position: 'bottom-right',
+      });
     }
   };
 
@@ -219,48 +253,71 @@ export const SpeakingExamRoom: FC<SpeakingExamRoomProps> = ({ exam, onBackToHome
   return (
     <div className="h-[100dvh] w-full flex flex-col bg-white text-slate-900 font-sans select-auto overflow-hidden">
       {/* 1. TOP HEADER */}
-      <header className="min-h-12 py-2 sm:py-0 sm:h-12 border-b border-slate-200 bg-white px-3 sm:px-5 flex flex-wrap items-center justify-between gap-2 shrink-0 shadow-2xs">
+      <header className="min-h-14 py-2 sm:py-0 sm:h-14 border-b-2 border-slate-200 bg-white px-3 sm:px-5 flex flex-wrap items-center justify-between gap-2 shrink-0 shadow-2xs">
         <div className="flex items-center gap-2 sm:gap-3 min-w-0">
           <button
             onClick={() => {
-              if (window.confirm('Are you sure you want to leave the speaking room? Your in-progress recordings will be discarded.')) {
-                if (isRecording) stopRecording();
-                onBackToHome();
-              }
+              if (isRecording) stopRecording();
+              saveSpeakingProgress(exam.id, {
+                activePart,
+                selectedQuestionIndex,
+                prepNotes,
+                transcriptsMap,
+                lastSavedAt: Date.now(),
+              });
+              onBackToHome();
             }}
-            className="text-slate-500 hover:text-slate-800 p-1.5 rounded-lg hover:bg-slate-100 transition shrink-0"
-            title="Back to Home"
+            className="flex items-center gap-1.5 text-xs text-slate-700 hover:text-slate-900 px-2.5 sm:px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 transition font-semibold shrink-0"
+            title="Return to Home (Progress is auto-saved)"
           >
-            <ArrowLeft className="w-4 h-4" />
+            <ArrowLeft className="w-3.5 h-3.5" />
+            <span className="hidden sm:inline">Home</span>
           </button>
+
+          {/* PNO Badge */}
+          <div className="hidden xs:flex sm:flex px-2.5 h-7 rounded-xl bg-blue-600 items-center justify-center text-white text-[11px] font-extrabold tracking-wider shrink-0 shadow-2xs">
+            PNO
+          </div>
 
           <div className="flex items-center gap-2 min-w-0">
             <span className="text-xs sm:text-sm font-bold text-slate-900 truncate max-w-[160px] sm:max-w-none">{exam.title}</span>
-            <span className="hidden md:inline text-[10px] font-semibold bg-slate-100 text-slate-700 border border-slate-200 px-2 py-0.5 rounded shrink-0">
-              Speaking Room
+            <span
+              className="hidden md:inline-flex items-center gap-1 text-[10px] font-medium text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200 shrink-0"
+              title="Your speaking transcripts and notes are auto-saved"
+            >
+              <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+              <span>Auto-saved</span>
             </span>
           </div>
         </div>
 
         {/* Actions & Part Switcher */}
-        <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+        <div className="flex items-center gap-2 sm:gap-2.5 shrink-0">
           <button
             onClick={() => setShowAiCoachModal(true)}
-            className="flex items-center gap-1 px-2 sm:px-3 py-1 text-xs font-semibold text-slate-700 bg-white hover:bg-slate-50 border border-slate-200 rounded-lg shadow-2xs transition"
+            className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 text-xs font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-300 rounded-xl transition"
             title="Generate personalized AI coaching prompt"
           >
             <Sparkles className="w-3.5 h-3.5 text-blue-600 shrink-0" />
-            <span className="hidden sm:inline">AI Coaching Prompt</span>
+            <span className="hidden sm:inline">AI Coach Prompt</span>
             <span className="sm:hidden">AI</span>
           </button>
 
+          <button
+            onClick={toggleColorMode}
+            className="p-1.5 rounded-xl text-slate-600 hover:bg-slate-100 transition"
+            title={colorMode === 'dark' ? 'Switch to Light mode' : 'Switch to Dark mode'}
+          >
+            {colorMode === 'dark' ? <Sun className="w-4 h-4 text-amber-400" /> : <Moon className="w-4 h-4" />}
+          </button>
+
           {/* Part Switcher (Segmented Control) */}
-          <div className="flex items-center gap-0.5 sm:gap-1 bg-slate-100 p-0.5 rounded-lg border border-slate-200">
+          <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl border-2 border-slate-200">
             <button
               onClick={() => handleSelectPart(1)}
-              className={`px-2 sm:px-3 py-1 text-xs font-semibold rounded-md transition ${
+              className={`px-2.5 sm:px-3 py-1 text-xs font-bold rounded-lg transition ${
                 activePart === 1
-                  ? 'bg-white text-slate-900 shadow-xs'
+                  ? 'bg-blue-600 text-white shadow-xs'
                   : 'text-slate-600 hover:text-slate-900'
               }`}
             >
@@ -268,9 +325,9 @@ export const SpeakingExamRoom: FC<SpeakingExamRoomProps> = ({ exam, onBackToHome
             </button>
             <button
               onClick={() => handleSelectPart(2)}
-              className={`px-2 sm:px-3 py-1 text-xs font-semibold rounded-md transition ${
+              className={`px-2.5 sm:px-3 py-1 text-xs font-bold rounded-lg transition ${
                 activePart === 2
-                  ? 'bg-white text-slate-900 shadow-xs'
+                  ? 'bg-blue-600 text-white shadow-xs'
                   : 'text-slate-600 hover:text-slate-900'
               }`}
             >
@@ -278,15 +335,28 @@ export const SpeakingExamRoom: FC<SpeakingExamRoomProps> = ({ exam, onBackToHome
             </button>
             <button
               onClick={() => handleSelectPart(3)}
-              className={`px-2 sm:px-3 py-1 text-xs font-semibold rounded-md transition ${
+              className={`px-2.5 sm:px-3 py-1 text-xs font-bold rounded-lg transition ${
                 activePart === 3
-                  ? 'bg-white text-slate-900 shadow-xs'
+                  ? 'bg-blue-600 text-white shadow-xs'
                   : 'text-slate-600 hover:text-slate-900'
               }`}
             >
               Part 3
             </button>
           </div>
+
+          <button
+            onClick={() => {
+              if (isRecording) stopRecording();
+              clearSpeakingProgress(exam.id);
+              onBackToHome();
+            }}
+            className="hidden sm:inline-flex items-center gap-1 px-3 py-1.5 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl shadow-2xs transition"
+            title="Complete practice session and clear in-progress status"
+          >
+            <CheckCircle2 className="w-3.5 h-3.5" />
+            <span>Finish</span>
+          </button>
         </div>
       </header>
 
@@ -301,7 +371,7 @@ export const SpeakingExamRoom: FC<SpeakingExamRoomProps> = ({ exam, onBackToHome
               : 'text-slate-600 hover:text-slate-900'
           }`}
         >
-          Câu hỏi &amp; Bài mẫu
+          Questions &amp; Model Answers
         </button>
         <button
           type="button"
@@ -313,7 +383,7 @@ export const SpeakingExamRoom: FC<SpeakingExamRoomProps> = ({ exam, onBackToHome
           }`}
         >
           {isRecording && <span className="w-2 h-2 rounded-full bg-rose-600 animate-pulse" />}
-          <span>Thu âm &amp; Transcript</span>
+          <span>Voice Recorder &amp; Transcript</span>
         </button>
       </div>
 
@@ -323,20 +393,20 @@ export const SpeakingExamRoom: FC<SpeakingExamRoomProps> = ({ exam, onBackToHome
         <div
           className={`${
             mobilePane === 'question' ? 'block w-full' : 'hidden'
-          } md:block md:w-1/2 h-full md:border-r border-slate-200 overflow-y-auto p-4 sm:p-6 space-y-5 bg-white`}
+          } md:block md:w-1/2 h-full md:border-r-2 border-slate-200 overflow-y-auto p-4 sm:p-6 space-y-5 bg-white`}
         >
           {/* Question selection pills if multiple */}
           {currentQuestions.length > 1 && (
-            <div className="flex items-center gap-2 pb-2 border-b border-slate-100 overflow-x-auto">
-              <span className="text-xs font-semibold text-slate-500 shrink-0">Questions:</span>
+            <div className="flex items-center gap-2 pb-2 border-b-2 border-slate-100 overflow-x-auto">
+              <span className="text-xs font-bold text-slate-500 shrink-0">Questions:</span>
               {currentQuestions.map((q, idx) => (
                 <button
                   key={q.id}
                   onClick={() => handleSelectQuestion(idx)}
-                  className={`px-3 py-1 rounded-md text-xs font-semibold transition shrink-0 ${
+                  className={`px-3.5 py-1.5 rounded-xl text-xs font-bold border-2 transition shrink-0 ${
                     selectedQuestionIndex === idx
-                      ? 'bg-slate-900 text-white shadow-xs'
-                      : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                      ? 'bg-blue-600 text-white border-blue-600 shadow-xs'
+                      : 'bg-slate-100 text-slate-700 border-slate-200 hover:bg-slate-200'
                   }`}
                 >
                   Q{idx + 1}
@@ -346,25 +416,25 @@ export const SpeakingExamRoom: FC<SpeakingExamRoomProps> = ({ exam, onBackToHome
           )}
 
           {/* Current Question Display */}
-          <div className="bg-slate-50/70 border border-slate-200 rounded-xl p-5 space-y-3 shadow-2xs">
+          <div className="bg-slate-50/70 border-2 border-slate-200 rounded-2xl p-5 space-y-3 shadow-2xs">
             <div className="flex items-center justify-between">
-              <span className="text-xs font-semibold text-blue-600 uppercase tracking-wider">
+              <span className="text-xs font-extrabold text-blue-600 uppercase tracking-wider">
                 Part {currentQuestion.part} • {currentQuestion.topic}
               </span>
-              <span className="text-[11px] text-slate-500 flex items-center gap-1 font-medium">
+              <span className="text-[11px] text-slate-500 flex items-center gap-1 font-semibold">
                 <Clock className="w-3 h-3 text-slate-400" />
-                {currentQuestion.part === 2 ? '1 phút chuẩn bị • 2 phút nói' : '30 - 45 giây'}
+                {currentQuestion.part === 2 ? '1 min prep • 2 mins speaking' : '30 - 45 secs'}
               </span>
             </div>
 
-            <h3 className="text-base font-bold text-slate-900 leading-relaxed">
-              "{currentQuestion.questionText}"
+            <h3 className="text-base font-extrabold text-slate-900 leading-relaxed">
+              &ldquo;{currentQuestion.questionText}&rdquo;
             </h3>
 
             {/* Cue Card Points for Part 2 */}
             {currentQuestion.cueCardBullets && (
-              <div className="p-4 bg-amber-50/50 border border-amber-200/80 rounded-lg space-y-2 mt-3 text-xs text-slate-800">
-                <p className="font-semibold text-amber-900">You should say:</p>
+              <div className="p-4 bg-amber-50/60 border-2 border-amber-200/80 rounded-xl space-y-2 mt-3 text-xs text-slate-800">
+                <p className="font-bold text-amber-900">You should say:</p>
                 <ul className="space-y-1 list-disc list-inside text-slate-700">
                   {currentQuestion.cueCardBullets.map((bullet, i) => (
                     <li key={i}>{bullet}</li>
@@ -376,17 +446,17 @@ export const SpeakingExamRoom: FC<SpeakingExamRoomProps> = ({ exam, onBackToHome
 
           {/* Part 2: 1-Minute Prep Countdown & Scratchpad */}
           {activePart === 2 && (
-            <div className="bg-white border border-slate-200 rounded-xl p-5 space-y-4 shadow-2xs">
+            <div className="bg-white border-2 border-slate-200 rounded-2xl p-5 space-y-4 shadow-2xs">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                  <div className="w-7 h-7 rounded-md bg-slate-100 text-slate-700 flex items-center justify-center">
-                    <Clock className="w-3.5 h-3.5" />
+                  <div className="w-8 h-8 rounded-xl bg-slate-100 text-slate-700 flex items-center justify-center">
+                    <Clock className="w-4 h-4" />
                   </div>
-                  <h4 className="text-sm font-bold text-slate-900">1 Phút Chuẩn Bị</h4>
+                  <h4 className="text-sm font-extrabold text-slate-900">1-Minute Preparation Timer</h4>
                 </div>
 
                 <div className="flex items-center gap-2.5">
-                  <span className="font-mono text-base font-bold text-slate-900 bg-slate-100 px-3 py-1 rounded-md border border-slate-200">
+                  <span className="font-mono text-base font-bold text-slate-900 bg-slate-100 px-3 py-1 rounded-xl border-2 border-slate-200">
                     {formatSeconds(prepSecondsLeft)}
                   </span>
                   <button
@@ -397,20 +467,20 @@ export const SpeakingExamRoom: FC<SpeakingExamRoomProps> = ({ exam, onBackToHome
                         setIsPrepRunning(true);
                       }
                     }}
-                    className={`px-3.5 py-1 text-xs font-semibold rounded-md transition shadow-xs ${
+                    className={`px-3.5 py-1.5 text-xs font-bold rounded-xl transition shadow-xs ${
                       isPrepRunning
                         ? 'bg-slate-800 hover:bg-slate-900 text-white'
                         : 'bg-blue-600 hover:bg-blue-700 text-white'
                     }`}
                   >
-                    {isPrepRunning ? 'Tạm Dừng' : prepSecondsLeft === defaultPrepSeconds ? 'Bắt Đầu' : 'Tiếp Tục'}
+                    {isPrepRunning ? 'Pause' : prepSecondsLeft === defaultPrepSeconds ? 'Start' : 'Resume'}
                   </button>
                   <button
                     onClick={() => {
                       setIsPrepRunning(false);
                       setPrepSecondsLeft(defaultPrepSeconds);
                     }}
-                    className="text-xs text-slate-500 hover:text-slate-800 px-2 py-1"
+                    className="text-xs font-semibold text-slate-500 hover:text-slate-800 px-2 py-1"
                   >
                     Reset
                   </button>
@@ -418,62 +488,62 @@ export const SpeakingExamRoom: FC<SpeakingExamRoomProps> = ({ exam, onBackToHome
               </div>
 
               {prepSecondsLeft === 0 && (
-                <div className="p-2.5 bg-amber-50 border border-amber-300 rounded-lg text-xs font-semibold text-amber-900">
-                  ⏰ Đã hết thời gian chuẩn bị! Hãy bấm &quot;Bắt Đầu Ghi Âm&quot; ở cột bên phải để trình bày bài nói.
+                <div className="p-3 bg-amber-50 border-2 border-amber-300 rounded-xl text-xs font-bold text-amber-900">
+                  ⏰ Preparation time is up! Click &ldquo;Start Recording&rdquo; on the right to begin speaking.
                 </div>
               )}
 
               {/* Prep Notes */}
               <div>
-                <label className="text-[11px] font-semibold text-slate-600 block mb-1">
-                  Ghi chú từ khóa (Keywords):
+                <label className="text-[11px] font-bold text-slate-600 block mb-1.5">
+                  Keyword Notes:
                 </label>
                 <textarea
                   value={prepNotes}
                   onChange={(e) => setPrepNotes(e.target.value)}
                   placeholder="What, When, Who, Why, Feelings..."
                   rows={3}
-                  className="w-full p-2.5 bg-slate-50/70 border border-slate-200 rounded-lg text-xs text-slate-800 placeholder-slate-400 focus:bg-white focus:border-blue-600 outline-none resize-none transition"
+                  className="w-full p-3 bg-slate-50/70 border-2 border-slate-200 rounded-xl text-xs text-slate-800 placeholder-slate-400 focus:bg-white focus:border-blue-600 outline-none resize-none transition"
                 />
               </div>
             </div>
           )}
 
-          {/* Model Answer (Đáp Án Mẫu Band 8.0+) */}
-          <div className="bg-slate-50/70 border border-slate-200 rounded-xl p-5 space-y-3 shadow-2xs">
+          {/* Model Answer (Band 8.0+) */}
+          <div className="bg-slate-50/70 border-2 border-slate-200 rounded-2xl p-5 space-y-3 shadow-2xs">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <Award className="w-4 h-4 text-slate-700" />
-                <h4 className="text-sm font-bold text-slate-900">Bài Mẫu Band 8.0+</h4>
+                <Award className="w-4 h-4 text-blue-600" />
+                <h4 className="text-sm font-extrabold text-slate-900">Band 8.0+ Model Answer</h4>
               </div>
               <button
                 onClick={() =>
                   setShowSampleMap((prev) => ({ ...prev, [currentQId]: !prev[currentQId] }))
                 }
-                className="px-3 py-1 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 text-xs font-medium rounded-lg transition shadow-2xs"
+                className="px-3.5 py-1.5 bg-white hover:bg-slate-100 text-slate-700 border-2 border-slate-200 text-xs font-bold rounded-xl transition shadow-2xs"
               >
-                {showSampleMap[currentQId] ? 'Ẩn Bài Mẫu' : 'Xem Bài Mẫu'}
+                {showSampleMap[currentQId] ? 'Hide Model Answer' : 'Show Model Answer'}
               </button>
             </div>
 
             {showSampleMap[currentQId] && (
               <div className="space-y-3 pt-2 animate-in fade-in">
-                <div className="p-4 bg-white rounded-lg border border-slate-200 text-xs text-slate-800 leading-relaxed whitespace-pre-wrap font-serif shadow-2xs">
+                <div className="p-4 bg-white rounded-xl border-2 border-slate-200 text-xs text-slate-800 leading-relaxed whitespace-pre-wrap shadow-2xs">
                   {currentQuestion.sampleAnswer}
                 </div>
 
                 {/* Vocabulary */}
                 {currentQuestion.keyVocabulary && (
                   <div className="space-y-1.5">
-                    <span className="text-[11px] font-semibold text-slate-700 flex items-center gap-1">
+                    <span className="text-[11px] font-bold text-slate-700 flex items-center gap-1">
                       <BookOpen className="w-3.5 h-3.5 text-slate-500" />
-                      <span>Từ vựng trọng tâm:</span>
+                      <span>Key Vocabulary &amp; Collocations:</span>
                     </span>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                       {currentQuestion.keyVocabulary.map((v, i) => (
                         <div
                           key={i}
-                          className="p-2.5 bg-white border border-slate-200 rounded-lg text-[11px] shadow-2xs"
+                          className="p-2.5 bg-white border-2 border-slate-200 rounded-xl text-[11px] shadow-2xs"
                         >
                           <div className="font-bold text-slate-900">{v.word}</div>
                           <div className="text-slate-500">{v.meaning}</div>
@@ -494,9 +564,9 @@ export const SpeakingExamRoom: FC<SpeakingExamRoomProps> = ({ exam, onBackToHome
           } md:flex md:w-1/2 h-full flex-col bg-slate-50/50 p-4 sm:p-6 space-y-5 overflow-y-auto`}
         >
           {/* Recorder Control Card */}
-          <div className="bg-white border border-slate-200 rounded-xl p-6 flex flex-col items-center justify-center space-y-4 shadow-2xs text-center">
-            <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
-              {isRecording ? 'Đang Thu Âm Giọng Nói...' : 'Phòng Thu Giọng Nói'}
+          <div className="bg-white border-2 border-slate-200 rounded-2xl p-6 flex flex-col items-center justify-center space-y-4 shadow-2xs text-center">
+            <span className="text-xs font-extrabold text-slate-500 uppercase tracking-wider">
+              {isRecording ? 'Recording in Progress...' : 'Voice Recording Studio'}
             </span>
 
             {/* Pulsing Record Circle */}
@@ -507,9 +577,9 @@ export const SpeakingExamRoom: FC<SpeakingExamRoomProps> = ({ exam, onBackToHome
                 className={`w-16 h-16 rounded-full flex items-center justify-center transition-all ${
                   isRecording
                     ? 'bg-rose-600 text-white shadow-md ring-4 ring-rose-200 animate-pulse'
-                    : 'bg-slate-100 hover:bg-slate-200 text-slate-600 border border-slate-200 shadow-2xs'
+                    : 'bg-slate-100 hover:bg-slate-200 text-slate-600 border-2 border-slate-200 shadow-2xs'
                 }`}
-                title={isRecording ? 'Bấm để dừng' : 'Bấm để bắt đầu thu âm'}
+                title={isRecording ? 'Click to stop recording' : 'Click to start recording'}
               >
                 {isRecording ? <Mic className="w-7 h-7" /> : <MicOff className="w-7 h-7" />}
               </button>
@@ -525,42 +595,42 @@ export const SpeakingExamRoom: FC<SpeakingExamRoomProps> = ({ exam, onBackToHome
               {!isRecording ? (
                 <button
                   onClick={startRecording}
-                  className="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-lg shadow-xs flex items-center gap-2 transition"
+                  className="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl shadow-xs flex items-center gap-2 transition"
                 >
                   <Play className="w-3.5 h-3.5 fill-white" />
-                  <span>Bắt Đầu Ghi Âm</span>
+                  <span>Start Recording</span>
                 </button>
               ) : (
                 <button
                   onClick={stopRecording}
-                  className="px-6 py-2 bg-rose-600 hover:bg-rose-700 text-white text-xs font-semibold rounded-lg shadow-xs flex items-center gap-2 transition"
+                  className="px-6 py-2 bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold rounded-xl shadow-xs flex items-center gap-2 transition"
                 >
                   <Square className="w-3.5 h-3.5 fill-white" />
-                  <span>Dừng & Lưu</span>
+                  <span>Stop &amp; Save</span>
                 </button>
               )}
             </div>
 
             {/* Audio Playback if recorded */}
             {audioUrlMap[currentQId] && (
-              <div className="w-full pt-4 border-t border-slate-100 space-y-2">
-                <span className="text-xs text-slate-600 font-medium flex items-center justify-center gap-1.5">
+              <div className="w-full pt-4 border-t-2 border-slate-100 space-y-2">
+                <span className="text-xs text-slate-600 font-bold flex items-center justify-center gap-1.5">
                   <Volume2 className="w-4 h-4 text-slate-500" />
-                  <span>Nghe lại bản ghi:</span>
+                  <span>Playback Recording:</span>
                 </span>
-                <audio controls src={audioUrlMap[currentQId]} className="w-full h-9 rounded" />
+                <audio controls src={audioUrlMap[currentQId]} className="w-full h-9 rounded-xl" />
               </div>
             )}
           </div>
 
           {/* Speech-to-Text Transcript Box */}
-          <div className="flex-1 flex flex-col bg-white border border-slate-200 rounded-xl p-5 space-y-3 min-h-[220px] shadow-2xs">
+          <div className="flex-1 flex flex-col bg-white border-2 border-slate-200 rounded-2xl p-5 space-y-3 min-h-[220px] shadow-2xs">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <FileText className="w-4 h-4 text-blue-600" />
-                <h4 className="text-sm font-bold text-slate-900">Transcript Lời Nói (Speech-to-Text)</h4>
+                <h4 className="text-sm font-extrabold text-slate-900">Live Speech-to-Text Transcript</h4>
               </div>
-              <span className="text-[11px] text-slate-400 font-medium">Tự động nhận diện</span>
+              <span className="text-[11px] text-slate-400 font-semibold">Auto-transcribed</span>
             </div>
 
             <textarea
@@ -570,25 +640,25 @@ export const SpeakingExamRoom: FC<SpeakingExamRoomProps> = ({ exam, onBackToHome
               }
               placeholder={
                 isRecording
-                  ? 'Đang lắng nghe và phiên âm lời nói của bạn...'
-                  : 'Nội dung transcript sẽ xuất hiện ở đây khi bạn nói vào micro, hoặc bạn có thể tự nhập/chỉnh sửa tại đây.'
+                  ? 'Listening and transcribing your speech in real time...'
+                  : 'Your spoken transcript will appear here as you speak into the microphone, or you can type/edit your response directly.'
               }
-              className="flex-1 w-full p-3 bg-slate-50/70 border border-slate-200 rounded-lg text-xs text-slate-800 placeholder-slate-400 focus:bg-white focus:border-blue-600 focus:ring-1 focus:ring-blue-600 outline-none resize-none leading-relaxed transition"
+              className="flex-1 w-full p-3.5 bg-slate-50/70 border-2 border-slate-200 rounded-xl text-xs text-slate-800 placeholder-slate-400 focus:bg-white focus:border-blue-600 outline-none resize-none leading-relaxed transition"
             />
 
             {/* Bottom bar with word count and copy prompt */}
             <div className="flex items-center justify-between pt-1">
-              <span className="text-xs text-slate-500 font-medium">
-                Số từ: {(transcriptsMap[currentQId] || '').trim().split(/\s+/).filter(Boolean).length} từ
+              <span className="text-xs text-slate-500 font-bold">
+                Word count: {(transcriptsMap[currentQId] || '').trim().split(/\s+/).filter(Boolean).length} words
               </span>
 
               <button
                 onClick={() => setShowAiCoachModal(true)}
-                className="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold rounded-lg flex items-center gap-1.5 shadow-xs transition"
-                title="Tạo prompt cá nhân hoá theo mục tiêu Band điểm để gửi AI"
+                className="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold rounded-xl flex items-center gap-1.5 shadow-xs transition"
+                title="Generate personalized AI coaching prompt"
               >
                 <Sparkles className="w-3.5 h-3.5 text-blue-400" />
-                <span>Copy Prompt Cho AI</span>
+                <span>Copy AI Coach Prompt</span>
               </button>
             </div>
           </div>
@@ -603,7 +673,7 @@ export const SpeakingExamRoom: FC<SpeakingExamRoomProps> = ({ exam, onBackToHome
         taskTitle={`${exam.title} - ${currentQuestion.topic}`}
         taskPrompt={currentQuestion.questionText}
         partInfo={`Part ${currentQuestion.part}`}
-        userContent={transcriptsMap[currentQId] || '(Chưa có transcript, hãy nói vào micro hoặc gõ vào ô)'}
+        userContent={transcriptsMap[currentQId] || '(No transcript recorded yet — speak into the microphone or type your response)'}
         sampleContent={currentQuestion.sampleAnswer}
       />
     </div>

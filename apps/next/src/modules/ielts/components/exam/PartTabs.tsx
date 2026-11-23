@@ -20,32 +20,34 @@ export const PartTabs: FC<PartTabsProps> = ({
   const maxQ = activeQuestions.length > 0 ? Math.max(...activeQuestions.map((q) => q.orderNumber)) : null;
 
   return (
-    <div className="bg-white border-b border-gray-300 select-none">
-      <div className="px-4 py-1.5 flex items-center space-x-2">
-        {parts.map((part) => {
-          const isActive = part.partNumber === activePartNumber;
+    <div className="bg-white border-b-2 border-gray-200 select-none">
+      <div className="px-4 py-2 flex items-center justify-between flex-wrap gap-2">
+        <div className="flex items-center space-x-2">
+          {parts.map((part) => {
+            const isActive = part.partNumber === activePartNumber;
 
-          return (
-            <button
-              key={part.id}
-              onClick={() => onSelectPart(part.partNumber)}
-              className={`px-4 py-1 text-xs font-semibold rounded-none transition flex items-center gap-1.5 ${
-                isActive
-                  ? 'bg-[#222222] text-white shadow-none'
-                  : 'bg-transparent text-gray-800 hover:bg-gray-100'
-              }`}
-            >
-              <span>Part {part.partNumber}</span>
-            </button>
-          );
-        })}
-      </div>
-
-      {minQ !== null && maxQ !== null && (
-        <div className="bg-[#f8f9fa] border-t border-gray-200 px-6 py-1 text-xs font-semibold text-gray-700">
-          Questions {minQ}–{maxQ}
+            return (
+              <button
+                key={part.id}
+                onClick={() => onSelectPart(part.partNumber)}
+                className={`px-3.5 py-1.5 text-xs font-bold rounded-xl border-2 transition flex items-center gap-1.5 ${
+                  isActive
+                    ? 'bg-blue-600 text-white border-blue-600 shadow-xs'
+                    : 'bg-gray-100 text-gray-700 border-gray-200 hover:bg-gray-200 hover:border-gray-300'
+                }`}
+              >
+                <span>Part {part.partNumber}</span>
+              </button>
+            );
+          })}
         </div>
-      )}
+
+        {minQ !== null && maxQ !== null && (
+          <div className="bg-blue-50 border border-blue-200 text-blue-700 px-3 py-1 rounded-lg text-xs font-bold">
+            Questions {minQ}–{maxQ}
+          </div>
+        )}
+      </div>
     </div>
   );
 };

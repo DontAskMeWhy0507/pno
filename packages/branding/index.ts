@@ -1,11 +1,11 @@
-export const SLOGAN = "Nền tảng học tập & luyện thi IELTS toàn diện";
-export const SLOGAN_TITLE = "Nền tảng Học tập & Luyện thi IELTS Toàn diện";
+export const SLOGAN = "The unified study & IELTS practice platform";
+export const SLOGAN_TITLE = "The Unified Study & IELTS Practice Platform";
 
-export const TAGLINE = "Học từ vựng & Luyện thi IELTS cùng PNO";
-export const TAGLINE_TITLE = "Học từ vựng & Luyện thi IELTS cùng PNO";
+export const TAGLINE = "Master vocabulary & IELTS with PNO";
+export const TAGLINE_TITLE = "Master Vocabulary & IELTS with PNO";
 
 export const BODY_COPY_LANDING =
-  "PNO là nền tảng học tập hiện đại kết hợp hệ thống Quiz (Flashcards, Anki SRS, Learn, Test, Match, Blocks) và Phòng luyện thi IELTS 4 kỹ năng trên máy tính.";
+  "PNO is a modern learning platform combining smart vocabulary study (Flashcards, Anki SRS, Learn, Test, Match, Blocks) with a full 4-skill Computer-Delivered IELTS exam room.";
 export const BODY_COPY_BASE =
-  "PNO là nền tảng học tập hiện đại kết hợp học từ vựng Quiz và luyện thi IELTS 4 kỹ năng.";
-export const BODY_COPY_SEO = `${BODY_COPY_BASE} Ôn tập Flashcards, Anki SRS, trò chơi tương tác và thi thử IELTS chuẩn quốc tế.`;
+  "PNO is a modern learning platform combining Quiz study sets and 4-skill IELTS practice.";
+export const BODY_COPY_SEO = `${BODY_COPY_BASE} Study with flashcards, Anki spaced repetition, interactive games, and authentic IELTS mock tests.`;

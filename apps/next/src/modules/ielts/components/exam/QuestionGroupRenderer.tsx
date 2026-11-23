@@ -89,12 +89,12 @@ export const QuestionGroupRenderer: FC<QuestionGroupRendererProps> = ({
 
     return (
       <div className="space-y-4 mb-8 font-sans text-gray-900">
-        {/* 1. Group Instructions Box */}
-        <div className={`border border-gray-300 rounded-none p-4 md:p-5 bg-white ${instructionTextClass} text-gray-900 shadow-none mb-4 font-sans`}>
+        {/* 1. Group Instructions Box (PNO Quiz Card Style) */}
+        <div className={`border-2 border-gray-200 rounded-2xl p-5 md:p-6 bg-white ${instructionTextClass} text-gray-900 shadow-xs mb-4 font-sans`}>
           {group.title && (
-            <h3 className="font-bold text-black text-base md:text-lg mb-2">{group.title}</h3>
+            <h3 className="font-extrabold text-gray-900 text-base md:text-lg mb-2">{group.title}</h3>
           )}
-          <div className="font-normal text-gray-900 whitespace-pre-line leading-[1.65]">
+          <div className="font-normal text-gray-700 whitespace-pre-line leading-[1.65]">
             {group.instructions
               .split(
                 /(TRUE|FALSE|NOT GIVEN|YES|NO|ONE WORD ONLY|NO MORE THAN TWO WORDS|NO MORE THAN THREE WORDS|\b[A-N]-[A-N]\b|\b\d+[-–]\d+\b)/g
@@ -115,7 +115,7 @@ export const QuestionGroupRenderer: FC<QuestionGroupRendererProps> = ({
                   /^\d+[-–]\d+$/.test(part)
                 ) {
                   return (
-                    <strong key={i} className="font-bold text-black">
+                    <strong key={i} className="font-bold text-blue-700 bg-blue-50 px-1.5 py-0.5 rounded-md">
                       {part}
                     </strong>
                   );
@@ -125,10 +125,10 @@ export const QuestionGroupRenderer: FC<QuestionGroupRendererProps> = ({
           </div>
         </div>
 
-        {/* 2. Summary Completion Card */}
-        <div className="border border-gray-300 bg-white p-5 md:p-7 shadow-none text-gray-900 font-sans">
+        {/* 2. Summary Completion Card (PNO Quiz Card Style) */}
+        <div className="border-2 border-gray-200 rounded-2xl bg-white p-5 md:p-7 shadow-xs text-gray-900 font-sans">
           {group.summaryTitle && (
-            <h4 className="font-bold text-base md:text-[17px] text-black mb-4 pb-2.5 border-b border-gray-200">
+            <h4 className="font-extrabold text-base md:text-[17px] text-gray-900 mb-4 pb-3 border-b-2 border-gray-100">
               {renderMarkdownText(group.summaryTitle)}
             </h4>
           )}
@@ -138,7 +138,7 @@ export const QuestionGroupRenderer: FC<QuestionGroupRendererProps> = ({
               const segments = para.split(/(\{\{\d+\}\})/g);
 
               return (
-                <p key={pIdx} className="leading-[1.65]">
+                <p key={pIdx} className="leading-[1.85]">
                   {segments.map((seg, sIdx) => {
                     const blankMatch = seg.match(/^\{\{(\d+)\}\}$/);
                     if (!blankMatch) {
@@ -169,14 +169,14 @@ export const QuestionGroupRenderer: FC<QuestionGroupRendererProps> = ({
                       <span
                         key={sIdx}
                         id={`q-card-${orderNum}`}
-                        className="inline-flex items-center align-middle mx-1 my-0.5 gap-1.5 px-1 py-0.5 border border-transparent rounded-none transition"
+                        className="inline-flex items-center align-middle mx-1 my-0.5 gap-1.5 px-1 py-0.5 rounded-xl transition"
                       >
                         {/* Order Number Badge */}
                         <span
-                          className={`inline-flex items-center justify-center font-bold rounded-none border select-none ${badgeTextClass} ${
+                          className={`inline-flex items-center justify-center font-bold rounded-lg border-2 select-none ${badgeTextClass} ${
                             isFlagged
-                              ? 'bg-amber-400 text-black border-amber-600 font-extrabold'
-                              : 'bg-gray-100 text-gray-800 border-gray-400'
+                              ? 'bg-amber-100 text-amber-800 border-amber-400 font-extrabold'
+                              : 'bg-blue-50 text-blue-700 border-blue-200'
                           }`}
                         >
                           {orderNum}
@@ -186,10 +186,10 @@ export const QuestionGroupRenderer: FC<QuestionGroupRendererProps> = ({
                         {isReviewMode ? (
                           <span className="inline-flex items-center gap-1.5 align-middle">
                             <span
-                              className={`inline-flex items-center gap-1 px-2.5 py-1 text-xs md:text-sm font-bold rounded-none border ${
+                              className={`inline-flex items-center gap-1 px-2.5 py-1 text-xs md:text-sm font-bold rounded-xl border-2 ${
                                 isCorrect
-                                   ? 'bg-green-100 border-green-600 text-green-900'
-                                  : 'bg-red-100 border-red-600 text-red-900'
+                                   ? 'bg-green-50 border-green-500 text-green-900'
+                                  : 'bg-red-50 border-red-400 text-red-900'
                               }`}
                             >
                               {isCorrect ? (
@@ -217,7 +217,7 @@ export const QuestionGroupRenderer: FC<QuestionGroupRendererProps> = ({
                               </span>
                             </span>
                             {!isCorrect && q && (
-                              <span className="bg-emerald-50 border border-emerald-500 text-emerald-900 px-2 py-1 text-xs md:text-sm font-bold">
+                              <span className="bg-emerald-50 border-2 border-emerald-400 text-emerald-900 px-2.5 py-1 rounded-xl text-xs md:text-sm font-bold">
                                 Answer: {q.correctAnswer}
                                 {hasOptions && optionsList.find((o) => o.id === q.correctAnswer)?.text && (
                                   <span className="font-normal ml-1">
@@ -232,13 +232,13 @@ export const QuestionGroupRenderer: FC<QuestionGroupRendererProps> = ({
                             id={`input-q-${orderNum}`}
                             value={typeof userAns === 'string' ? userAns : ''}
                             onChange={(e) => onAnswerChange(orderNum, e.target.value)}
-                            className={`inline-block font-semibold rounded-none border transition cursor-pointer ${inputControlClass} ${
+                            className={`inline-block font-bold rounded-xl border-2 transition cursor-pointer ${inputControlClass} ${
                               userAns
-                                ? 'bg-blue-50 border-blue-600 text-blue-950 font-bold'
-                                : 'bg-white border-gray-400 text-gray-800 hover:border-gray-600 focus:border-black focus:ring-1 focus:ring-black focus:outline-none'
+                                ? 'bg-blue-50 border-blue-600 text-blue-900'
+                                : 'bg-gray-100 border-gray-200 text-gray-800 hover:border-blue-300 focus:bg-white focus:border-blue-500 focus:outline-none'
                             }`}
                           >
-                            <option value="">-- [Select] --</option>
+                            <option value="">-- Select --</option>
                             {optionsList.map((opt) => (
                               <option key={opt.id} value={opt.id}>
                                 {opt.id} - {opt.text}
@@ -251,11 +251,11 @@ export const QuestionGroupRenderer: FC<QuestionGroupRendererProps> = ({
                             type="text"
                             value={typeof userAns === 'string' ? userAns : ''}
                             onChange={(e) => onAnswerChange(orderNum, e.target.value)}
-                            placeholder={`(${orderNum})`}
-                            className={`inline-block font-medium rounded-none border transition w-36 md:w-48 ${inputControlClass} ${
+                            placeholder={`Type answer (${orderNum})...`}
+                            className={`inline-block font-bold rounded-xl border-2 transition w-36 md:w-48 ${inputControlClass} ${
                               userAns
-                                ? 'bg-blue-50 border-blue-600 text-gray-900 font-semibold'
-                                : 'bg-white border-gray-400 text-gray-900 hover:border-gray-600 focus:border-black focus:ring-1 focus:ring-black focus:outline-none placeholder:text-gray-400'
+                                ? 'bg-blue-50 border-blue-600 text-blue-900'
+                                : 'bg-gray-100 border-gray-200 text-gray-900 hover:border-blue-300 focus:bg-white focus:border-blue-500 focus:outline-none placeholder:text-gray-400 placeholder:font-medium'
                             }`}
                           />
                         )}
@@ -263,9 +263,9 @@ export const QuestionGroupRenderer: FC<QuestionGroupRendererProps> = ({
                         {/* Quick Flag Button */}
                         <button
                           onClick={() => onToggleFlag(orderNum)}
-                          className={`p-0.5 transition-colors ml-0.5 ${
+                          className={`p-1 rounded-lg transition-colors ml-0.5 ${
                             isFlagged
-                              ? 'text-amber-600 hover:text-amber-700'
+                              ? 'text-amber-600 bg-amber-50 hover:text-amber-700'
                               : 'text-gray-300 hover:text-amber-500'
                           }`}
                           title={isFlagged ? 'Remove flag' : 'Flag for review'}
@@ -286,11 +286,11 @@ export const QuestionGroupRenderer: FC<QuestionGroupRendererProps> = ({
 
           {/* 3. Word Bank Card (if present) */}
           {group.wordBank && group.wordBank.length > 0 && (
-            <div className="mt-6 border border-gray-300 bg-gray-50 p-4 md:p-5">
-              <div className="text-xs font-bold uppercase tracking-wider text-gray-800 mb-3 flex items-center justify-between border-b border-gray-200 pb-2">
+            <div className="mt-6 border-2 border-gray-200 rounded-2xl bg-slate-50/70 p-4 md:p-5">
+              <div className="text-xs font-extrabold uppercase tracking-wider text-gray-800 mb-3 flex items-center justify-between border-b-2 border-gray-200 pb-2">
                 <span>Word Bank</span>
-                <span className="text-xs font-normal text-gray-600 lowercase">
-                  (select the matching letter for each blank)
+                <span className="text-xs font-medium text-gray-500 normal-case">
+                  Select the matching letter for each blank
                 </span>
               </div>
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2.5">
@@ -301,18 +301,18 @@ export const QuestionGroupRenderer: FC<QuestionGroupRendererProps> = ({
                   return (
                     <div
                       key={item.id}
-                      className={`border flex items-center gap-2.5 transition ${wordBankItemClass} ${
+                      className={`border-2 rounded-xl flex items-center gap-2.5 transition ${wordBankItemClass} ${
                         usedByQ
-                          ? 'bg-gray-100 border-gray-300 text-gray-400 opacity-60'
-                          : 'bg-white border-gray-300 hover:border-black text-gray-900 shadow-2xs'
+                          ? 'bg-gray-100 border-gray-200 text-gray-400 opacity-65'
+                          : 'bg-white border-gray-200 hover:border-blue-300 text-gray-900 shadow-2xs'
                       }`}
                     >
-                      <span className="w-5 h-5 flex items-center justify-center font-bold text-xs bg-gray-900 text-white rounded-none shrink-0">
+                      <span className="w-6 h-6 flex items-center justify-center font-bold text-xs bg-blue-600 text-white rounded-lg shrink-0">
                         {item.id}
                       </span>
-                      <span className="font-medium text-gray-800 leading-tight">{item.text}</span>
+                      <span className="font-semibold text-gray-800 leading-tight">{item.text}</span>
                       {usedByQ && (
-                        <span className="ml-auto text-[10px] bg-blue-100 text-blue-800 px-1.5 py-0.5 font-bold shrink-0">
+                        <span className="ml-auto text-[10px] bg-blue-100 text-blue-800 px-1.5 py-0.5 rounded-md font-bold shrink-0">
                           Q{usedByQ.orderNumber}
                         </span>
                       )}
@@ -325,7 +325,7 @@ export const QuestionGroupRenderer: FC<QuestionGroupRendererProps> = ({
 
           {/* 4. Review Mode Explanations Section */}
           {isReviewMode && (
-            <div className="mt-6 border border-blue-200 bg-blue-50/40 p-4 md:p-5">
+            <div className="mt-6 border-2 border-blue-200 rounded-2xl bg-blue-50/40 p-4 md:p-5">
               <h5 className="font-bold text-xs md:text-sm text-blue-900 uppercase tracking-wider mb-3 flex items-center gap-1.5 border-b border-blue-200 pb-2">
                 <Info className="w-4 h-4 text-blue-700" />
                 <span>Explanations for this question group</span>
@@ -351,12 +351,12 @@ export const QuestionGroupRenderer: FC<QuestionGroupRendererProps> = ({
   // STANDARD QUESTION LIST (True/False/Not Given, MCQ, Matching Headings...)
   return (
     <div className="space-y-4 mb-8 font-sans text-gray-900">
-      {/* Group Instructions Box */}
-      <div className={`border border-gray-300 rounded-none p-4 md:p-5 bg-white ${instructionTextClass} text-gray-900 shadow-none mb-4 font-sans`}>
+      {/* Group Instructions Box (PNO Quiz Card Style) */}
+      <div className={`border-2 border-gray-200 rounded-2xl p-5 md:p-6 bg-white ${instructionTextClass} text-gray-900 shadow-xs mb-4 font-sans`}>
         {group.title && (
-          <h3 className="font-bold text-black text-base md:text-lg mb-2">{group.title}</h3>
+          <h3 className="font-extrabold text-gray-900 text-base md:text-lg mb-2">{group.title}</h3>
         )}
-        <div className="font-normal text-gray-900 whitespace-pre-line leading-[1.65]">
+        <div className="font-normal text-gray-700 whitespace-pre-line leading-[1.65]">
           {group.instructions
             .split(
               /(TRUE|FALSE|NOT GIVEN|YES|NO|ONE WORD ONLY|NO MORE THAN TWO WORDS|NO MORE THAN THREE WORDS)/g
@@ -375,7 +375,7 @@ export const QuestionGroupRenderer: FC<QuestionGroupRendererProps> = ({
                 ].includes(part)
               ) {
                 return (
-                  <strong key={i} className="font-bold text-black">
+                  <strong key={i} className="font-bold text-blue-700 bg-blue-50 px-1.5 py-0.5 rounded-md">
                     {part}
                   </strong>
                 );
@@ -384,14 +384,14 @@ export const QuestionGroupRenderer: FC<QuestionGroupRendererProps> = ({
             })}
         </div>
         {group.sharedContent && (
-          <div className={`mt-3 p-3.5 bg-gray-50 border border-gray-200 rounded-none font-sans ${instructionTextClass} text-gray-900 whitespace-pre-line`}>
+          <div className={`mt-3 p-4 bg-slate-50 border-2 border-gray-200 rounded-xl font-sans ${instructionTextClass} text-gray-900 whitespace-pre-line`}>
             {renderMarkdownText(group.sharedContent)}
           </div>
         )}
       </div>
 
       {/* List of Questions in Group */}
-      <div className="space-y-3">
+      <div className="space-y-3.5">
         {group.questions.map((q) => {
           let isCorrect: boolean | undefined = undefined;
           if (isReviewMode && scoreReport) {

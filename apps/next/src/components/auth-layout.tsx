@@ -214,7 +214,7 @@ export const AuthLayout: React.FC<AuthLayoutProps> = ({
                               )}`;
                             }}
                           >
-                            ⚡ Đăng nhập nhanh (Quick Dev Login)
+                            ⚡ Quick Dev Login
                           </Button>
                         )}
                         <Box>

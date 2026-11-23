@@ -1,4 +1,6 @@
 import { useState, type FC } from 'react';
+import { useToast } from '@chakra-ui/react';
+import { outfit } from '@quenti/lib/chakra-theme';
 import type { SpeakingExam, SpeakingQuestion } from '../../types/speaking';
 import { getAllCollections } from '../../utils/storage';
 import {
@@ -24,6 +26,7 @@ export const SpeakingEditorModal: FC<SpeakingEditorModalProps> = ({
   onClose,
   onSave,
 }) => {
+  const toast = useToast();
   const collections = getAllCollections();
   const [activeTab, setActiveTab] = useState<'info' | 'part1' | 'part2' | 'part3'>('info');
 
@@ -140,19 +143,43 @@ export const SpeakingEditorModal: FC<SpeakingEditorModalProps> = ({
   const handleSave = (e: React.FormEvent) => {
     e.preventDefault();
     if (!title.trim()) {
-      alert('Please enter a test title.');
+      toast({
+        title: 'Please enter a test title',
+        status: 'warning',
+        duration: 2500,
+        isClosable: true,
+        position: 'bottom-right',
+      });
       return;
     }
     if (part1Questions.length === 0) {
-      alert('Please add at least one question for Part 1.');
+      toast({
+        title: 'Please add at least one question for Part 1',
+        status: 'warning',
+        duration: 2500,
+        isClosable: true,
+        position: 'bottom-right',
+      });
       return;
     }
     if (!part2QuestionText.trim()) {
-      alert('Please enter a topic prompt for Part 2 cue card.');
+      toast({
+        title: 'Please enter a topic prompt for Part 2 Cue Card',
+        status: 'warning',
+        duration: 2500,
+        isClosable: true,
+        position: 'bottom-right',
+      });
       return;
     }
     if (part3Questions.length === 0) {
-      alert('Please add at least one question for Part 3.');
+      toast({
+        title: 'Please add at least one question for Part 3',
+        status: 'warning',
+        duration: 2500,
+        isClosable: true,
+        position: 'bottom-right',
+      });
       return;
     }
 
@@ -188,19 +215,22 @@ export const SpeakingEditorModal: FC<SpeakingEditorModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 select-text font-sans">
-      <div className="bg-white rounded-2xl shadow-2xl max-w-4xl w-full max-h-[90vh] flex flex-col overflow-hidden border border-gray-200 animate-in fade-in zoom-in-95">
-        {/* Header */}
-        <div className="h-14 bg-white border-b border-gray-200 px-6 flex items-center justify-between shadow-2xs shrink-0">
-          <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-lg bg-indigo-100 text-indigo-700 flex items-center justify-center">
-              <Mic className="w-4 h-4" />
+    <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4 select-text font-sans">
+      <div className="bg-white rounded-2xl shadow-2xl max-w-4xl w-full max-h-[90vh] flex flex-col overflow-hidden border-2 border-gray-200 animate-in fade-in zoom-in-95">
+        {/* Header — PNO Quiz Modal Header Style */}
+        <div className="min-h-16 py-3 bg-white border-b-2 border-gray-200 px-6 flex items-center justify-between shrink-0">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-blue-600 text-white flex items-center justify-center shadow-xs">
+              <Mic className="w-5 h-5" />
             </div>
             <div>
-              <h2 className="text-sm font-bold text-gray-900 leading-tight">
+              <h2
+                className="text-lg font-extrabold text-gray-900 leading-tight"
+                style={{ fontFamily: outfit.style.fontFamily }}
+              >
                 {initialExam ? 'Edit Speaking Test' : 'Create Speaking Practice Test'}
               </h2>
-              <span className="text-[11px] font-semibold text-indigo-600">
+              <span className="text-xs font-medium text-gray-500">
                 Official 3-Part Speaking Room (Parts 1, 2, 3)
               </span>
             </div>
@@ -209,13 +239,13 @@ export const SpeakingEditorModal: FC<SpeakingEditorModalProps> = ({
           <div className="flex items-center gap-2">
             <button
               onClick={onClose}
-              className="px-3.5 py-1.5 text-xs font-semibold text-gray-700 bg-white hover:bg-gray-100 rounded-lg border border-gray-300 transition"
+              className="px-4 py-2 text-xs font-bold text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-xl border-2 border-gray-200 transition"
             >
               Cancel
             </button>
             <button
               onClick={handleSave}
-              className="px-4 py-1.5 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg shadow-xs transition flex items-center gap-1.5"
+              className="px-4 py-2 text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-xl shadow-xs transition flex items-center gap-1.5"
             >
               <Save className="w-4 h-4" />
               <span>Save Speaking Test</span>
@@ -223,51 +253,53 @@ export const SpeakingEditorModal: FC<SpeakingEditorModalProps> = ({
           </div>
         </div>
 
-        {/* Tabs */}
-        <div className="bg-slate-50 border-b border-gray-200 px-6 flex items-center space-x-2 shrink-0 select-none">
-          <button
-            onClick={() => setActiveTab('info')}
-            className={`py-3 px-4 text-xs font-bold border-b-2 transition ${
-              activeTab === 'info'
-                ? 'border-indigo-600 text-indigo-600'
-                : 'border-transparent text-gray-500 hover:text-gray-900'
-            }`}
-          >
-            General Info
-          </button>
-          <button
-            onClick={() => setActiveTab('part1')}
-            className={`py-3 px-4 text-xs font-bold border-b-2 transition flex items-center gap-1.5 ${
-              activeTab === 'part1'
-                ? 'border-indigo-600 text-indigo-600'
-                : 'border-transparent text-gray-500 hover:text-gray-900'
-            }`}
-          >
-            <Mic className="w-3.5 h-3.5" />
-            <span>Part 1: Interview ({part1Questions.length} Qs)</span>
-          </button>
-          <button
-            onClick={() => setActiveTab('part2')}
-            className={`py-3 px-4 text-xs font-bold border-b-2 transition flex items-center gap-1.5 ${
-              activeTab === 'part2'
-                ? 'border-indigo-600 text-indigo-600'
-                : 'border-transparent text-gray-500 hover:text-gray-900'
-            }`}
-          >
-            <Mic className="w-3.5 h-3.5" />
-            <span>Part 2: Cue Card</span>
-          </button>
-          <button
-            onClick={() => setActiveTab('part3')}
-            className={`py-3 px-4 text-xs font-bold border-b-2 transition flex items-center gap-1.5 ${
-              activeTab === 'part3'
-                ? 'border-indigo-600 text-indigo-600'
-                : 'border-transparent text-gray-500 hover:text-gray-900'
-            }`}
-          >
-            <Mic className="w-3.5 h-3.5" />
-            <span>Part 3: Discussion ({part3Questions.length} Qs)</span>
-          </button>
+        {/* Tabs — PNO Soft-Rounded Pill Tabs */}
+        <div className="bg-slate-50/70 border-b-2 border-gray-200 px-6 py-2.5 flex items-center shrink-0 select-none overflow-x-auto">
+          <div className="flex items-center gap-1 bg-gray-100 p-1 rounded-xl border-2 border-gray-200">
+            <button
+              onClick={() => setActiveTab('info')}
+              className={`py-1.5 px-3.5 text-xs font-bold rounded-lg transition ${
+                activeTab === 'info'
+                  ? 'bg-blue-600 text-white shadow-2xs'
+                  : 'text-gray-600 hover:text-gray-900'
+              }`}
+            >
+              General Info
+            </button>
+            <button
+              onClick={() => setActiveTab('part1')}
+              className={`py-1.5 px-3.5 text-xs font-bold rounded-lg transition flex items-center gap-1.5 ${
+                activeTab === 'part1'
+                  ? 'bg-blue-600 text-white shadow-2xs'
+                  : 'text-gray-600 hover:text-gray-900'
+              }`}
+            >
+              <Mic className="w-3.5 h-3.5" />
+              <span>Part 1: Interview ({part1Questions.length} Qs)</span>
+            </button>
+            <button
+              onClick={() => setActiveTab('part2')}
+              className={`py-1.5 px-3.5 text-xs font-bold rounded-lg transition flex items-center gap-1.5 ${
+                activeTab === 'part2'
+                  ? 'bg-blue-600 text-white shadow-2xs'
+                  : 'text-gray-600 hover:text-gray-900'
+              }`}
+            >
+              <Mic className="w-3.5 h-3.5" />
+              <span>Part 2: Cue Card</span>
+            </button>
+            <button
+              onClick={() => setActiveTab('part3')}
+              className={`py-1.5 px-3.5 text-xs font-bold rounded-lg transition flex items-center gap-1.5 ${
+                activeTab === 'part3'
+                  ? 'bg-blue-600 text-white shadow-2xs'
+                  : 'text-gray-600 hover:text-gray-900'
+              }`}
+            >
+              <Mic className="w-3.5 h-3.5" />
+              <span>Part 3: Discussion ({part3Questions.length} Qs)</span>
+            </button>
+          </div>
         </div>
 
         {/* Content Area */}

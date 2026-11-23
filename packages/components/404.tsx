@@ -135,7 +135,7 @@ export const NotFoundPage: React.FC<NotFoundPageProps> = ({
             maxW="xl"
             textAlign="center"
           >
-            Không tìm thấy trang này
+            Page not found
           </Heading>
           <HStack
             spacing="3"
@@ -170,18 +170,18 @@ export const NotFoundPage: React.FC<NotFoundPageProps> = ({
               rounded="full"
             />
             <Text fontSize="lg" fontWeight={500}>
-              Trang bạn đang tìm không tồn tại hoặc đã được gỡ bỏ.
+              The page you&apos;re looking for doesn&apos;t exist.
             </Text>
           </HStack>
           <HStack mt={{ base: 2, sm: "8" }} spacing="3" flexWrap="wrap" justify="center">
             <Button as={Link} href="/" colorScheme="blue">
-              Về trang chủ PNO
+              Back to PNO Home
             </Button>
             <Button as={Link} href="/home" variant="outline" colorScheme="gray">
               Quiz
             </Button>
             <Button as={Link} href="/ielts" variant="outline" colorScheme="purple">
-              Thi IELTS
+              IELTS
             </Button>
           </HStack>
         </VStack>

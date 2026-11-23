@@ -1,4 +1,6 @@
 import { useState, useRef, type FC } from 'react';
+import { useToast } from '@chakra-ui/react';
+import { outfit } from '@quenti/lib/chakra-theme';
 import type { Exam, Part, QuestionGroup, Question, QuestionType } from '../../types/exam';
 import { parseQuickKeyText, AI_EXPLAIN_PROMPT_TEMPLATE } from '../../utils/keyMatcher';
 import { getAllCollections, getExamCollection } from '../../utils/storage';
@@ -65,6 +67,7 @@ export const TestEditor: FC<TestEditorProps> = ({
   onSave,
   onCancel,
 }) => {
+  const toast = useToast();
   const [showQuickKeyModal, setShowQuickKeyModal] = useState(false);
   const [quickKeyText, setQuickKeyText] = useState('');
   const [copiedPrompt, setCopiedPrompt] = useState(false);
@@ -201,10 +204,6 @@ export const TestEditor: FC<TestEditorProps> = ({
   // Convert to 4-section listening setup
   const handleConvertToListening = () => {
     if (initialExam) return;
-    const hasQuestions = exam.parts.some((p) => (p.questionGroups || []).some((g) => (g.questions || []).length > 0));
-    if (hasQuestions && !window.confirm('Switching this test to Listening format will adjust sections and default duration. Proceed?')) {
-      return;
-    }
     const updatedParts: Part[] = [];
     for (let i = 1; i <= 4; i++) {
       const existing = exam.parts[i - 1];
@@ -225,18 +224,18 @@ export const TestEditor: FC<TestEditorProps> = ({
       durationMinutes: 30,
       parts: updatedParts,
     }));
+    toast({
+      title: 'Switched to Listening format (4 Sections • 30 mins)',
+      status: 'info',
+      duration: 2200,
+      isClosable: true,
+      position: 'bottom-right',
+    });
   };
 
   // Convert to 3-passage reading setup
   const handleConvertToReading = () => {
     if (initialExam) return;
-    const qInExtra = exam.parts.slice(3).reduce(
-      (sum, p) => sum + (p.questionGroups || []).reduce((gS, g) => gS + (g.questions || []).length, 0),
-      0
-    );
-    if (qInExtra > 0 && !window.confirm(`Switching to Reading format will remove Section 4 and its ${qInExtra} questions. Proceed?`)) {
-      return;
-    }
     const updatedParts: Part[] = [];
     for (let i = 1; i <= 3; i++) {
       const existing = exam.parts[i - 1];
@@ -257,6 +256,13 @@ export const TestEditor: FC<TestEditorProps> = ({
       durationMinutes: 60,
       parts: updatedParts,
     }));
+    toast({
+      title: 'Switched to Reading format (3 Passages • 60 mins)',
+      status: 'info',
+      duration: 2200,
+      isClosable: true,
+      position: 'bottom-right',
+    });
   };
 
   // Add Part / Section
@@ -280,21 +286,30 @@ export const TestEditor: FC<TestEditorProps> = ({
   // Delete Part / Section
   const handleDeletePart = (partIdx: number) => {
     if (exam.parts.length <= 1) {
-      alert('A practice test must contain at least one part/section.');
+      toast({
+        title: 'A practice test must contain at least one part or section',
+        status: 'warning',
+        duration: 2500,
+        isClosable: true,
+        position: 'bottom-right',
+      });
       return;
     }
     const part = exam.parts[partIdx];
     if (!part) return;
-    const qCount = getPartQuestionCount(partIdx);
-    if (qCount > 0 && !window.confirm(`Are you sure you want to delete ${part.title} (${qCount} questions)?`)) {
-      return;
-    }
     const updated = exam.parts.filter((_, idx) => idx !== partIdx).map((p, idx) => ({
       ...p,
       partNumber: idx + 1,
     }));
     setExam((prev) => ({ ...prev, parts: updated }));
     setActiveTab(Math.max(0, partIdx - 1));
+    toast({
+      title: `Removed ${part.title}`,
+      status: 'info',
+      duration: 2200,
+      isClosable: true,
+      position: 'bottom-right',
+    });
   };
 
   // Copy active part's audio to all sections
@@ -302,12 +317,24 @@ export const TestEditor: FC<TestEditorProps> = ({
     const idx = getActivePartIndex();
     const sourceAudio = exam.parts[idx]?.audioUrl;
     if (!sourceAudio) {
-      alert('No audio URL or track set on this section to copy.');
+      toast({
+        title: 'No audio URL or track set on this section to copy',
+        status: 'warning',
+        duration: 2500,
+        isClosable: true,
+        position: 'bottom-right',
+      });
       return;
     }
     const updated = exam.parts.map((p) => ({ ...p, audioUrl: sourceAudio }));
     setExam((prev) => ({ ...prev, parts: updated }));
-    alert(`Applied audio track to all ${updated.length} sections!`);
+    toast({
+      title: `Applied audio track to all ${updated.length} sections`,
+      status: 'success',
+      duration: 2200,
+      isClosable: true,
+      position: 'bottom-right',
+    });
   };
 
   // Audio file upload - saves directly into project web folder
@@ -466,7 +493,14 @@ export const TestEditor: FC<TestEditorProps> = ({
   const handleApplyQuickKeys = () => {
     const parsedItems = parseQuickKeyText(quickKeyText);
     if (parsedItems.length === 0) {
-      alert('No questions detected. Please check your pasted text.');
+      toast({
+        title: 'No questions detected',
+        description: 'Please check your pasted answer key text.',
+        status: 'warning',
+        duration: 2800,
+        isClosable: true,
+        position: 'bottom-right',
+      });
       return;
     }
     const keyMap = new Map(parsedItems.map((item) => [item.orderNumber, item]));
@@ -490,12 +524,24 @@ export const TestEditor: FC<TestEditorProps> = ({
     setExam((prev) => ({ ...prev, parts: updatedParts }));
     setShowQuickKeyModal(false);
     setQuickKeyText('');
-    alert(`Successfully applied answers and explanations to ${parsedItems.length} questions!`);
+    toast({
+      title: `Applied answers & explanations to ${parsedItems.length} questions`,
+      status: 'success',
+      duration: 2500,
+      isClosable: true,
+      position: 'bottom-right',
+    });
   };
 
   const handleSave = () => {
     if (!exam.title.trim()) {
-      alert('Please enter a test title!');
+      toast({
+        title: 'Please enter a test title',
+        status: 'warning',
+        duration: 2500,
+        isClosable: true,
+        position: 'bottom-right',
+      });
       return;
     }
     onSave(exam);
@@ -504,24 +550,27 @@ export const TestEditor: FC<TestEditorProps> = ({
   const activePart = typeof activeTab === 'number' ? exam.parts[getActivePartIndex()] : null;
 
   return (
-    <div className="fixed inset-0 z-50 bg-gray-100 flex flex-col overflow-hidden select-text font-sans">
-      {/* Header */}
-      <div className="h-14 bg-white border-b border-gray-200 px-6 flex items-center justify-between shadow-2xs">
-        <div className="flex items-center gap-2.5">
+    <div className="fixed inset-0 z-50 bg-slate-50 flex flex-col overflow-hidden select-text font-sans">
+      {/* Header — PNO Quiz Editor Header Style */}
+      <div className="min-h-16 py-3 bg-white border-b-2 border-gray-200 px-6 flex flex-wrap items-center justify-between gap-3 shadow-2xs">
+        <div className="flex items-center gap-3">
           {isListening ? (
-            <div className="w-8 h-8 rounded-lg bg-blue-100 text-blue-700 flex items-center justify-center">
-              <Headphones className="w-4 h-4" />
+            <div className="w-10 h-10 rounded-xl bg-blue-600 text-white flex items-center justify-center shadow-xs">
+              <Headphones className="w-5 h-5" />
             </div>
           ) : (
-            <div className="w-8 h-8 rounded-lg bg-blue-100 text-blue-700 flex items-center justify-center">
-              <BookOpen className="w-4 h-4" />
+            <div className="w-10 h-10 rounded-xl bg-blue-600 text-white flex items-center justify-center shadow-xs">
+              <BookOpen className="w-5 h-5" />
             </div>
           )}
           <div>
-            <h2 className="text-sm font-bold text-gray-900 leading-tight">
+            <h2
+              className="text-lg font-extrabold text-gray-900 leading-tight"
+              style={{ fontFamily: outfit.style.fontFamily }}
+            >
               {initialExam ? 'Edit Practice Test' : 'Create Practice Test'}
             </h2>
-            <span className="text-[11px] font-semibold text-blue-600">
+            <span className="text-xs font-medium text-gray-500">
               {isListening ? 'IELTS Listening Test (Audio + 4 Sections)' : 'IELTS Reading Test (Passages + Questions)'}
             </span>
           </div>
@@ -531,22 +580,22 @@ export const TestEditor: FC<TestEditorProps> = ({
           <button
             type="button"
             onClick={() => setShowQuickKeyModal(true)}
-            className="px-3.5 py-1.5 text-xs font-bold text-amber-800 bg-amber-50 hover:bg-amber-100 border border-amber-300 rounded-lg shadow-2xs transition flex items-center gap-1.5"
+            className="px-3.5 py-2 text-xs font-bold text-gray-800 bg-gray-100 hover:bg-gray-200 border-2 border-gray-200 rounded-xl transition flex items-center gap-1.5"
             title="Paste answer key and explanations from AI or answer sheet"
           >
-            <Sparkles className="w-3.5 h-3.5 text-amber-600" />
-            <span>⚡ Quick Key & AI Explanations</span>
+            <Sparkles className="w-3.5 h-3.5 text-blue-600" />
+            <span>Quick Key &amp; AI Explanations</span>
           </button>
 
           <button
             onClick={onCancel}
-            className="px-3.5 py-1.5 text-xs font-semibold text-gray-700 bg-white hover:bg-gray-50 rounded-lg border border-gray-300 transition"
+            className="px-4 py-2 text-xs font-bold text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-xl border-2 border-gray-200 transition"
           >
             Cancel
           </button>
           <button
             onClick={handleSave}
-            className="px-4 py-1.5 text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-lg shadow-xs transition flex items-center gap-1.5"
+            className="px-4 py-2 text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-xl shadow-xs transition flex items-center gap-1.5"
           >
             <Save className="w-4 h-4" />
             <span>Save Test</span>
@@ -554,47 +603,49 @@ export const TestEditor: FC<TestEditorProps> = ({
         </div>
       </div>
 
-      {/* Tabs */}
-      <div className="bg-white border-b border-gray-200 px-6 flex items-center space-x-1.5 overflow-x-auto select-none">
-        <button
-          onClick={() => setActiveTab('info')}
-          className={`py-3 px-4 text-xs font-bold border-b-2 transition shrink-0 ${
-            activeTab === 'info'
-              ? 'border-blue-600 text-blue-600'
-              : 'border-transparent text-gray-500 hover:text-gray-900'
-          }`}
-        >
-          General Info
-        </button>
-
-        {exam.parts.map((part, idx) => (
+      {/* Tabs — PNO Soft-Rounded Pill Tabs */}
+      <div className="bg-white border-b-2 border-gray-200 px-6 py-2.5 flex items-center gap-2 overflow-x-auto select-none">
+        <div className="flex items-center gap-1 bg-gray-100 p-1 rounded-xl border-2 border-gray-200">
           <button
-            key={part.id || idx}
-            onClick={() => setActiveTab(idx)}
-            className={`py-3 px-3.5 text-xs font-bold border-b-2 transition flex items-center gap-1.5 shrink-0 ${
-              activeTab === idx
-                ? 'border-blue-600 text-blue-600'
-                : 'border-transparent text-gray-500 hover:text-gray-900'
+            onClick={() => setActiveTab('info')}
+            className={`py-1.5 px-3.5 text-xs font-bold rounded-lg transition shrink-0 ${
+              activeTab === 'info'
+                ? 'bg-blue-600 text-white shadow-2xs'
+                : 'text-gray-600 hover:text-gray-900'
             }`}
           >
-            {isListening ? (
-              <Headphones className="w-3.5 h-3.5 text-slate-500" />
-            ) : (
-              <BookOpen className="w-3.5 h-3.5 text-slate-500" />
-            )}
-            <span>
-              {isListening ? `Section ${part.partNumber}` : `Part ${part.partNumber}`} ({getPartQuestionCount(idx)} Qs)
-            </span>
+            General Info
           </button>
-        ))}
+
+          {exam.parts.map((part, idx) => (
+            <button
+              key={part.id || idx}
+              onClick={() => setActiveTab(idx)}
+              className={`py-1.5 px-3.5 text-xs font-bold rounded-lg transition flex items-center gap-1.5 shrink-0 ${
+                activeTab === idx
+                  ? 'bg-blue-600 text-white shadow-2xs'
+                  : 'text-gray-600 hover:text-gray-900'
+              }`}
+            >
+              {isListening ? (
+                <Headphones className="w-3.5 h-3.5" />
+              ) : (
+                <BookOpen className="w-3.5 h-3.5" />
+              )}
+              <span>
+                {isListening ? `Section ${part.partNumber}` : `Part ${part.partNumber}`} ({getPartQuestionCount(idx)} Qs)
+              </span>
+            </button>
+          ))}
+        </div>
 
         <button
           onClick={handleAddPart}
-          className="ml-2 px-2.5 py-1.5 text-xs font-bold text-blue-600 hover:text-blue-700 bg-blue-50 hover:bg-blue-100 rounded border border-blue-200 transition flex items-center gap-1 shrink-0"
+          className="px-3 py-1.5 text-xs font-bold text-blue-700 hover:text-blue-800 bg-blue-50 hover:bg-blue-100 rounded-xl border-2 border-blue-200 transition flex items-center gap-1 shrink-0"
           title={isListening ? 'Add another Section' : 'Add another Part'}
         >
           <Plus className="w-3.5 h-3.5" />
-          <span>{isListening ? '+ Section' : '+ Part'}</span>
+          <span>{isListening ? 'Add Section' : 'Add Part'}</span>
         </button>
       </div>
 

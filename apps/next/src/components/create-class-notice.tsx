@@ -27,11 +27,11 @@ export const CreateClassNotice = () => {
           <Modal.CloseButton />
           <VStack spacing="6">
             <GhostMessage
-              message="Tính năng lớp học đang tạm ẩn"
-              subheading="Hiện tại bạn có thể dùng trực tiếp toàn bộ tính năng Quiz (tạo bộ thẻ, thư mục, nhập Anki/Quizlet) và Thi IELTS trên PNO."
+              message="Classes are currently disabled"
+              subheading="You have full direct access to all Quiz study sets, folders, Anki/Quizlet imports, and 4-skill IELTS practice on PNO."
             />
             <Button colorScheme="blue" onClick={() => setOpen(false)}>
-              Đóng
+              Close
             </Button>
           </VStack>
         </Modal.Body>
