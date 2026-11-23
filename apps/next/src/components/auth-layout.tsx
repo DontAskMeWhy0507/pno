@@ -171,8 +171,8 @@ export const AuthLayout: React.FC<AuthLayoutProps> = ({
                     <Logo width={24} height={24} />
                     <Heading fontSize="24px" textAlign="center">
                       {mode == "signup"
-                        ? "Create your Quenti account"
-                        : "Welcome back"}
+                        ? "Create your PNO account"
+                        : "Welcome back to PNO"}
                     </Heading>
                     <form
                       style={{

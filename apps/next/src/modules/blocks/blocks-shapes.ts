@@ -104,6 +104,21 @@ export function getRandomPiece(): BlockPiece {
   };
 }
 
+export function rotatePieceMatrix(matrix: BlockMatrix): BlockMatrix {
+  const rows = matrix.length;
+  const cols = matrix[0]?.length || 0;
+  if (rows === 0 || cols === 0) return matrix;
+  const rotated: BlockMatrix = Array.from({ length: cols }, () =>
+    Array.from({ length: rows }, () => 0),
+  );
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
+      rotated[c]![rows - 1 - r] = matrix[r]![c]!;
+    }
+  }
+  return rotated;
+}
+
 export function canPlacePiece(
   board: (string | null)[][],
   piece: BlockPiece,

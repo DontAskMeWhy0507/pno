@@ -1,7 +1,10 @@
 import React, { useState, useRef } from "react";
 import { useRouter } from "next/router";
 import { signIn } from "next-auth/react";
+import JSZip from "jszip";
+import * as fzstd from "fzstd";
 import { Modal } from "@quenti/components/modal";
+import { decodeProtobufMedia } from "@quenti/lib/src/anki/protobuf-media";
 import { api } from "@quenti/trpc";
 import {
   Button,
@@ -139,35 +142,150 @@ export const ImportFromAnkiModal: React.FC<ImportFromAnkiModalProps> = ({
     acceptApkgFile(e.target.files?.[0]);
   };
 
-  const handleImport = () => {
+  const handleImport = async () => {
     if (!selectedFile) return;
 
     const sizeMb = selectedFile.size / (1024 * 1024);
-    if (sizeMb > 3.2) {
+    if (sizeMb > 100) {
       setError(
-        `This file is ${sizeMb.toFixed(1)}MB. Direct browser uploads are limited to ~3MB on serverless deployments; please use "Import from Google Drive" above (up to 50MB) or the CLI importer.`,
+        `This file is ${sizeMb.toFixed(1)}MB. Please select an Anki package under 100MB.`,
       );
       return;
     }
 
     setLoading(true);
+    setError("");
     setProgressMsg("Reading Anki package...");
 
     try {
-      const reader = new FileReader();
-      reader.onload = () => {
-        const base64 = (reader.result as string).split(",")[1] ?? "";
+      // Fast direct path for small packages (<= 2.8 MB)
+      if (sizeMb <= 2.8) {
+        const arrayBuf = await selectedFile.arrayBuffer();
+        const bytes = new Uint8Array(arrayBuf);
+        let binary = "";
+        const chunkSize = 0x8000;
+        for (let i = 0; i < bytes.length; i += chunkSize) {
+          binary += String.fromCharCode(...bytes.subarray(i, i + chunkSize));
+        }
+        const base64 = window.btoa(binary);
         setProgressMsg("Parsing decks, cards, and media...");
         importMutation.mutate({
           fileBase64: base64,
           fileName: selectedFile.name,
         });
-      };
-      reader.onerror = () => {
-        setLoading(false);
-        setError("Error reading local file.");
-      };
-      reader.readAsDataURL(selectedFile);
+        return;
+      }
+
+      // Smart client-side split for large packages (> 2.8 MB up to 100 MB)
+      setProgressMsg("Unpacking large Anki archive in browser...");
+      const zip = await JSZip.loadAsync(await selectedFile.arrayBuffer());
+
+      // Parse media manifest (JSON or Anki 2.1.50+ Zstd/Protobuf)
+      let mediaMap: Record<string, string> = {};
+      const mediaEntry = zip.file("media");
+      if (mediaEntry) {
+        let mediaBytes = await mediaEntry.async("uint8array");
+        if (
+          mediaBytes.length >= 4 &&
+          mediaBytes[0] === 0x28 &&
+          mediaBytes[1] === 0xb5 &&
+          mediaBytes[2] === 0x2f &&
+          mediaBytes[3] === 0xfd
+        ) {
+          mediaBytes = fzstd.decompress(mediaBytes);
+        }
+        const text = new TextDecoder("utf-8", { fatal: false }).decode(
+          mediaBytes,
+        );
+        if (text.trim().startsWith("{")) {
+          try {
+            mediaMap = JSON.parse(text) as Record<string, string>;
+          } catch {
+            mediaMap = decodeProtobufMedia(mediaBytes);
+          }
+        } else {
+          mediaMap = decodeProtobufMedia(mediaBytes);
+        }
+      }
+
+      // Upload media files in <= 2.2 MB batches so no request exceeds Vercel's 4.5 MB body limit
+      const importId = `${Date.now().toString(36)}${Math.random()
+        .toString(36)
+        .slice(2, 8)}`;
+      let resolvedMediaBase: string | undefined;
+      const mediaEntries = Object.entries(mediaMap);
+
+      if (mediaEntries.length > 0) {
+        let currentBatch: { name: string; base64: string }[] = [];
+        let currentBatchBytes = 0;
+        const maxBatchBytes = 2.0 * 1024 * 1024;
+        let processedCount = 0;
+
+        const flushBatch = async () => {
+          if (currentBatch.length === 0) return;
+          setProgressMsg(
+            `Uploading media files (${processedCount}/${mediaEntries.length})...`,
+          );
+          const resp = await fetch("/api/anki/upload-media-batch", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              importId,
+              files: currentBatch,
+            }),
+          });
+          if (resp.ok) {
+            const data = (await resp.json()) as { mediaBase?: string | null };
+            if (data.mediaBase) resolvedMediaBase = data.mediaBase;
+          }
+          currentBatch = [];
+          currentBatchBytes = 0;
+        };
+
+        for (const [entryId, realName] of mediaEntries) {
+          const entry = zip.file(entryId);
+          processedCount++;
+          if (!entry) continue;
+          const base64 = await entry.async("base64");
+          const approxBytes = base64.length;
+          if (approxBytes > 2.8 * 1024 * 1024) continue; // skip single oversized media > 2.8MB
+          if (
+            currentBatch.length > 0 &&
+            currentBatchBytes + approxBytes > maxBatchBytes
+          ) {
+            await flushBatch();
+          }
+          currentBatch.push({ name: realName, base64 });
+          currentBatchBytes += approxBytes;
+        }
+        await flushBatch();
+      }
+
+      // Build lightweight collection-only .apkg zip
+      setProgressMsg("Importing decks and flashcards...");
+      const miniZip = new JSZip();
+      for (const colName of [
+        "collection.anki21b",
+        "collection.anki21",
+        "collection.anki2",
+        "media",
+      ]) {
+        const entry = zip.file(colName);
+        if (entry) {
+          miniZip.file(colName, await entry.async("uint8array"));
+        }
+      }
+
+      const miniBase64 = await miniZip.generateAsync({
+        type: "base64",
+        compression: "DEFLATE",
+      });
+
+      importMutation.mutate({
+        fileBase64: miniBase64,
+        fileName: selectedFile.name,
+        mediaBaseOverride: resolvedMediaBase,
+      });
     } catch (err: unknown) {
       setLoading(false);
       setError(err instanceof Error ? err.message : "Error processing file.");

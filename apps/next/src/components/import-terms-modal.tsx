@@ -1,6 +1,7 @@
-import React, { useMemo } from "react";
+import React, { useMemo, useRef } from "react";
 
 import { Modal } from "@quenti/components/modal";
+import { parseQuizletExportText } from "@quenti/lib/src/quizlet/parser";
 
 import {
   Button,
@@ -51,19 +52,62 @@ export const ImportTermsModal: React.FC<ImportTermsModalProps> = ({
     setCardDelimiter("\\n");
   }, [isOpen]);
 
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      const text = await file.text();
+      if (file.name.toLowerCase().endsWith(".json")) {
+        const parsed = JSON.parse(text) as
+          | { word?: string; term?: string; definition?: string }[]
+          | { terms?: { word?: string; term?: string; definition?: string }[] };
+        const items = Array.isArray(parsed) ? parsed : parsed.terms || [];
+        const formatted = items
+          .map((item) => `${item.word || item.term || ""}\t${item.definition || ""}`)
+          .filter((l) => l.trim().length > 0)
+          .join("\n");
+        setTermDelimiter("\\t");
+        setCardDelimiter("\\n");
+        setValue(formatted);
+      } else {
+        setValue(text);
+      }
+    } catch {
+      // ignore invalid file
+    } finally {
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  };
+
   const parseTerms = (
     value: string,
     td: string,
     cd: string,
   ): { word: string; definition: string }[] => {
-    if (!value || !cd || !td) return [];
-    return value
+    if (!value || !value.trim()) return [];
+    const normalized = value.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
+
+    // When using default Tab/Newline delimiters, leverage smart auto-detect parser
+    if (td === "\t" && cd === "\n") {
+      const smart = parseQuizletExportText(normalized, {
+        termDelimiter: "auto",
+        rowDelimiter: "auto",
+      });
+      if (smart.length > 0) {
+        return smart.map(({ word, definition }) => ({ word, definition }));
+      }
+    }
+
+    if (!cd || !td) return [];
+    return normalized
       .split(cd)
       .map((card) => {
         const idx = card.indexOf(td);
         return idx === -1
-          ? [card, ""]
-          : [card.slice(0, idx), card.slice(idx + td.length)];
+          ? [card.trim(), ""]
+          : [card.slice(0, idx).trim(), card.slice(idx + td.length).trim()];
       })
       .map(([word, definition]) => ({
         word: word || "",
@@ -87,10 +131,26 @@ export const ImportTermsModal: React.FC<ImportTermsModalProps> = ({
           <Modal.Heading>Import terms</Modal.Heading>
           <Stack spacing={6}>
             <FormControl>
-              <FormLabel mb="3">
-                Copy and paste your terms and definitions in the following
-                format:
-              </FormLabel>
+              <Flex justify="space-between" align="center" mb="3" wrap="wrap" gap={2}>
+                <FormLabel m="0">
+                  Copy and paste your terms and definitions (or upload a file):
+                </FormLabel>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept=".txt,.csv,.tsv,.json"
+                  style={{ display: "none" }}
+                  onChange={handleFileUpload}
+                />
+                <Button
+                  size="xs"
+                  variant="outline"
+                  colorScheme="blue"
+                  onClick={() => fileInputRef.current?.click()}
+                >
+                  Upload .txt / .csv / .json
+                </Button>
+              </Flex>
               <AutoResizeTextarea
                 bg={textareaBg}
                 placeholder={generatePlaceholder()}

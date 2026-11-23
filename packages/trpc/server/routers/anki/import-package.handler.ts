@@ -44,10 +44,153 @@ type ImportPackageOptions = {
   input: TImportPackageSchema;
 };
 
+export async function uploadFilesToGithubTree(
+  files: { name: string; content: Buffer }[],
+  importId?: string,
+): Promise<string | null> {
+  const ghToken = process.env.GITHUB_MEDIA_TOKEN;
+  if (!ghToken || files.length === 0) return null;
+
+  const owner = process.env.GITHUB_MEDIA_OWNER || "DontAskMeWhy0507";
+  const repo = process.env.GITHUB_MEDIA_REPO || "quenti-media";
+  const safeImportId =
+    importId?.replace(/[^a-zA-Z0-9_-]/g, "").slice(0, 40) ||
+    `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
+  const prefix = `anki/imports/${safeImportId}`;
+  const headers = {
+    Authorization: `Bearer ${ghToken}`,
+    Accept: "application/vnd.github+json",
+    "Content-Type": "application/json",
+  };
+
+  try {
+    // 1. Get current main branch HEAD commit and base tree SHA
+    const refRes = await fetch(
+      `https://api.github.com/repos/${owner}/${repo}/git/ref/heads/main`,
+      { headers, signal: AbortSignal.timeout(10_000) },
+    );
+    if (!refRes.ok) throw new Error(`GitHub ref fetch failed (${refRes.status})`);
+    const refJson = (await refRes.json()) as { object?: { sha?: string } };
+    const parentCommitSha = refJson.object?.sha;
+    if (!parentCommitSha) throw new Error("Missing HEAD commit SHA");
+
+    const commitRes = await fetch(
+      `https://api.github.com/repos/${owner}/${repo}/git/commits/${parentCommitSha}`,
+      { headers, signal: AbortSignal.timeout(10_000) },
+    );
+    if (!commitRes.ok)
+      throw new Error(`GitHub commit fetch failed (${commitRes.status})`);
+    const commitJson = (await commitRes.json()) as { tree?: { sha?: string } };
+    const baseTreeSha = commitJson.tree?.sha;
+    if (!baseTreeSha) throw new Error("Missing base tree SHA");
+
+    // 2. Create Git blobs in parallel batches of 8 (no branch lock contention!)
+    const treeEntries: {
+      path: string;
+      mode: "100644";
+      type: "blob";
+      sha: string;
+    }[] = [];
+    const batchSize = 8;
+    for (let i = 0; i < files.length; i += batchSize) {
+      const chunk = files.slice(i, i + batchSize);
+      const created = await Promise.all(
+        chunk.map(async (f) => {
+          const safeName = sanitizeMediaFilename(f.name);
+          const blobRes = await fetch(
+            `https://api.github.com/repos/${owner}/${repo}/git/blobs`,
+            {
+              method: "POST",
+              headers,
+              body: JSON.stringify({
+                content: f.content.toString("base64"),
+                encoding: "base64",
+              }),
+              signal: AbortSignal.timeout(20_000),
+            },
+          );
+          if (!blobRes.ok) return null;
+          const blobJson = (await blobRes.json()) as { sha?: string };
+          return blobJson.sha
+            ? {
+                path: `${prefix}/${safeName}`,
+                mode: "100644" as const,
+                type: "blob" as const,
+                sha: blobJson.sha,
+              }
+            : null;
+        }),
+      );
+      for (const item of created) {
+        if (item) treeEntries.push(item);
+      }
+    }
+
+    if (treeEntries.length === 0) return null;
+
+    // 3. Create single Git tree + single commit + update branch ref
+    const newTreeRes = await fetch(
+      `https://api.github.com/repos/${owner}/${repo}/git/trees`,
+      {
+        method: "POST",
+        headers,
+        body: JSON.stringify({
+          base_tree: baseTreeSha,
+          tree: treeEntries,
+        }),
+        signal: AbortSignal.timeout(15_000),
+      },
+    );
+    if (!newTreeRes.ok)
+      throw new Error(`GitHub tree creation failed (${newTreeRes.status})`);
+    const newTreeJson = (await newTreeRes.json()) as { sha?: string };
+    if (!newTreeJson.sha) throw new Error("Missing new tree SHA");
+
+    const newCommitRes = await fetch(
+      `https://api.github.com/repos/${owner}/${repo}/git/commits`,
+      {
+        method: "POST",
+        headers,
+        body: JSON.stringify({
+          message: `Anki import media batch (${treeEntries.length} files)`,
+          tree: newTreeJson.sha,
+          parents: [parentCommitSha],
+        }),
+        signal: AbortSignal.timeout(15_000),
+      },
+    );
+    if (!newCommitRes.ok)
+      throw new Error(`GitHub commit creation failed (${newCommitRes.status})`);
+    const newCommitJson = (await newCommitRes.json()) as { sha?: string };
+    if (!newCommitJson.sha) throw new Error("Missing new commit SHA");
+
+    const updateRefRes = await fetch(
+      `https://api.github.com/repos/${owner}/${repo}/git/refs/heads/main`,
+      {
+        method: "PATCH",
+        headers,
+        body: JSON.stringify({
+          sha: newCommitJson.sha,
+          force: true,
+        }),
+        signal: AbortSignal.timeout(15_000),
+      },
+    );
+    if (!updateRefRes.ok)
+      throw new Error(`GitHub ref update failed (${updateRefRes.status})`);
+
+    return `https://cdn.jsdelivr.net/gh/${owner}/${repo}@main/${prefix}`;
+  } catch (err) {
+    console.warn("GitHub Git Tree batch upload warning:", err);
+    return null;
+  }
+}
+
 export async function importAnkiBuffer(
   ctx: NonNullableUserContext,
   buffer: Buffer,
   _fileName: string,
+  mediaBaseOverride?: string,
 ) {
   const userId = ctx.session.user.id;
 
@@ -72,11 +215,9 @@ export async function importAnkiBuffer(
     }
   }
 
-  // Extract media. On deployments with GitHub CDN or Vercel Blob configured,
-  // media is uploaded externally and card HTML is rewritten to public URLs.
-  // Otherwise it falls back to the local public/uploads/anki directory.
-  let mediaBase: string | null = null;
+  let mediaBase: string | null = mediaBaseOverride ?? null;
   const blobToken = process.env.BLOB_READ_WRITE_TOKEN;
+  const ghToken = process.env.GITHUB_MEDIA_TOKEN;
   const loadMediaFiles = async () => {
     const files: { name: string; content: Buffer }[] = [];
     if (Object.keys(parsed.mediaMap).length === 0) return files;
@@ -103,76 +244,10 @@ export async function importAnkiBuffer(
     return files;
   };
 
-  // Preferred media target: a public GitHub repo served through the
-  // jsDelivr CDN (GITHUB_MEDIA_TOKEN). Files land under a per-import prefix
-  // so decks never collide, and card HTML is rewritten to the CDN URLs.
-  const ghToken = process.env.GITHUB_MEDIA_TOKEN;
-  if (ghToken) {
-    try {
-      const files = await loadMediaFiles();
-      if (files.length) {
-        const owner = process.env.GITHUB_MEDIA_OWNER || "DontAskMeWhy0507";
-        const repo = process.env.GITHUB_MEDIA_REPO || "quenti-media";
-        const importId = `${Date.now().toString(36)}${Math.random()
-          .toString(36)
-          .slice(2, 8)}`;
-        const prefix = `anki/imports/${importId}`;
-        const uploadOne = async (file: { name: string; content: Buffer }) => {
-          const resp = await fetch(
-            `https://api.github.com/repos/${owner}/${repo}/contents/${prefix}/${encodeURIComponent(
-              file.name,
-            )}`,
-            {
-              method: "PUT",
-              headers: {
-                Authorization: `Bearer ${ghToken}`,
-                Accept: "application/vnd.github+json",
-                "Content-Type": "application/json",
-              },
-              body: JSON.stringify({
-                message: `Anki import media: ${file.name}`,
-                content: file.content.toString("base64"),
-              }),
-              signal: AbortSignal.timeout(15_000),
-            },
-          );
-          if (!resp.ok) {
-            const err = new Error(
-              `GitHub media upload failed for ${file.name} (HTTP ${resp.status})`,
-            ) as Error & { status?: number };
-            err.status = resp.status;
-            throw err;
-          }
-        };
-        // Uploads MUST be sequential: every Contents-API PUT creates a
-        // commit on the same branch, so parallel PUTs race on the branch
-        // ref and all but one fail. Retry transient errors only.
-        let uploaded = 0;
-        for (const f of files) {
-          let lastErr: unknown = null;
-          for (let attempt = 0; attempt < 3; attempt++) {
-            try {
-              await uploadOne(f);
-              lastErr = null;
-              break;
-            } catch (e) {
-              lastErr = e;
-              const status = (e as { status?: number })?.status;
-              if (status === 401 || status === 403 || status === 422) break;
-              await new Promise((r) => setTimeout(r, 500 * (attempt + 1)));
-            }
-          }
-          if (lastErr)
-            console.warn(`GitHub media upload failed for ${f.name}:`, lastErr);
-          else uploaded++;
-        }
-        if (uploaded > 0) {
-          mediaBase = `https://cdn.jsdelivr.net/gh/${owner}/${repo}@main/${prefix}`;
-        }
-      }
-    } catch (err) {
-      console.warn("GitHub media upload warning:", err);
-      mediaBase = null;
+  if (!mediaBase && ghToken) {
+    const files = await loadMediaFiles();
+    if (files.length > 0) {
+      mediaBase = await uploadFilesToGithubTree(files);
     }
   }
 
@@ -313,7 +388,12 @@ export const importPackageHandler = async ({
   input,
 }: ImportPackageOptions) => {
   const buffer = Buffer.from(input.fileBase64, "base64");
-  return importAnkiBuffer(ctx, buffer, input.fileName);
+  return importAnkiBuffer(
+    ctx,
+    buffer,
+    input.fileName,
+    input.mediaBaseOverride,
+  );
 };
 
 export default importPackageHandler;

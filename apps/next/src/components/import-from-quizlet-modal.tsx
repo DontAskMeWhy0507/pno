@@ -89,14 +89,65 @@ export const ImportFromQuizletModal: React.FC<ImportFromQuizletModalProps> = ({
   const [rowDelimType, setRowDelimType] = React.useState<string>("auto");
   const [customRowDelim, setCustomRowDelim] = React.useState<string>("\\n\\n");
 
+  const fileInputRef = React.useRef<HTMLInputElement>(null);
+
   const attemptFormat = (u: string) => {
-    const parsed = u.replace(/^(https?:\/\/)?/, "");
-    const segments = parsed.split("/");
-    const id = segments.find((segment) => /^\d+$/.test(segment));
-    if (id) {
-      return `https://quizlet.com/${id}`;
+    const trimmed = u.trim();
+    if (!trimmed) return "";
+    const withProtocol = /^https?:\/\//i.test(trimmed)
+      ? trimmed
+      : `https://${trimmed}`;
+    try {
+      const parsed = new URL(withProtocol);
+      if (
+        parsed.hostname === "quizlet.com" ||
+        parsed.hostname === "www.quizlet.com"
+      ) {
+        parsed.protocol = "https:";
+        parsed.hash = "";
+        parsed.search = "";
+        return parsed.toString().replace(/\/$/, "");
+      }
+    } catch {
+      // Fallback
     }
-    return u;
+    return trimmed;
+  };
+
+  const handleUploadTextFile = async (
+    e: React.ChangeEvent<HTMLInputElement>,
+  ) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setError("");
+    try {
+      const text = await file.text();
+      if (file.name.toLowerCase().endsWith(".json")) {
+        const parsed = JSON.parse(text) as
+          | { word?: string; term?: string; definition?: string }[]
+          | { terms?: { word?: string; term?: string; definition?: string }[]; title?: string };
+        const items = Array.isArray(parsed) ? parsed : parsed.terms || [];
+        if (!Array.isArray(parsed) && parsed.title && !customTitle) {
+          setCustomTitle(parsed.title);
+        }
+        const formatted = items
+          .map((item) => `${item.word || item.term || ""}\t${item.definition || ""}`)
+          .filter((l) => l.trim().length > 0)
+          .join("\n");
+        setTermDelimType("tab");
+        setRowDelimType("newline");
+        setRawText(formatted);
+      } else {
+        setRawText(text);
+        if (!customTitle) {
+          setCustomTitle(file.name.replace(/\.(txt|csv|tsv)$/i, ""));
+        }
+      }
+    } catch {
+      setError("Could not read the selected file.");
+    } finally {
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
   };
 
   const url = attemptFormat(_url);
@@ -338,20 +389,37 @@ export const ImportFromQuizletModal: React.FC<ImportFromQuizletModalProps> = ({
 
                     {/* Textarea for pasted cards */}
                     <FormControl isInvalid={!!error}>
-                      <Flex justify="space-between" align="center" mb={1}>
+                      <Flex justify="space-between" align="center" mb={1} wrap="wrap" gap={2}>
                         <FormLabel fontSize="xs" fontWeight={700} m={0}>
                           Copy &amp; paste text from Quizlet Export
                         </FormLabel>
-                        <Badge
-                          colorScheme={previewTerms.length > 0 ? "green" : "gray"}
-                          fontSize="xs"
-                          px={2}
-                          py={0.5}
-                          rounded="full"
-                        >
-                          {previewTerms.length} card
-                          {previewTerms.length !== 1 ? "s" : ""} detected
-                        </Badge>
+                        <HStack spacing={2}>
+                          <input
+                            ref={fileInputRef}
+                            type="file"
+                            accept=".txt,.csv,.tsv,.json"
+                            style={{ display: "none" }}
+                            onChange={handleUploadTextFile}
+                          />
+                          <Button
+                            size="xs"
+                            variant="outline"
+                            colorScheme="blue"
+                            onClick={() => fileInputRef.current?.click()}
+                          >
+                            Upload .txt / .csv / .json
+                          </Button>
+                          <Badge
+                            colorScheme={previewTerms.length > 0 ? "green" : "gray"}
+                            fontSize="xs"
+                            px={2}
+                            py={0.5}
+                            rounded="full"
+                          >
+                            {previewTerms.length} card
+                            {previewTerms.length !== 1 ? "s" : ""} detected
+                          </Badge>
+                        </HStack>
                       </Flex>
                       <Textarea
                         rows={5}

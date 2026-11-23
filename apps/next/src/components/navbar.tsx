@@ -170,6 +170,9 @@ export const Navbar: React.FC = () => {
                 setImportIsEdit(false);
                 setImportModalOpen(true);
               }}
+              onAnkiImportClick={() => {
+                setAnkiImportModalOpen(true);
+              }}
             />
           </Box>
           <HStack as="nav" display={["none", "none", "flex"]} height="12">

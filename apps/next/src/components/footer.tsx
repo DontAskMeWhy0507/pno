@@ -48,11 +48,11 @@ export const Footer = () => {
         <Stack spacing="8">
           <Flex justifyContent="space-between" alignItems="center">
             <HStack spacing="3">
-              <Link href={WEBSITE_URL}>
+              <Link href="/">
                 <HStack>
                   <FrameLogo width="18px" height="18px" />
                   <Heading size="md" className="notranslate">
-                    Quenti
+                    PNO
                   </Heading>
                 </HStack>
               </Link>

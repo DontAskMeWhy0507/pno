@@ -35,6 +35,7 @@ export interface MobileMenuProps {
   onFolderClick: () => void;
   onClassClick: () => void;
   onImportClick: () => void;
+  onAnkiImportClick?: () => void;
 }
 
 export const MobileMenu: React.FC<MobileMenuProps> = ({
@@ -43,6 +44,7 @@ export const MobileMenu: React.FC<MobileMenuProps> = ({
   onFolderClick,
   onClassClick,
   onImportClick,
+  onAnkiImportClick,
 }) => {
   const router = useRouter();
   React.useEffect(() => {
@@ -96,20 +98,42 @@ export const MobileMenu: React.FC<MobileMenuProps> = ({
         spacing={8}
       >
         <Stack spacing={4}>
-          {session?.user && (
-            <Button
-              variant="outline"
-              colorScheme="gray"
-              fontWeight={700}
-              fontSize="sm"
-              onClick={async () => {
-                onClose();
-                await router.push("/home");
-              }}
-            >
-              Home
-            </Button>
-          )}
+          <Button
+            variant="outline"
+            colorScheme="gray"
+            fontWeight={700}
+            fontSize="sm"
+            onClick={async () => {
+              onClose();
+              await router.push("/");
+            }}
+          >
+            Trang chủ PNO
+          </Button>
+          <Button
+            variant="outline"
+            colorScheme="blue"
+            fontWeight={700}
+            fontSize="sm"
+            onClick={async () => {
+              onClose();
+              await router.push("/home");
+            }}
+          >
+            Quiz
+          </Button>
+          <Button
+            variant="outline"
+            colorScheme="purple"
+            fontWeight={700}
+            fontSize="sm"
+            onClick={async () => {
+              onClose();
+              await router.push("/ielts");
+            }}
+          >
+            Thi IELTS
+          </Button>
           {session?.user && (
             <Menu
               boundary="scrollParent"
@@ -154,8 +178,21 @@ export const MobileMenu: React.FC<MobileMenuProps> = ({
                 <MenuOption
                   icon={<IconCloudDownload size={20} />}
                   label="Import from Quizlet"
-                  onClick={onImportClick}
+                  onClick={() => {
+                    onClose();
+                    onImportClick();
+                  }}
                 />
+                {onAnkiImportClick && (
+                  <MenuOption
+                    icon={<IconCloudDownload size={20} />}
+                    label="Import from Anki (.apkg)"
+                    onClick={() => {
+                      onClose();
+                      onAnkiImportClick();
+                    }}
+                  />
+                )}
                 <MenuDivider />
                 <MenuOption
                   icon={<IconFolder size={20} />}

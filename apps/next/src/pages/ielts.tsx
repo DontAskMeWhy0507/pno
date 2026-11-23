@@ -1,12 +1,22 @@
-import Head from "next/head";
+import dynamic from "next/dynamic";
+import React from "react";
+
+import { HeadSeo } from "@quenti/components/head-seo";
 
 import { PageWrapper } from "../common/page-wrapper";
+import { Loading } from "../components/loading";
+
+const IeltsApp = dynamic(() => import("../modules/ielts/App"), {
+  ssr: false,
+  loading: () => <Loading />,
+});
 
 export default function IeltsPage() {
   return (
-    <Head>
-      <title>Thi IELTS | Quenti</title>
-    </Head>
+    <>
+      <HeadSeo title="Thi IELTS 4 Kỹ Năng" />
+      <IeltsApp />
+    </>
   );
 }
 

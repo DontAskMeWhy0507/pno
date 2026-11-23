@@ -118,7 +118,7 @@ export const HydrateFolderData: React.FC<
   return (
     <ContextLayer key={folder.data.id} data={folder.data}>
       <Head>
-        <title>{folder.data.title} | Quenti</title>
+        <title>{folder.data.title} | PNO</title>
       </Head>
       {children}
     </ContextLayer>

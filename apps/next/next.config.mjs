@@ -145,8 +145,8 @@ let config = {
   rewrites: async () => [
     ...(await getConsoleRewrites()),
     {
-      source: "/",
-      destination: "/home",
+      source: "/ielts/:path*",
+      destination: "/ielts",
     },
     {
       source: "/:id(_[a-zA-Z0-9]{10})",

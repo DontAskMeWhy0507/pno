@@ -1,4 +1,10 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 
 import { Link } from "@quenti/components";
 
@@ -30,6 +36,7 @@ import {
   IconBrain,
   IconCube,
   IconFlame,
+  IconRefresh,
   IconRotateClockwise,
   IconTrophy,
   IconVolume,
@@ -41,11 +48,13 @@ import { useSet } from "../../hooks/use-set";
 import { playSound } from "./blocks-audio";
 import {
   type BlockPiece,
+  GRID_SIZE,
   canPieceFitAnywhere,
   canPlacePiece,
   checkAndClearLines,
   createEmptyBoard,
   getRandomPiece,
+  rotatePieceMatrix,
 } from "./blocks-shapes";
 
 interface QuestionData {
@@ -54,20 +63,65 @@ interface QuestionData {
   choices: string[];
 }
 
+interface DragState {
+  piece: BlockPiece;
+  clientX: number;
+  clientY: number;
+  startX: number;
+  startY: number;
+  grabRowOffset: number;
+  grabColOffset: number;
+  moved: boolean;
+}
+
+function cleanTermText(raw: string | undefined | null): string {
+  if (!raw) return "";
+  return raw
+    .replace(/<style[\s\S]*?<\/style>/gi, " ")
+    .replace(/<script[\s\S]*?<\/script>/gi, " ")
+    .replace(/\[sound:[^\]]+\]/gi, " ")
+    .replace(/<br\s*\/?>/gi, " / ")
+    .replace(/<\/?(?:div|p|li|tr|h[1-6])[^>]*>/gi, " ")
+    .replace(/<[^>]+>/g, "")
+    .replace(/&nbsp;/gi, " ")
+    .replace(/&amp;/gi, "&")
+    .replace(/&lt;/gi, "<")
+    .replace(/&gt;/gi, ">")
+    .replace(/&quot;/gi, '"')
+    .replace(/&#39;/gi, "'")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function createDockPieces(): BlockPiece[] {
+  return [getRandomPiece(), getRandomPiece(), getRandomPiece()];
+}
+
 export const BlocksContainer: React.FC = () => {
   const set = useSet();
-  const terms = set?.terms || [];
+  const rawTerms = set?.terms || [];
+
+  const terms = useMemo(() => {
+    return rawTerms
+      .map((t) => ({
+        id: t.id,
+        word: cleanTermText(t.word),
+        definition: cleanTermText(t.definition),
+      }))
+      .filter((t) => t.word || t.definition);
+  }, [rawTerms]);
 
   // Audio preference
   const [soundEnabled, setSoundEnabled] = useState(true);
 
-  // Game state
+  // Game state — start immediately with 3 pieces in the dock!
   const [board, setBoard] = useState<(string | null)[][]>(createEmptyBoard);
-  const [pieces, setPieces] = useState<BlockPiece[]>([]);
+  const [pieces, setPieces] = useState<BlockPiece[]>(() => createDockPieces());
   const [selectedPieceId, setSelectedPieceId] = useState<string | null>(null);
   const [hoverPos, setHoverPos] = useState<{ r: number; c: number } | null>(
     null,
   );
+  const [dragState, setDragState] = useState<DragState | null>(null);
 
   // Stats
   const [score, setScore] = useState(0);
@@ -76,31 +130,45 @@ export const BlocksContainer: React.FC = () => {
   const [streak, setStreak] = useState(0);
   const [cardsAnswered, setCardsAnswered] = useState(0);
 
-  // Phase: 'question' | 'placing' | 'gameover'
-  const [phase, setPhase] = useState<"question" | "placing" | "gameover">(
-    "question",
+  // Phase: 'placing' | 'question' | 'gameover'
+  const [phase, setPhase] = useState<"placing" | "question" | "gameover">(
+    "placing",
   );
   const [currentQuestion, setCurrentQuestion] = useState<QuestionData | null>(
     null,
   );
   const [selectedChoice, setSelectedChoice] = useState<string | null>(null);
 
+  const gridRef = useRef<HTMLDivElement>(null);
   const timeoutsRef = useRef<number[]>([]);
-  const scheduleTimeout = (fn: () => void, ms: number) => {
+
+  const scheduleTimeout = useCallback((fn: () => void, ms: number) => {
     const id = window.setTimeout(() => {
       timeoutsRef.current = timeoutsRef.current.filter((t) => t !== id);
       fn();
     }, ms);
     timeoutsRef.current.push(id);
-  };
-  const clearAllTimeouts = () => {
+  }, []);
+
+  const clearAllTimeouts = useCallback(() => {
     timeoutsRef.current.forEach((id) => window.clearTimeout(id));
     timeoutsRef.current = [];
-  };
-  useEffect(() => clearAllTimeouts, []);
+  }, []);
+
+  useEffect(() => clearAllTimeouts, [clearAllTimeouts]);
+
+  // Select first available piece automatically if none selected
+  useEffect(() => {
+    if (
+      pieces.length > 0 &&
+      (!selectedPieceId || !pieces.some((p) => p.id === selectedPieceId))
+    ) {
+      setSelectedPieceId(pieces[0]!.id);
+    }
+  }, [pieces, selectedPieceId]);
 
   // LocalStorage high score key
-  const highScoreKey = `quenti_blocks_highscore_${set?.id || "default"}`;
+  const highScoreKey = `pno_blocks_highscore_${set?.id || "default"}`;
 
   useEffect(() => {
     try {
@@ -118,22 +186,23 @@ export const BlocksContainer: React.FC = () => {
       try {
         window.localStorage.setItem(highScoreKey, score.toString());
       } catch {
-        // Storage unavailable in private mode or quota exceeded
+        // Storage unavailable
       }
     }
   }, [score, highScore, highScoreKey]);
 
-  const updateScore = (delta: number) => {
+  const updateScore = useCallback((delta: number) => {
     setScore((prev) => prev + delta);
-  };
+  }, []);
 
-  // Generate a multiple choice question from set terms
-  const generateQuestion = (): QuestionData | null => {
+  // Generate a multiple choice question from cleaned set terms
+  const generateQuestion = useCallback((): QuestionData | null => {
     if (terms.length === 0) return null;
     const targetIdx = Math.floor(Math.random() * terms.length);
     const target = terms[targetIdx]!;
 
-    const isTermPrompt = Math.random() > 0.4;
+    const hasBoth = Boolean(target.word && target.definition);
+    const isTermPrompt = hasBoth ? Math.random() > 0.4 : Boolean(target.word);
     const prompt = isTermPrompt
       ? target.word || target.definition
       : target.definition || target.word;
@@ -141,7 +210,6 @@ export const BlocksContainer: React.FC = () => {
       ? target.definition || target.word
       : target.word || target.definition;
 
-    // Pick up to 3 distinct distractors
     const otherAnswers = Array.from(
       new Set(
         terms
@@ -155,7 +223,6 @@ export const BlocksContainer: React.FC = () => {
 
     const shuffledOthers = [...otherAnswers].sort(() => 0.5 - Math.random());
     const distractors = shuffledOthers.slice(0, 3);
-
     const choices = [...distractors, correctAnswer].sort(
       () => 0.5 - Math.random(),
     );
@@ -165,23 +232,277 @@ export const BlocksContainer: React.FC = () => {
       correctAnswer,
       choices,
     };
-  };
+  }, [terms]);
 
-  // Start question phase
-  const triggerNextQuestion = () => {
+  // Trigger question phase when dock is empty
+  const triggerNextQuestion = useCallback(() => {
     const q = generateQuestion();
+    if (!q) {
+      // Fallback if set has no terms
+      const fresh = createDockPieces();
+      setPieces(fresh);
+      setSelectedPieceId(fresh[0]!.id);
+      setPhase("placing");
+      return;
+    }
     setCurrentQuestion(q);
     setSelectedChoice(null);
     setPhase("question");
-  };
+  }, [generateQuestion]);
 
-  // On mount or when terms become available: start first question
+  const selectedPiece = useMemo(() => {
+    if (dragState) return dragState.piece;
+    return pieces.find((p) => p.id === selectedPieceId) || null;
+  }, [dragState, pieces, selectedPieceId]);
+
+  // Rotate currently selected piece 90 degrees clockwise
+  const handleRotateSelectedPiece = useCallback(() => {
+    if (phase !== "placing" || !selectedPieceId) return;
+    setPieces((prev) =>
+      prev.map((p) =>
+        p.id === selectedPieceId
+          ? { ...p, shape: rotatePieceMatrix(p.shape) }
+          : p,
+      ),
+    );
+  }, [phase, selectedPieceId]);
+
+  // Reroll current dock pieces
+  const handleRerollPieces = useCallback(() => {
+    if (phase !== "placing") return;
+    const fresh = createDockPieces();
+    setPieces(fresh);
+    setSelectedPieceId(fresh[0]!.id);
+    setHoverPos(null);
+  }, [phase]);
+
+  // Keyboard shortcut 'R' to rotate selected piece
   useEffect(() => {
-    if (terms.length > 0 && phase === "question" && !currentQuestion) {
-      triggerNextQuestion();
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [terms]);
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (
+        (e.key === "r" || e.key === "R") &&
+        phase === "placing" &&
+        !e.ctrlKey &&
+        !e.metaKey
+      ) {
+        e.preventDefault();
+        handleRotateSelectedPiece();
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [handleRotateSelectedPiece, phase]);
+
+  // Place a specific piece onto the board at (r, c)
+  const placePieceOnBoard = useCallback(
+    (pieceToPlace: BlockPiece, r: number, c: number): boolean => {
+      if (phase !== "placing") return false;
+      if (!canPlacePiece(board, pieceToPlace, r, c)) return false;
+
+      playSound("place", soundEnabled);
+
+      const newBoard = board.map((row) => [...row]);
+      let blockCount = 0;
+      for (let pr = 0; pr < pieceToPlace.shape.length; pr++) {
+        for (let pc = 0; pc < pieceToPlace.shape[0]!.length; pc++) {
+          if (pieceToPlace.shape[pr]![pc] === 1) {
+            newBoard[r + pr]![c + pc] = pieceToPlace.color;
+            blockCount++;
+          }
+        }
+      }
+
+      updateScore(blockCount * 10);
+
+      const { newBoard: clearedBoard, linesCleared: cleared } =
+        checkAndClearLines(newBoard);
+      if (cleared > 0) {
+        playSound("clear", soundEnabled);
+        setLinesCleared((l) => l + cleared);
+        const clearBonus = cleared * 150 * (cleared > 1 ? cleared : 1);
+        updateScore(clearBonus);
+        effectChannel.emit("confetti");
+      }
+
+      setBoard(clearedBoard);
+
+      const remainingPieces = pieces.filter((p) => p.id !== pieceToPlace.id);
+      setPieces(remainingPieces);
+      setHoverPos(null);
+
+      if (remainingPieces.length === 0) {
+        setSelectedPieceId(null);
+        scheduleTimeout(() => {
+          triggerNextQuestion();
+        }, 250);
+      } else {
+        setSelectedPieceId(remainingPieces[0]!.id);
+        const anyCanFit = remainingPieces.some((p) =>
+          canPieceFitAnywhere(clearedBoard, p) ||
+          canPieceFitAnywhere(clearedBoard, {
+            ...p,
+            shape: rotatePieceMatrix(p.shape),
+          }) ||
+          canPieceFitAnywhere(clearedBoard, {
+            ...p,
+            shape: rotatePieceMatrix(rotatePieceMatrix(p.shape)),
+          }) ||
+          canPieceFitAnywhere(clearedBoard, {
+            ...p,
+            shape: rotatePieceMatrix(
+              rotatePieceMatrix(rotatePieceMatrix(p.shape)),
+            ),
+          }),
+        );
+
+        if (!anyCanFit) {
+          playSound("gameover", soundEnabled);
+          scheduleTimeout(() => {
+            setPhase("gameover");
+          }, 500);
+        }
+      }
+      return true;
+    },
+    [
+      board,
+      phase,
+      pieces,
+      scheduleTimeout,
+      soundEnabled,
+      triggerNextQuestion,
+      updateScore,
+    ],
+  );
+
+  // Compute grid cell coordinates from pointer clientX/clientY
+  const getGridPosFromPointer = useCallback(
+    (
+      clientX: number,
+      clientY: number,
+      grabRowOffset: number,
+      grabColOffset: number,
+    ): { r: number; c: number } | null => {
+      if (!gridRef.current) return null;
+      const rect = gridRef.current.getBoundingClientRect();
+      const pad = 8; // p={2} = 8px
+      const innerWidth = rect.width - pad * 2;
+      const innerHeight = rect.height - pad * 2;
+      const cellW = innerWidth / GRID_SIZE;
+      const cellH = innerHeight / GRID_SIZE;
+
+      const relX = clientX - rect.left - pad;
+      const relY = clientY - rect.top - pad;
+
+      // Allow a half-cell margin around the board for forgiving edge drops
+      if (
+        relX < -cellW * 0.6 ||
+        relY < -cellH * 0.6 ||
+        relX > innerWidth + cellW * 0.6 ||
+        relY > innerHeight + cellH * 0.6
+      ) {
+        return null;
+      }
+
+      const rawCol = Math.floor(relX / cellW) - grabColOffset;
+      const rawRow = Math.floor(relY / cellH) - grabRowOffset;
+      const c = Math.max(0, Math.min(GRID_SIZE - 1, rawCol));
+      const r = Math.max(0, Math.min(GRID_SIZE - 1, rawRow));
+
+      return { r, c };
+    },
+    [],
+  );
+
+  // Pointer drag lifecycle (supports mouse, touch, pen)
+  useEffect(() => {
+    if (!dragState) return;
+
+    const handlePointerMove = (e: PointerEvent) => {
+      const dx = e.clientX - dragState.startX;
+      const dy = e.clientY - dragState.startY;
+      const moved = dragState.moved || Math.hypot(dx, dy) > 5;
+
+      setDragState((prev) =>
+        prev
+          ? {
+              ...prev,
+              clientX: e.clientX,
+              clientY: e.clientY,
+              moved,
+            }
+          : null,
+      );
+
+      const pos = getGridPosFromPointer(
+        e.clientX,
+        e.clientY,
+        dragState.grabRowOffset,
+        dragState.grabColOffset,
+      );
+      setHoverPos(pos);
+    };
+
+    const handlePointerUp = (e: PointerEvent) => {
+      const pos = getGridPosFromPointer(
+        e.clientX,
+        e.clientY,
+        dragState.grabRowOffset,
+        dragState.grabColOffset,
+      );
+      if (dragState.moved && pos) {
+        placePieceOnBoard(dragState.piece, pos.r, pos.c);
+      } else if (!dragState.moved) {
+        setHoverPos(null);
+      } else {
+        setHoverPos(null);
+      }
+      setDragState(null);
+    };
+
+    window.addEventListener("pointermove", handlePointerMove);
+    window.addEventListener("pointerup", handlePointerUp);
+    window.addEventListener("pointercancel", handlePointerUp);
+    return () => {
+      window.removeEventListener("pointermove", handlePointerMove);
+      window.removeEventListener("pointerup", handlePointerUp);
+      window.removeEventListener("pointercancel", handlePointerUp);
+    };
+  }, [dragState, getGridPosFromPointer, placePieceOnBoard]);
+
+  const handlePiecePointerDown = (
+    e: React.PointerEvent<HTMLDivElement>,
+    piece: BlockPiece,
+  ) => {
+    if (phase !== "placing") return;
+    e.preventDefault();
+    setSelectedPieceId(piece.id);
+
+    const rect = e.currentTarget.getBoundingClientRect();
+    const numRows = piece.shape.length;
+    const numCols = piece.shape[0]?.length || 1;
+    const relX = Math.max(0, Math.min(rect.width - 1, e.clientX - rect.left));
+    const relY = Math.max(0, Math.min(rect.height - 1, e.clientY - rect.top));
+    const grabColOffset = Math.min(
+      numCols - 1,
+      Math.floor((relX / Math.max(1, rect.width)) * numCols),
+    );
+    const grabRowOffset = Math.min(
+      numRows - 1,
+      Math.floor((relY / Math.max(1, rect.height)) * numRows),
+    );
+
+    setDragState({
+      piece,
+      clientX: e.clientX,
+      clientY: e.clientY,
+      startX: e.clientX,
+      startY: e.clientY,
+      grabRowOffset,
+      grabColOffset,
+      moved: false,
+    });
+  };
 
   // Answer handler
   const handleAnswer = (choice: string) => {
@@ -196,13 +517,18 @@ export const BlocksContainer: React.FC = () => {
       setStreak((s) => s + 1);
       setCardsAnswered((c) => c + 1);
 
-      // Award 3 puzzle pieces
-      const newPieces = [getRandomPiece(), getRandomPiece(), getRandomPiece()];
+      const newPieces = createDockPieces();
       setPieces(newPieces);
       setSelectedPieceId(newPieces[0]!.id);
-      const anyNewFits = newPieces.some((p) => canPieceFitAnywhere(board, p));
+      const anyNewFits = newPieces.some(
+        (p) =>
+          canPieceFitAnywhere(board, p) ||
+          canPieceFitAnywhere(board, {
+            ...p,
+            shape: rotatePieceMatrix(p.shape),
+          }),
+      );
 
-      // Transition to placing phase (or gameover if no new piece fits)
       scheduleTimeout(() => {
         setSelectedChoice(null);
         if (!anyNewFits) {
@@ -211,109 +537,81 @@ export const BlocksContainer: React.FC = () => {
         } else {
           setPhase("placing");
         }
-      }, 700);
+      }, 550);
     } else {
       playSound("wrong", soundEnabled);
       setStreak(0);
-      // Let user see correct answer for 1.4s then give another question
       scheduleTimeout(() => {
         triggerNextQuestion();
-      }, 1400);
+      }, 1200);
     }
   };
 
-  const selectedPiece = useMemo(() => {
-    return pieces.find((p) => p.id === selectedPieceId) || null;
-  }, [pieces, selectedPieceId]);
-
-  // Check if hover placement is valid
-  const isHoverValid = useMemo(() => {
-    if (!selectedPiece || !hoverPos) return false;
-    return canPlacePiece(board, selectedPiece, hoverPos.r, hoverPos.c);
-  }, [board, selectedPiece, hoverPos]);
-
-  // Place block on board
-  const handleCellClick = (r: number, c: number) => {
-    if (phase !== "placing" || !selectedPiece) return;
-
-    if (!canPlacePiece(board, selectedPiece, r, c)) {
-      return;
+  // Check if hover placement is valid and which rows/cols would clear
+  const { isHoverValid, previewClearRows, previewClearCols } = useMemo(() => {
+    if (!selectedPiece || !hoverPos) {
+      return {
+        isHoverValid: false,
+        previewClearRows: new Set<number>(),
+        previewClearCols: new Set<number>(),
+      };
+    }
+    const valid = canPlacePiece(board, selectedPiece, hoverPos.r, hoverPos.c);
+    if (!valid) {
+      return {
+        isHoverValid: false,
+        previewClearRows: new Set<number>(),
+        previewClearCols: new Set<number>(),
+      };
     }
 
-    playSound("place", soundEnabled);
-
-    // Place piece
-    const newBoard = board.map((row) => [...row]);
-    let blockCount = 0;
+    const tempBoard = board.map((row) => [...row]);
     for (let pr = 0; pr < selectedPiece.shape.length; pr++) {
       for (let pc = 0; pc < selectedPiece.shape[0]!.length; pc++) {
         if (selectedPiece.shape[pr]![pc] === 1) {
-          newBoard[r + pr]![c + pc] = selectedPiece.color;
-          blockCount++;
+          tempBoard[hoverPos.r + pr]![hoverPos.c + pc] = selectedPiece.color;
         }
       }
     }
 
-    // Points for placing blocks
-    updateScore(blockCount * 10);
-
-    // Check line clears
-    const { newBoard: clearedBoard, linesCleared: cleared } =
-      checkAndClearLines(newBoard);
-    if (cleared > 0) {
-      playSound("clear", soundEnabled);
-      setLinesCleared((l) => l + cleared);
-      // Combo bonus
-      const clearBonus = cleared * 150 * (cleared > 1 ? cleared : 1);
-      updateScore(clearBonus);
-      effectChannel.emit("confetti");
+    const rows = new Set<number>();
+    const cols = new Set<number>();
+    for (let r = 0; r < GRID_SIZE; r++) {
+      if (tempBoard[r]!.every((cell) => cell !== null)) rows.add(r);
+    }
+    for (let c = 0; c < GRID_SIZE; c++) {
+      if (tempBoard.every((row) => row[c] !== null)) cols.add(c);
     }
 
-    setBoard(clearedBoard);
+    return {
+      isHoverValid: true,
+      previewClearRows: rows,
+      previewClearCols: cols,
+    };
+  }, [board, selectedPiece, hoverPos]);
 
-    // Remove placed piece from tray
-    const remainingPieces = pieces.filter((p) => p.id !== selectedPiece.id);
-    setPieces(remainingPieces);
-
-    if (remainingPieces.length === 0) {
-      // All pieces placed: next card question!
-      setSelectedPieceId(null);
-      setHoverPos(null);
-      scheduleTimeout(() => {
-        triggerNextQuestion();
-      }, 400);
-    } else {
-      // Select next piece automatically
-      setSelectedPieceId(remainingPieces[0]!.id);
-
-      // Check if ANY remaining piece can fit anywhere
-      const anyCanFit = remainingPieces.some((p) =>
-        canPieceFitAnywhere(clearedBoard, p),
-      );
-
-      if (!anyCanFit) {
-        playSound("gameover", soundEnabled);
-        scheduleTimeout(() => {
-          setPhase("gameover");
-        }, 600);
-      }
-    }
+  const handleCellClick = (r: number, c: number) => {
+    if (phase !== "placing" || !selectedPiece || dragState?.moved) return;
+    placePieceOnBoard(selectedPiece, r, c);
   };
 
   const restartGame = () => {
     clearAllTimeouts();
+    const initialPieces = createDockPieces();
     setBoard(createEmptyBoard());
-    setPieces([]);
-    setSelectedPieceId(null);
+    setPieces(initialPieces);
+    setSelectedPieceId(initialPieces[0]!.id);
     setHoverPos(null);
+    setDragState(null);
     setScore(0);
     setStreak(0);
     setLinesCleared(0);
     setCardsAnswered(0);
-    triggerNextQuestion();
+    setSelectedChoice(null);
+    setPhase("placing");
   };
 
-  // All ColorMode hooks hoisted unconditionally to the top level
+  // All ColorMode hooks hoisted unconditionally
   const bg = useColorModeValue("gray.50", "gray.900");
   const panelBg = useColorModeValue("white", "gray.800");
   const gridFrameBg = useColorModeValue("gray.200", "gray.900");
@@ -327,7 +625,40 @@ export const BlocksContainer: React.FC = () => {
   const placingBannerBorder = useColorModeValue("green.200", "green.700");
 
   return (
-    <Box minH="calc(100vh - 80px)" bg={bg} py={4}>
+    <Box minH="calc(100vh - 80px)" bg={bg} py={4} userSelect="none">
+      {/* Floating Ghost Piece while Dragging */}
+      {dragState && dragState.moved && (
+        <Box
+          pos="fixed"
+          left={`${dragState.clientX}px`}
+          top={`${dragState.clientY}px`}
+          transform={`translate(-${
+            dragState.grabColOffset * 38 + 19
+          }px, -${dragState.grabRowOffset * 38 + 19}px)`}
+          pointerEvents="none"
+          zIndex={3000}
+          opacity={0.92}
+          filter="drop-shadow(0 10px 18px rgba(0,0,0,0.35))"
+        >
+          <Stack spacing="2px">
+            {dragState.piece.shape.map((pRow, pr) => (
+              <HStack key={pr} spacing="2px">
+                {pRow.map((filled, pc) => (
+                  <Box
+                    key={pc}
+                    w="36px"
+                    h="36px"
+                    bg={filled ? dragState.piece.color : "transparent"}
+                    rounded="md"
+                    border={filled ? "1px solid rgba(255,255,255,0.5)" : "none"}
+                  />
+                ))}
+              </HStack>
+            ))}
+          </Stack>
+        </Box>
+      )}
+
       <Container maxW="5xl">
         {/* Top bar */}
         <Flex
@@ -355,14 +686,18 @@ export const BlocksContainer: React.FC = () => {
               <Heading size="sm" fontWeight={700}>
                 Blocks
               </Heading>
-              <Text fontSize="xs" color="gray.500" display={{ base: "none", md: "block" }}>
+              <Text
+                fontSize="xs"
+                color="gray.500"
+                display={{ base: "none", md: "block" }}
+              >
                 {set?.title}
               </Text>
             </HStack>
           </HStack>
 
           {/* Stats Bar */}
-          <HStack spacing={{ base: 2, md: 4 }}>
+          <HStack spacing={{ base: 2, md: 3 }}>
             <Box
               px={3}
               py={1}
@@ -406,6 +741,16 @@ export const BlocksContainer: React.FC = () => {
               </Badge>
             )}
 
+            <Tooltip label="Restart game">
+              <IconButton
+                aria-label="Restart game"
+                size="sm"
+                variant="ghost"
+                icon={<IconRotateClockwise size={18} />}
+                onClick={restartGame}
+              />
+            </Tooltip>
+
             <Tooltip label={soundEnabled ? "Mute sound" : "Enable sound"}>
               <IconButton
                 aria-label="Sound"
@@ -426,7 +771,7 @@ export const BlocksContainer: React.FC = () => {
 
         {/* Main Game Arena */}
         <SimpleGrid columns={{ base: 1, lg: 12 }} spacing={6} alignItems="start">
-          {/* Left / Main Column: 8x8 Board & Dock */}
+          {/* Left / Main Column: 8x8 Board & Drag-and-Drop Dock */}
           <Box
             gridColumn={{ lg: "span 7" }}
             bg={panelBg}
@@ -438,27 +783,32 @@ export const BlocksContainer: React.FC = () => {
               <Text fontSize="xs" fontWeight={700} color="gray.500">
                 8×8 PUZZLE BOARD
               </Text>
-              <Badge colorScheme="purple" fontSize="xs">
-                {linesCleared} lines cleared
-              </Badge>
+              <HStack spacing={2}>
+                <Badge colorScheme="purple" fontSize="xs">
+                  {linesCleared} lines cleared
+                </Badge>
+              </HStack>
             </Flex>
 
             {/* 8x8 Grid */}
             <Center>
               <Box
+                ref={gridRef}
                 display="inline-block"
                 p={2}
                 bg={gridFrameBg}
                 rounded="xl"
-                onMouseLeave={() => setHoverPos(null)}
+                onMouseLeave={() => {
+                  if (!dragState) setHoverPos(null);
+                }}
+                style={{ touchAction: "none" }}
               >
                 <Stack spacing="2px">
                   {board.map((row, r) => (
                     <HStack key={r} spacing="2px">
                       {row.map((cellColor, c) => {
-                        // Check if this cell is highlighted by hover preview
                         let isHoverPreview = false;
-                        if (selectedPiece && hoverPos) {
+                        if (selectedPiece && hoverPos && phase === "placing") {
                           const pr = r - hoverPos.r;
                           const pc = c - hoverPos.c;
                           if (
@@ -472,6 +822,9 @@ export const BlocksContainer: React.FC = () => {
                           }
                         }
 
+                        const willClear =
+                          previewClearRows.has(r) || previewClearCols.has(c);
+
                         let cellBg = cellColor || cellEmptyBg;
                         let opacity = 1;
 
@@ -479,7 +832,7 @@ export const BlocksContainer: React.FC = () => {
                           cellBg = isHoverValid
                             ? selectedPiece!.color
                             : "#ef4444";
-                          opacity = isHoverValid ? 0.75 : 0.6;
+                          opacity = isHoverValid ? 0.82 : 0.6;
                         }
 
                         return (
@@ -491,20 +844,29 @@ export const BlocksContainer: React.FC = () => {
                             opacity={opacity}
                             rounded="md"
                             border="1px solid"
-                            borderColor={cellEmptyBorder}
-                            transition="all 0.1s"
+                            borderColor={
+                              willClear ? "yellow.400" : cellEmptyBorder
+                            }
+                            transition="background 0.08s, transform 0.08s"
+                            transform={willClear ? "scale(0.95)" : undefined}
                             cursor={
                               phase === "placing" && selectedPiece
                                 ? "pointer"
                                 : "default"
                             }
                             onMouseEnter={() => {
-                              if (phase === "placing") {
+                              if (phase === "placing" && !dragState) {
                                 setHoverPos({ r, c });
                               }
                             }}
                             onClick={() => handleCellClick(r, c)}
-                            boxShadow={cellColor ? "inset 0 1px 2px rgba(255,255,255,0.3)" : undefined}
+                            boxShadow={
+                              willClear
+                                ? "0 0 10px rgba(250, 204, 21, 0.85)"
+                                : cellColor
+                                  ? "inset 0 1px 2px rgba(255,255,255,0.3)"
+                                  : undefined
+                            }
                           />
                         );
                       })}
@@ -514,30 +876,82 @@ export const BlocksContainer: React.FC = () => {
               </Box>
             </Center>
 
-            {/* Piece Dock */}
-            <Box mt={5} pt={3} borderTop="1px solid" borderColor={cellEmptyBorder}>
-              <Text fontSize="xs" fontWeight={700} color="gray.500" mb={3} textAlign="center">
-                {phase === "placing"
-                  ? "Select a piece and click the grid to place"
-                  : "Answer question to earn pieces"}
-              </Text>
+            {/* Piece Dock with Drag-and-Drop + Rotate + Reroll */}
+            <Box
+              mt={5}
+              pt={3}
+              borderTop="1px solid"
+              borderColor={cellEmptyBorder}
+            >
+              <Flex
+                justify="space-between"
+                align="center"
+                mb={3}
+                wrap="wrap"
+                gap={2}
+              >
+                <Text fontSize="xs" fontWeight={700} color="gray.500">
+                  {phase === "placing"
+                    ? "Kéo-thả (hoặc chạm/click) khối hình vào bảng 8×8"
+                    : "Trả lời câu hỏi bên phải để nhận 3 khối mới"}
+                </Text>
 
-              <HStack justify="center" spacing={4} minH="70px">
+                {phase === "placing" && pieces.length > 0 && (
+                  <HStack spacing={2}>
+                    <Button
+                      size="xs"
+                      variant="outline"
+                      colorScheme="blue"
+                      leftIcon={<IconRotateClockwise size={14} />}
+                      onClick={handleRotateSelectedPiece}
+                      title="Xoay khối đang chọn 90° (Phím R)"
+                    >
+                      Xoay (R)
+                    </Button>
+                    <Button
+                      size="xs"
+                      variant="ghost"
+                      colorScheme="gray"
+                      leftIcon={<IconRefresh size={14} />}
+                      onClick={handleRerollPieces}
+                      title="Đổi 3 khối khác"
+                    >
+                      Đổi khối
+                    </Button>
+                  </HStack>
+                )}
+              </Flex>
+
+              <HStack
+                justify="center"
+                spacing={{ base: 4, sm: 6 }}
+                minH="92px"
+                py={2}
+              >
                 {pieces.length > 0 ? (
                   pieces.map((piece) => {
                     const isSelected = selectedPieceId === piece.id;
+                    const isBeingDragged =
+                      dragState?.piece.id === piece.id && dragState.moved;
+
                     return (
                       <Box
                         key={piece.id}
-                        p={2}
+                        p={3}
                         rounded="xl"
                         border="2px solid"
                         borderColor={isSelected ? piece.color : "transparent"}
                         bg={isSelected ? selectedPieceBg : "transparent"}
-                        cursor="pointer"
-                        transition="all 0.15s"
-                        transform={isSelected ? "scale(1.08)" : "scale(1)"}
+                        cursor={phase === "placing" ? "grab" : "default"}
+                        _active={
+                          phase === "placing" ? { cursor: "grabbing" } : undefined
+                        }
+                        opacity={isBeingDragged ? 0.3 : 1}
+                        transition="transform 0.15s, border-color 0.15s"
+                        transform={isSelected ? "scale(1.06)" : "scale(1)"}
+                        onPointerDown={(e) => handlePiecePointerDown(e, piece)}
                         onClick={() => setSelectedPieceId(piece.id)}
+                        style={{ touchAction: "none" }}
                       >
                         <Stack spacing="2px">
                           {piece.shape.map((pRow, pr) => (
@@ -545,10 +959,15 @@ export const BlocksContainer: React.FC = () => {
                               {pRow.map((filled, pc) => (
                                 <Box
                                   key={pc}
-                                  w="14px"
-                                  h="14px"
+                                  w="18px"
+                                  h="18px"
                                   bg={filled ? piece.color : "transparent"}
                                   rounded="xs"
+                                  boxShadow={
+                                    filled
+                                      ? "inset 0 1px 2px rgba(255,255,255,0.35)"
+                                      : undefined
+                                  }
                                 />
                               ))}
                             </HStack>
@@ -559,7 +978,7 @@ export const BlocksContainer: React.FC = () => {
                   })
                 ) : (
                   <Text fontSize="xs" color="gray.400">
-                    No pieces in dock.
+                    Đã xếp hết 3 khối — hãy trả lời câu hỏi bên phải để lấy thêm!
                   </Text>
                 )}
               </HStack>
@@ -576,7 +995,12 @@ export const BlocksContainer: React.FC = () => {
           >
             <Flex align="center" gap={2} mb={3}>
               <IconBrain size={20} color="#3b82f6" />
-              <Heading size="xs" textTransform="uppercase" letterSpacing="wide" color="blue.500">
+              <Heading
+                size="xs"
+                textTransform="uppercase"
+                letterSpacing="wide"
+                color="blue.500"
+              >
                 Active Recall Card
               </Heading>
             </Flex>
@@ -584,10 +1008,15 @@ export const BlocksContainer: React.FC = () => {
             {terms.length === 0 ? (
               <Stack spacing={3} py={4} textAlign="center">
                 <Text fontSize="sm" color="gray.500">
-                  This study set has no terms yet.
+                  Bộ học tập này chưa có thẻ từ vựng nào.
                 </Text>
-                <Button as={Link} href={`/${set?.id}`} colorScheme="blue" size="sm">
-                  Back to Set
+                <Button
+                  as={Link}
+                  href={`/${set?.id}`}
+                  colorScheme="blue"
+                  size="sm"
+                >
+                  Quay lại bộ thẻ
                 </Button>
               </Stack>
             ) : phase === "question" && currentQuestion ? (
@@ -599,8 +1028,14 @@ export const BlocksContainer: React.FC = () => {
                   borderColor={promptBorder}
                   rounded="xl"
                 >
-                  <Text fontSize="xs" color="blue.600" _dark={{ color: "blue.300" }} fontWeight={600} mb={1}>
-                    PROMPT
+                  <Text
+                    fontSize="xs"
+                    color="blue.600"
+                    _dark={{ color: "blue.300" }}
+                    fontWeight={600}
+                    mb={1}
+                  >
+                    CÂU HỎI ÔN TẬP
                   </Text>
                   <Text fontSize="md" fontWeight={700}>
                     {currentQuestion.prompt}
@@ -608,7 +1043,7 @@ export const BlocksContainer: React.FC = () => {
                 </Box>
 
                 <Text fontSize="xs" fontWeight={700} color="gray.500">
-                  Select the correct match to unlock 3 blocks:
+                  Chọn đáp án đúng để mở khóa 3 khối tiếp theo:
                 </Text>
 
                 <Stack spacing={2}>
@@ -631,7 +1066,11 @@ export const BlocksContainer: React.FC = () => {
                     return (
                       <Button
                         key={i}
-                        variant={isSelected || (selectedChoice !== null && isCorrect) ? "solid" : "outline"}
+                        variant={
+                          isSelected || (selectedChoice !== null && isCorrect)
+                            ? "solid"
+                            : "outline"
+                        }
                         colorScheme={btnColor}
                         bg={explicitBg}
                         color={explicitBg ? "white" : undefined}
@@ -665,26 +1104,44 @@ export const BlocksContainer: React.FC = () => {
                   rounded="xl"
                   textAlign="center"
                 >
-                  <Text fontSize="sm" fontWeight={700} color="green.600" _dark={{ color: "green.300" }}>
-                    Correct! +100 Points
+                  <Text
+                    fontSize="sm"
+                    fontWeight={700}
+                    color="green.600"
+                    _dark={{ color: "green.300" }}
+                  >
+                    Lượt xếp gạch ({pieces.length} khối còn lại)
                   </Text>
-                  <Text fontSize="xs" color="gray.600" _dark={{ color: "gray.300" }} mt={1}>
-                    Place your 3 earned block pieces onto the grid. Fill complete rows or columns to clear them and score big combos!
+                  <Text
+                    fontSize="xs"
+                    color="gray.600"
+                    _dark={{ color: "gray.300" }}
+                    mt={1}
+                  >
+                    Kéo-thả trực tiếp khối hình từ khay bên dưới lên bảng 8×8 (hoặc bấm phím R để xoay khối). Lấp đầy hàng ngang hoặc cột dọc để ghi điểm combo!
                   </Text>
                 </Box>
 
                 <Box p={4} bg={statBoxBg} rounded="xl">
                   <Text fontSize="xs" fontWeight={700} color="gray.500" mb={2}>
-                    STUDY PROGRESS
+                    TIẾN ĐỘ HỌC TẬP
                   </Text>
                   <SimpleGrid columns={2} spacing={3}>
                     <Box>
-                      <Text fontSize="xs" color="gray.500">CARDS LEARNED</Text>
-                      <Text fontSize="lg" fontWeight={700} color="blue.500">{cardsAnswered}</Text>
+                      <Text fontSize="xs" color="gray.500">
+                        THẺ ĐÃ ÔN
+                      </Text>
+                      <Text fontSize="lg" fontWeight={700} color="blue.500">
+                        {cardsAnswered}
+                      </Text>
                     </Box>
                     <Box>
-                      <Text fontSize="xs" color="gray.500">STREAK</Text>
-                      <Text fontSize="lg" fontWeight={700} color="orange.500">{streak} 🔥</Text>
+                      <Text fontSize="xs" color="gray.500">
+                        CHUỖI ĐÚNG
+                      </Text>
+                      <Text fontSize="lg" fontWeight={700} color="orange.500">
+                        {streak} 🔥
+                      </Text>
                     </Box>
                   </SimpleGrid>
                 </Box>
@@ -703,10 +1160,14 @@ export const BlocksContainer: React.FC = () => {
           <ModalOverlay />
           <ModalContent rounded="2xl" p={2}>
             <ModalHeader textAlign="center" pb={1}>
-              <IconTrophy size={48} color="#f59e0b" style={{ margin: "0 auto 8px" }} />
+              <IconTrophy
+                size={48}
+                color="#f59e0b"
+                style={{ margin: "0 auto 8px" }}
+              />
               <Heading size="md">Game Over</Heading>
               <Text fontSize="xs" color="gray.500" mt={1}>
-                No more remaining pieces can fit on the board.
+                Không còn chỗ trống hợp lệ trên bàn cờ cho các khối còn lại.
               </Text>
             </ModalHeader>
 

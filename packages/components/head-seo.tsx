@@ -36,7 +36,7 @@ const buildSeo = (props: {
     title,
     canonical,
     openGraph: {
-      siteName: "Quenti",
+      siteName: "PNO",
       type: "website",
       title,
       description,
@@ -81,7 +81,7 @@ export const HeadSeo: React.FC<HeadSeoProps> = ({
     origin: WEBSITE_URL,
   });
 
-  const title = `${_title}${!hideTitleSuffix ? " | Quenti" : ""}`;
+  const title = `${_title}${!hideTitleSuffix ? " | PNO" : ""}`;
   const description = truncateOnWord(_description);
 
   let seoObject = buildSeo({

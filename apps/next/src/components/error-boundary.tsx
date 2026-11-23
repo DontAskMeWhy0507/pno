@@ -22,7 +22,7 @@ export const ErrorFallback: React.FC<{
   return (
     <>
       <Head>
-        <title>Error | Quenti</title>
+        <title>Error | PNO</title>
       </Head>
       <Center height="calc(100vh - 120px)" px="4">
         <VStack textAlign="center" spacing={6}>

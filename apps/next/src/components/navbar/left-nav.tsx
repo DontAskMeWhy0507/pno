@@ -66,7 +66,7 @@ export const LeftNav: React.FC<LeftNavProps> = ({
       >
         <HStack
           as={Link}
-          href={session?.user ? "/home" : WEBSITE_URL}
+          href="/"
           rel="home"
           ml="2"
         >
@@ -83,22 +83,35 @@ export const LeftNav: React.FC<LeftNavProps> = ({
             fontWeight={700}
             lineHeight={1.33}
           >
-            Quenti
+            PNO
           </Heading>
         </HStack>
       </Flex>
+      <HStack display={["none", "none", "flex"]} spacing="1">
+        <Button
+          as={Link}
+          href="/home"
+          variant="ghost"
+          colorScheme="gray"
+          fontWeight={700}
+          fontSize="sm"
+        >
+          Quiz
+        </Button>
+        <Button
+          as={Link}
+          href="/ielts"
+          variant="ghost"
+          colorScheme="gray"
+          fontWeight={700}
+          fontSize="sm"
+          leftIcon={<IconSchool size={17} />}
+        >
+          Thi IELTS
+        </Button>
+      </HStack>
       {session?.user && me && (
         <HStack display={["none", "none", "flex"]}>
-          <Button
-            as={Link}
-            href="/home"
-            variant="ghost"
-            colorScheme="gray"
-            fontWeight={700}
-            fontSize="sm"
-          >
-            Home
-          </Button>
           <TeacherOnly>
             {session.user?.isOrgEligible && !earlyClassAccess && (
               <UnboundOnly strict>

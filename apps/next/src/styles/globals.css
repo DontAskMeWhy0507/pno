@@ -58,3 +58,66 @@
   size: auto;
   margin: 20mm;
 }
+
+/* PNO IELTS Passage Highlights & Split Divider */
+.highlight-yellow {
+  background-color: #fef08a;
+  color: #111827;
+  border-radius: 2px;
+  padding: 1px 2px;
+}
+
+.highlight-green {
+  background-color: #bbf7d0;
+  color: #111827;
+  border-radius: 2px;
+  padding: 1px 2px;
+}
+
+.highlight-pink {
+  background-color: #fbcfe8;
+  color: #111827;
+  border-radius: 2px;
+  padding: 1px 2px;
+}
+
+.highlight-blue {
+  background-color: #bae6fd;
+  color: #111827;
+  border-radius: 2px;
+  padding: 1px 2px;
+}
+
+.split-divider {
+  width: 6px;
+  background-color: #cbd5e1;
+  cursor: col-resize;
+  transition: background-color 0.15s ease;
+  position: relative;
+  user-select: none;
+  flex-shrink: 0;
+}
+
+.split-divider:hover,
+.split-divider.dragging {
+  background-color: #3b82f6;
+}
+
+.split-divider::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 2px;
+  height: 28px;
+  background-color: #475569;
+  border-radius: 1px;
+}
+
+.outline-hidden,
+.focus\:outline-hidden:focus,
+.focus-visible\:outline-hidden:focus-visible {
+  outline: 2px solid transparent;
+  outline-offset: 2px;
+}
