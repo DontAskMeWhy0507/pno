@@ -54,7 +54,7 @@ export const SortFlashcardWrapper = () => {
 
   type Flashcard = StudiableTerm & { isFlipped: boolean; index: number };
   const [visibleFlashcards, setVisibleFlashcards] = React.useState<Flashcard[]>(
-    !progressView ? [{ ...term!, isFlipped: shouldFlip, index }] : [],
+    !progressView && term ? [{ ...term, isFlipped: shouldFlip, index }] : [],
   );
 
   const [hasUserEngaged, setHasUserEngaged] = React.useState(false);
@@ -99,18 +99,16 @@ export const SortFlashcardWrapper = () => {
     if (know) stateMarkKnown(term.id);
     else stateMarkStillLearning(term.id);
 
-    void (async () => {
-      await put.mutateAsync({
-        id: term.id,
-        containerId: container.id,
-        mode: "Flashcards",
-        correctness: know ? 1 : -1,
-        appearedInRound: currentRound,
-        incorrectCount: know
-          ? term.incorrectCount || 0
-          : term.incorrectCount + 1,
-      });
-    })();
+    put.mutate({
+      id: term.id,
+      containerId: container.id,
+      mode: "Flashcards",
+      correctness: know ? 1 : -1,
+      appearedInRound: currentRound,
+      incorrectCount: know
+        ? term.incorrectCount || 0
+        : term.incorrectCount + 1,
+    });
   };
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -119,27 +117,31 @@ export const SortFlashcardWrapper = () => {
     [currentRound],
   );
 
+  React.useEffect(() => {
+    return () => {
+      markCardCallback.cancel();
+    };
+  }, [markCardCallback]);
+
   const goBack = () => {
     const newIndex = index - 1;
     const studiableTerm = termsThisRound[newIndex];
     if (!studiableTerm) return;
     setState(studiableTerm.correctness == 1 ? "known" : "stillLearning");
 
-    void (async () => {
-      await apiDelete.mutateAsync({
-        id: studiableTerm.id,
-        containerId: container.id,
-        mode: "Flashcards",
-      });
-    })();
+    apiDelete.mutate({
+      id: studiableTerm.id,
+      containerId: container.id,
+      mode: "Flashcards",
+    });
 
     allowAnimation();
     stateGoBack();
   };
 
   React.useEffect(() => {
-    if (!progressView)
-      setVisibleFlashcards([{ ...term!, isFlipped: shouldFlip, index }]);
+    if (!progressView && term)
+      setVisibleFlashcards([{ ...term, isFlipped: shouldFlip, index }]);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [term]);
 
@@ -153,21 +155,17 @@ export const SortFlashcardWrapper = () => {
   const onNextRound = () => {
     stateNextRound();
 
-    void (async () => {
-      await apiCompleteCardsRound.mutateAsync({
-        entityId: id,
-        type: entityType == "set" ? "StudySet" : "Folder",
-      });
-    })();
+    apiCompleteCardsRound.mutate({
+      entityId: id,
+      type: entityType == "set" ? "StudySet" : "Folder",
+    });
   };
 
   const onResetProgress = () => {
-    void (async () => {
-      await apiResetCardsProgress.mutateAsync({
-        entityId: id,
-        type: entityType == "set" ? "StudySet" : "Folder",
-      });
-    })();
+    apiResetCardsProgress.mutate({
+      entityId: id,
+      type: entityType == "set" ? "StudySet" : "Folder",
+    });
   };
 
   return (

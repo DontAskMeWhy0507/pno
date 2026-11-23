@@ -76,8 +76,10 @@ export const createLearnStore = (initProps?: Partial<LearnStoreProps>) => {
     completed: false,
   };
 
+  let answerTimer: ReturnType<typeof setTimeout> | null = null;
+
   return createStore<LearnState>()(
-    subscribeWithSelector((set) => ({
+    subscribeWithSelector((set, get) => ({
       ...DEFAULT_PROPS,
       ...initProps,
       initialize: (mode, answerMode, studiableTerms, allTerms, round) => {
@@ -116,15 +118,19 @@ export const createLearnStore = (initProps?: Partial<LearnStoreProps>) => {
         });
       },
       answerCorrectly: (termId) => {
+        if (get().answered) return;
         set({
           answered: termId,
           status: "correct",
           prevTermWasIncorrect: false,
         });
 
-        setTimeout(() => {
+        if (answerTimer) clearTimeout(answerTimer);
+        answerTimer = setTimeout(() => {
+          answerTimer = null;
           set((state) => {
-            const active = state.roundTimeline[state.roundCounter]!;
+            const active = state.roundTimeline[state.roundCounter];
+            if (!active) return {};
             active.term.correctness = active.type == "choice" ? 1 : 2;
 
             state.endQuestionCallback(true);
@@ -161,13 +167,14 @@ export const createLearnStore = (initProps?: Partial<LearnStoreProps>) => {
       },
       overrideCorrect: () => {
         set((state) => {
-          const active = state.roundTimeline[state.roundCounter]!;
+          const active = state.roundTimeline[state.roundCounter];
+          if (!active) return {};
           active.term.correctness = 2;
 
-          const roundTimeline = state.roundTimeline;
+          const roundTimeline = [...state.roundTimeline];
           if (state.roundProgress != state.termsThisRound - 1) {
             // Remove the added question from the timeline
-            roundTimeline.splice(-1);
+            roundTimeline.pop();
           }
 
           state.endQuestionCallback(true);
@@ -265,22 +272,19 @@ export const createLearnStore = (initProps?: Partial<LearnStoreProps>) => {
           const familiarTerms = state.studiableTerms.filter(
             (x) => x.correctness == 1,
           );
-          const familiarTermsWithRound = familiarTerms.map((x) => {
-            if (x.appearedInRound === undefined)
-              throw new Error("No round information for familiar term!");
-            return x;
-          });
+          const eligibleFamiliar = familiarTerms.filter(
+            (x) => currentRound - (x.appearedInRound ?? 0) >= 2,
+          );
+          const remainingFamiliar = familiarTerms.filter(
+            (x) => currentRound - (x.appearedInRound ?? 0) < 2,
+          );
 
-          const termsThisRound = incorrectTerms
-            .concat(
-              // Add the familiar terms that haven't been seen at least 2 rounds ago
-              familiarTermsWithRound.filter(
-                (x) => currentRound - x.appearedInRound! >= 2,
-              ),
-            )
-            .concat(unstudied)
-            .concat(familiarTerms) // Add the rest of the familar terms if there's nothing else left
-            .slice(0, LEARN_TERMS_IN_ROUND);
+          const termsThisRound = [
+            ...incorrectTerms,
+            ...eligibleFamiliar,
+            ...unstudied,
+            ...remainingFamiliar,
+          ].slice(0, LEARN_TERMS_IN_ROUND);
 
           // For each term that hasn't been seen (correctness == 0), set the round it appeared in as the current round
           termsThisRound.forEach((x) => {

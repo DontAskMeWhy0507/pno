@@ -5,23 +5,39 @@ import { EnabledFeature } from "@quenti/lib/feature";
 
 import { createTRPCRouter, lockedProcedure } from "../trpc";
 
-const staticDir = path.join(process.cwd(), "../../packages/trpc/server/static");
+const loadLines = (filename: string): string[] => {
+  const candidates = [
+    path.join(__dirname, "../static/insults", filename),
+    path.join(
+      process.cwd(),
+      "../../packages/trpc/server/static/insults",
+      filename,
+    ),
+    path.join(process.cwd(), "packages/trpc/server/static/insults", filename),
+  ];
+  for (const filePath of candidates) {
+    if (fs.existsSync(filePath)) {
+      return fs
+        .readFileSync(filePath, "utf8")
+        .split(/\r?\n/)
+        .filter((i) => i.length > 0);
+    }
+  }
+  return [];
+};
 
-const correct: string[] = fs
-  .readFileSync(staticDir + "/insults/correct.txt")
-  .toString()
-  .split("\n")
-  .filter((i) => !!i.length);
-const incorrect: string[] = fs
-  .readFileSync(staticDir + "/insults/incorrect.txt")
-  .toString()
-  .split("\n")
-  .filter((i) => !!i.length);
+let cachedInsults: { correct: string[]; incorrect: string[] } | null = null;
 
 export const discoverableRouter = createTRPCRouter({
   fetchInsults: lockedProcedure([EnabledFeature.ExtendedFeedbackBank]).query(
     () => {
-      return { correct, incorrect };
+      if (!cachedInsults) {
+        cachedInsults = {
+          correct: loadLines("correct.txt"),
+          incorrect: loadLines("incorrect.txt"),
+        };
+      }
+      return cachedInsults;
     },
   ),
 });

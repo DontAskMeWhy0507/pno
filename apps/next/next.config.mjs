@@ -58,8 +58,26 @@ let config = {
     // (SIGSEGV, 2026-11-03). Keep it external: the server loads it from
     // node_modules at runtime instead.
     serverComponentsExternalPackages: ["sql.js"],
+    outputFileTracingIncludes: {
+      "/api/**/*": [
+        "../../node_modules/sql.js/dist/sql-wasm.wasm",
+        "./node_modules/sql.js/dist/sql-wasm.wasm",
+      ],
+    },
     // Tommy, I love you so much https://holocron.so/blog/optimizing-next.js-cold-starts-for-vercel
     esmExternals: false,
+  },
+  webpack: (config, { isServer }) => {
+    if (isServer) {
+      if (Array.isArray(config.externals)) {
+        config.externals.push("sql.js");
+      } else if (config.externals) {
+        config.externals = [config.externals, "sql.js"];
+      } else {
+        config.externals = ["sql.js"];
+      }
+    }
+    return config;
   },
   reactStrictMode: true,
   // Deployment fix (2026-11-01): the fork's existing code has prettier /
@@ -79,8 +97,10 @@ let config = {
   transpilePackages: [
     "@quenti/auth",
     "@quenti/core",
+    "@quenti/cortex",
     "@quenti/emails",
     "@quenti/env",
+    "@quenti/images",
     "@quenti/interfaces",
     "@quenti/lib",
     "@quenti/components",
@@ -183,10 +203,6 @@ let config = {
     {
       source: "/:id(c[a-z0-9]{24})/blocks",
       destination: "/sets/:id/blocks",
-    },
-    {
-      source: "/api/anki/media/:path*",
-      destination: "/uploads/anki/:path*",
     },
     {
       source: "/a/:id/:assignmentId",

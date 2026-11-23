@@ -57,36 +57,36 @@ const InteractiveMatchCard: React.FC<CardProps> = ({ i }) => {
   const handleDragEnd = ({ over, active }: DragEnd) => {
     if (over) {
       if (!answer.find((a) => a.zone === over.id)) {
+        const nextAnswer = [
+          ...answer.filter((a) => a.term !== active.id),
+          {
+            zone: over.id,
+            term: active.id,
+          },
+        ];
         answerQuestion<MatchData>(
           i,
-          [
-            ...answer.filter((a) => a.term !== active.id),
-            {
-              zone: over.id,
-              term: active.id,
-            },
-          ],
-          data.terms.length == answer.length + 1,
+          nextAnswer,
+          data.terms.length == nextAnswer.length,
         );
       } else {
-        // Swap the two
-        const newAnswer = answer;
+        // Swap the two without mutating existing answer entries
+        const newAnswer = answer.map((a) => ({ ...a }));
         const oldIndex = newAnswer.findIndex((a) => a.term === active.id);
-        const newIndex = newAnswer.findIndex((a) => a.zone === over.id)!;
+        const newIndex = newAnswer.findIndex((a) => a.zone === over.id);
+        if (newIndex === -1) return;
 
         if (oldIndex !== -1) {
-          // Swap the two elements in the array
           const oldZone = newAnswer[oldIndex]!.zone;
           newAnswer[oldIndex]!.zone = newAnswer[newIndex]!.zone;
           newAnswer[newIndex]!.zone = oldZone;
         } else {
-          // Move the element to the new index
           newAnswer[newIndex]!.term = active.id;
         }
         answerQuestion<MatchData>(
           i,
-          Array.from(newAnswer),
-          data.terms.length == answer.length,
+          newAnswer,
+          data.terms.length == newAnswer.length,
         );
       }
     } else {

@@ -10,7 +10,7 @@ type DuplicateOptions = {
 };
 
 export const duplicateHandler = async ({ ctx, input }: DuplicateOptions) => {
-  await isClassTeacherOrThrow(input.classId, ctx.session.user.id);
+  await isClassTeacherOrThrow(input.classId, ctx.session.user.id, "mutation");
 
   const assignment = await ctx.prisma.assignment.findUnique({
     where: {

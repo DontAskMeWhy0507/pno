@@ -48,6 +48,7 @@ function renderCloze(text: string, targetOrdinal: number, isBack: boolean): stri
 
 function isFieldEmpty(val: string | undefined): boolean {
   if (!val) return true;
+  if (/<img\b/i.test(val) || /\[sound:[^\]]+\]/i.test(val)) return false;
   const stripped = val.replace(/<[^>]*>/g, "").replace(/&nbsp;/g, " ").trim();
   return stripped.length === 0;
 }
@@ -120,6 +121,21 @@ function replaceFields(
   return rendered;
 }
 
+function escapeHtmlAttr(value: string): string {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+}
+
+function encodeMediaPath(mediaUrlPrefix: string, filename: string): string {
+  const clean = filename.replace(/\\/g, "/").split("/").pop() ?? filename;
+  const encoded = encodeURIComponent(clean);
+  return mediaUrlPrefix ? `${mediaUrlPrefix.replace(/\/$/, "")}/${encoded}` : encoded;
+}
+
 export function sanitizeAnkiHtml(
   rawHtml: string,
   mediaUrlPrefix: string = ""
@@ -131,38 +147,61 @@ export function sanitizeAnkiHtml(
   const audioSet = new Set<string>();
   const imageSet = new Set<string>();
 
-  // 1. Strip dangerous script, iframe, object, embed, style tags to prevent stored XSS
+  // 1. Strip dangerous paired & void tags to prevent stored XSS and CSS injection
   let html = rawHtml
-    .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, "")
-    .replace(/<iframe\b[^<]*(?:(?!<\/iframe>)<[^<]*)*<\/iframe>/gi, "")
-    .replace(/<object\b[^<]*(?:(?!<\/object>)<[^<]*)*<\/object>/gi, "")
-    .replace(/<embed\b[^>]*>/gi, "")
-    .replace(/<applet\b[^<]*(?:(?!<\/applet>)<[^<]*)*<\/applet>/gi, "");
+    .replace(
+      /<(script|iframe|object|applet|style|svg|math|form|template|noscript)\b[\s\S]*?(?:<\/\1\s*>|$)/gi,
+      "",
+    )
+    .replace(
+      /<(embed|link|meta|base|input|button|textarea|select)\b[^>]*\/?>/gi,
+      "",
+    );
 
-  // 2. Strip inline event handlers (e.g. onerror=, onload=, onclick=) and javascript: pseudo-protocol
+  // 2. Strip inline event handlers (whitespace or `/`), srcdoc, and dangerous URI schemes
   html = html
-    .replace(/\s+on[a-zA-Z]+=["'][^"']*["']/gi, "")
-    .replace(/\s+on[a-zA-Z]+=[^\s>]+/gi, "")
-    .replace(/(href|src)\s*=\s*["']\s*javascript:[^"']*["']/gi, '$1="#"');
+    .replace(/(?:[\s/])+on[a-zA-Z0-9_-]+\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]+)/gi, "")
+    .replace(/(?:[\s/])+srcdoc\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]+)/gi, "")
+    .replace(
+      /\b(href|src|xlink:href|action|formaction)\s*=\s*(?:"\s*(?:javascript|vbscript|data\s*:\s*text\/html)[^"]*"|'\s*(?:javascript|vbscript|data\s*:\s*text\/html)[^']*'|(?:javascript|vbscript|data\s*:\s*text\/html)[^\s>]*)/gi,
+      '$1="#"',
+    );
 
-  // 3. Extract and replace [sound:filename.ext]
-  html = html.replace(/\[sound:([^\]]+)\]/g, (_match, filename) => {
+  // 3. Extract and replace [sound:filename.ext] with HTML-escaped attributes
+  html = html.replace(/\[sound:([^\]]+)\]/g, (_match, filename: string) => {
     const cleanFile = filename.trim();
+    if (!cleanFile) return "";
     audioSet.add(cleanFile);
-    const src = mediaUrlPrefix ? `${mediaUrlPrefix}/${cleanFile}` : cleanFile;
-    return `<div data-anki-sound="${cleanFile}" class="anki-audio" data-src="${src}"></div>`;
+    const src = encodeMediaPath(mediaUrlPrefix, cleanFile);
+    return `<div data-anki-sound="${escapeHtmlAttr(cleanFile)}" class="anki-audio" data-src="${escapeHtmlAttr(src)}"></div>`;
   });
 
-  // 4. Extract and rewrite <img src="...">
-  html = html.replace(/<img\s+([^>]*?)src=["']([^"']+)["']([^>]*?)>/gi, (_match, pre, src, post) => {
-    const cleanSrc = src.trim();
-    if (!cleanSrc.startsWith("http://") && !cleanSrc.startsWith("https://") && !cleanSrc.startsWith("data:")) {
-      imageSet.add(cleanSrc);
-      const newSrc = mediaUrlPrefix ? `${mediaUrlPrefix}/${cleanSrc}` : cleanSrc;
-      return `<img ${pre}src="${newSrc}"${post} class="anki-img" />`;
-    }
-    return `<img ${pre}src="${cleanSrc}"${post} class="anki-img" />`;
-  });
+  // 4. Extract and rewrite <img src="..."> cleanly
+  html = html.replace(
+    /<img\b([^>]*?)\bsrc\s*=\s*(?:"([^"]+)"|'([^']+)')([^>]*?)\/?\s*>/gi,
+    (_match, pre, dSrc, sSrc, post) => {
+      const cleanSrc = String(dSrc ?? sSrc ?? "").trim();
+      if (/^(?:javascript|vbscript|data\s*:\s*text\/html)/i.test(cleanSrc)) {
+        return "";
+      }
+      const altMatch = `${pre} ${post}`.match(
+        /\balt\s*=\s*(?:"([^"]*)"|'([^']*)')/i,
+      );
+      const altAttr = altMatch
+        ? ` alt="${escapeHtmlAttr(altMatch[1] ?? altMatch[2] ?? "")}"`
+        : "";
+      if (
+        !cleanSrc.startsWith("http://") &&
+        !cleanSrc.startsWith("https://") &&
+        !cleanSrc.startsWith("data:image/")
+      ) {
+        imageSet.add(cleanSrc);
+        const newSrc = encodeMediaPath(mediaUrlPrefix, cleanSrc);
+        return `<img src="${escapeHtmlAttr(newSrc)}"${altAttr} class="anki-img" />`;
+      }
+      return `<img src="${escapeHtmlAttr(cleanSrc)}"${altAttr} class="anki-img" />`;
+    },
+  );
 
   return {
     html,
@@ -177,10 +216,10 @@ export function renderAnkiCard(options: RenderCardOptions): RenderedCard {
   // Render question
   const rawQuestion = replaceFields(options.qfmt, options.fields, options.clozeOrdinal, false);
 
-  // Render answer, replacing {{FrontSide}} if present
+  // Render answer, replacing {{FrontSide}} safely without $-pattern interpolation
   let afmt = options.afmt;
   if (afmt.includes("{{FrontSide}}")) {
-    afmt = afmt.replace("{{FrontSide}}", rawQuestion);
+    afmt = afmt.replace("{{FrontSide}}", () => rawQuestion);
   }
   const rawAnswer = replaceFields(afmt, options.fields, options.clozeOrdinal, true);
 

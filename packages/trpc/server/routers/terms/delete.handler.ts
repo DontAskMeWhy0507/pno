@@ -64,38 +64,42 @@ export const deleteHandler = async ({ ctx, input }: DeleteOptions) => {
     });
   }
 
-  // Update all ranks so that all values are consecutive
-  await ctx.prisma.term.updateMany({
-    where: {
-      studySetId: input.studySetId,
-      rank: {
-        gt: term.rank,
+  // Delete term and update ranks atomically before cleaning up R2 assets
+  await ctx.prisma.$transaction([
+    ctx.prisma.term.delete({
+      where: {
+        id_studySetId: {
+          id: input.termId,
+          studySetId: input.studySetId,
+        },
       },
-    },
-    data: {
-      rank: {
-        decrement: 1,
+    }),
+    ctx.prisma.term.updateMany({
+      where: {
+        studySetId: input.studySetId,
+        ephemeral: false,
+        rank: {
+          gt: term.rank,
+        },
       },
-    },
-  });
+      data: {
+        rank: {
+          decrement: 1,
+        },
+      },
+    }),
+    ctx.prisma.studySet.update({
+      where: { id: input.studySetId },
+      data: { cortexStale: true },
+    }),
+  ]);
 
   if (
     env.ASSETS_BUCKET_URL &&
     term.assetUrl?.startsWith(env.ASSETS_BUCKET_URL)
   ) {
-    await deleteTermAsset(input.studySetId, term.id);
+    await deleteTermAsset(input.studySetId, term.id).catch(() => undefined);
   }
-
-  await ctx.prisma.term.delete({
-    where: {
-      id_studySetId: {
-        id: input.termId,
-        studySetId: input.studySetId,
-      },
-    },
-  });
-
-  await markCortexStale(input.studySetId);
 
   return { deleted: input.termId };
 };

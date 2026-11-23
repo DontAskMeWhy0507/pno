@@ -10,11 +10,11 @@
   ],
   "scripts": {
     "clean": "rm -rf .turbo && rm -rf node_modules",
-    "db:push": "bunx prisma db push",
-    "db:seed": "bunx prisma db seed",
-    "db:studio": "bunx prisma studio",
-    "generate": "bunx prisma generate",
-    "postinstall": "bunx prisma generate"
+    "db:push": "prisma db push",
+    "db:seed": "prisma db seed",
+    "db:studio": "prisma studio",
+    "generate": "prisma generate",
+    "postinstall": "prisma generate"
   },
   "dependencies": {
     "@prisma/client": "5.5.2",

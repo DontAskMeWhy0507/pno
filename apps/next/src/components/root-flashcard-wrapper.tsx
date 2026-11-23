@@ -71,7 +71,7 @@ export const RootFlashcardWrapper: React.FC<RootFlashcardWrapperProps> = ({
 
   const Wrapper = authed ? CreateSortFlashcardsData : React.Fragment;
 
-  if (isDirty || (!termOrder.length && !container))
+  if (isDirty || (!termOrder.length && !container && authed))
     return <LoadingFlashcard h={h} />;
   if (!termOrder.length) return <FlashcardsEmpty h={h} />;
 

@@ -41,13 +41,16 @@ export function parseQuizletExportText(
   options: QuizletExportParseOptions = {},
 ): ParsedQuizletTerm[] {
   if (!text || !text.trim()) return [];
+  const normalizedText = text.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
 
   // Resolve term delimiter
   let termDelim = options.termDelimiter || "auto";
   if (termDelim === "tab") termDelim = "\t";
   else if (termDelim === "comma") termDelim = ",";
   else if (termDelim === "custom") {
-    termDelim = options.customTermDelimiter?.trim() || "@";
+    termDelim = options.customTermDelimiter
+      ? options.customTermDelimiter
+      : "@";
   }
 
   // Resolve row delimiter
@@ -62,10 +65,10 @@ export function parseQuizletExportText(
 
   // Auto-detect term delimiter if requested or still "auto"
   if (termDelim === "auto") {
-    const atCount = (text.match(/ @/g) || text.match(/@/g) || []).length;
-    const tabCount = (text.match(/\t/g) || []).length;
-    const dashCount = (text.match(/ - /g) || []).length;
-    const commaCount = (text.match(/,/g) || []).length;
+    const atCount = (normalizedText.match(/ @/g) || []).length;
+    const tabCount = (normalizedText.match(/\t/g) || []).length;
+    const dashCount = (normalizedText.match(/ - /g) || []).length;
+    const commaCount = (normalizedText.match(/,/g) || []).length;
 
     if (atCount > 0 && atCount >= tabCount) {
       termDelim = "@";
@@ -82,9 +85,15 @@ export function parseQuizletExportText(
 
   // Auto-detect row delimiter if requested
   if (rowDelim === "auto") {
-    if (text.includes("\n\n") && (text.match(/\n\n/g) || []).length > 1) {
+    if (
+      normalizedText.includes("\n\n") &&
+      (normalizedText.match(/\n\n/g) || []).length > 1
+    ) {
       rowDelim = "\n\n";
-    } else if (text.includes(";\n") || (text.match(/;/g) || []).length > 2) {
+    } else if (
+      normalizedText.includes(";\n") ||
+      (normalizedText.match(/;/g) || []).length > 2
+    ) {
       rowDelim = ";";
     } else {
       rowDelim = "\n";
@@ -95,7 +104,10 @@ export function parseQuizletExportText(
 
   // Branch A: Explicit row delimiter (such as \n\n or semicolon)
   if (rowDelim !== "\n") {
-    const blocks = text.split(rowDelim).map((b) => b.trim()).filter(Boolean);
+    const blocks = normalizedText
+      .split(rowDelim)
+      .map((b) => b.trim())
+      .filter(Boolean);
     for (const block of blocks) {
       const idx = block.indexOf(termDelim);
       if (idx !== -1) {
@@ -110,14 +122,19 @@ export function parseQuizletExportText(
   }
 
   // Branch B: Row delimiter is newline, with multi-line definition continuation support
-  const lines = text.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+  const lines = normalizedText
+    .split("\n")
+    .map((l) => l.trim())
+    .filter(Boolean);
   let currentCard: { word: string; definition: string; hasDelim: boolean } | null = null;
+  let firstCardHasDelim = true;
 
   for (const line of lines) {
     const delimIndex = line.indexOf(termDelim);
     if (delimIndex !== -1) {
       // Line contains delimiter: start a new card
       if (currentCard && (currentCard.word || currentCard.definition)) {
+        if (terms.length === 0) firstCardHasDelim = currentCard.hasDelim;
         terms.push({
           word: cleanHtml(currentCard.word),
           definition: cleanHtml(currentCard.definition),
@@ -136,7 +153,6 @@ export function parseQuizletExportText(
           : line;
       } else {
         // Line before any delimiter was encountered (e.g. scroll remnant from export modal)
-        // Only keep if no valid cards exist yet
         currentCard = {
           word: line,
           definition: "",
@@ -147,9 +163,8 @@ export function parseQuizletExportText(
   }
 
   if (currentCard && (currentCard.word || currentCard.definition)) {
-    // If the only line in the file had no delimiter, include it;
-    // but if we parsed cards with delimiters, drop any leading/trailing orphan line without a delimiter
     if (terms.length === 0 || currentCard.hasDelim || currentCard.definition) {
+      if (terms.length === 0) firstCardHasDelim = currentCard.hasDelim;
       terms.push({
         word: cleanHtml(currentCard.word),
         definition: cleanHtml(currentCard.definition),
@@ -157,8 +172,8 @@ export function parseQuizletExportText(
     }
   }
 
-  // Filter out any leading orphan line that had no delimiter if subsequent cards had delimiters
-  if (terms.length > 1 && terms[0] && !terms[0].definition) {
+  // Filter out leading orphan line only if it had no delimiter
+  if (terms.length > 1 && !firstCardHasDelim) {
     terms.shift();
   }
 
@@ -289,7 +304,7 @@ export function parseQuizletHtml(html: string): ParsedQuizletSet {
       if (!match[1]) continue;
       try {
         const json = JSON.parse(match[1]);
-        if (json?.name && !title) title = json.name;
+        if (json?.name && title === "Quizlet Flashcards") title = json.name;
         const items = json?.itemListElement || json?.hasPart || [];
         for (const item of items) {
           const word = item?.name || item?.question || "";
@@ -331,21 +346,78 @@ export function parseQuizletHtml(html: string): ParsedQuizletSet {
   return { title, terms };
 }
 
-export async function fetchQuizletSet(url: string): Promise<ParsedQuizletSet> {
-  const res = await fetch(url, {
-    headers: {
-      "User-Agent":
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
-      "Accept":
-        "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
-      "Accept-Language": "en-US,en;q=0.9",
-      "Cache-Control": "no-cache",
-      "Pragma": "no-cache",
-    },
-    redirect: "follow",
-  });
+const ALLOWED_QUIZLET_HOSTS = new Set(["quizlet.com", "www.quizlet.com"]);
+const MAX_QUIZLET_HTML_BYTES = 5 * 1024 * 1024; // 5 MB
 
-  const html = await res.text();
+export function validateQuizletUrl(rawUrl: string): string {
+  let parsed: URL;
+  try {
+    parsed = new URL(rawUrl.trim());
+  } catch {
+    throw new Error("Please enter a valid Quizlet URL.");
+  }
+  if (
+    parsed.protocol !== "https:" ||
+    !ALLOWED_QUIZLET_HOSTS.has(parsed.hostname.toLowerCase())
+  ) {
+    throw new Error("Only https://quizlet.com study set URLs are supported.");
+  }
+  if (!/^\/(?:[a-z]{2}\/)?\d+(?:\/[^/?#]+)?\/?$/i.test(parsed.pathname)) {
+    throw new Error("URL does not look like a Quizlet study set link.");
+  }
+  parsed.hash = "";
+  return parsed.toString();
+}
+
+export async function fetchQuizletSet(url: string): Promise<ParsedQuizletSet> {
+  let currentUrl = validateQuizletUrl(url);
+  let res: Response | null = null;
+
+  for (let redirects = 0; redirects < 3; redirects++) {
+    res = await fetch(currentUrl, {
+      headers: {
+        "User-Agent":
+          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+        Accept:
+          "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+        "Accept-Language": "en-US,en;q=0.9",
+        "Cache-Control": "no-cache",
+        Pragma: "no-cache",
+      },
+      redirect: "manual",
+      signal: AbortSignal.timeout(15_000),
+    });
+
+    if (res.status >= 300 && res.status < 400) {
+      const loc = res.headers.get("location");
+      if (!loc) break;
+      const nextUrl = new URL(loc, currentUrl).toString();
+      currentUrl = validateQuizletUrl(nextUrl);
+      continue;
+    }
+    break;
+  }
+
+  if (!res) {
+    throw new Error(
+      "Could not reach Quizlet. Please try pasting the exported text instead.",
+    );
+  }
+
+  const contentLength = Number(res.headers.get("content-length") ?? 0);
+  if (contentLength > MAX_QUIZLET_HTML_BYTES) {
+    throw new Error(
+      "Quizlet response was too large to parse. Please use 'Paste Export Text'.",
+    );
+  }
+
+  const buf = await res.arrayBuffer();
+  if (buf.byteLength > MAX_QUIZLET_HTML_BYTES) {
+    throw new Error(
+      "Quizlet response was too large to parse. Please use 'Paste Export Text'.",
+    );
+  }
+  const html = new TextDecoder().decode(buf);
 
   if (
     res.status === 403 ||
@@ -355,6 +427,17 @@ export async function fetchQuizletSet(url: string): Promise<ParsedQuizletSet> {
   ) {
     throw new Error(
       "CLOUDFLARE_BLOCKED: Quizlet's Cloudflare bot challenge blocked direct server access to this link. Please open the set in Quizlet, click '...' -> 'Export', copy the text, and paste it into the 'Paste Export' tab.",
+    );
+  }
+
+  if (res.status === 404) {
+    throw new Error(
+      "Quizlet set not found (HTTP 404). Make sure the set is public.",
+    );
+  }
+  if (!res.ok) {
+    throw new Error(
+      `Quizlet returned HTTP ${res.status}. Please use 'Paste Export Text' instead.`,
     );
   }
 

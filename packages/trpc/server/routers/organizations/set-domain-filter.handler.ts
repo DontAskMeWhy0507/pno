@@ -41,6 +41,17 @@ export const setDomainFilterHandler = async ({
     },
   });
 
+  if (input.filter) {
+    try {
+      new RegExp(input.filter);
+    } catch {
+      throw new TRPCError({
+        code: "BAD_REQUEST",
+        message: "Invalid regular expression filter.",
+      });
+    }
+  }
+
   await ctx.prisma.organizationDomain.update({
     where: {
       id: input.domainId,

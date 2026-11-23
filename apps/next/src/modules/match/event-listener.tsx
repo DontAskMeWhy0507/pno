@@ -55,33 +55,20 @@ export const EventListener: React.FC<{
     setTerms(terms);
     setZIndex(terms.length);
 
-    setTimeout(() => {
+    const initTimer = window.setTimeout(() => {
+      if (!wrapper.current || !grossTerms.current) return;
       terms.forEach((term, index) => {
-        const width = grossTerms.current![index]!.width;
-        const height = grossTerms.current![index]!.height;
+        const current = grossTerms.current?.[index];
+        if (!current || !wrapper.current) return;
+        const { width, height } = current;
         const { x, y } = pickNewSpot(
           index,
           { ...term, width, height },
-          wrapper.current!,
+          wrapper.current,
         );
 
         setCard(index, {
           ...term,
-          /**
-           * By now, the component will have updated its own height to be correct
-           * But, `term` references a completely independent object that didn't see this change.
-           * We need the most recent copy of terms from useMatchContext((s) => s.terms) (see above)
-           * But even that is lagging behind (snapshots or whatever). The normal
-           * fix is to add `terms` to the dependency array, but terms updates
-           * so much that we literally cannot do that. Introducing ✨ refs ✨:
-           * https://stackoverflow.com/questions/53633698/referencing-outdated-state-in-react-useeffect-hook
-           * that's why this is here and if there's some better solution please
-           * see https://react.dev/learn/state-as-a-snapshot & https://react.dev/learn/referencing-values-with-refs
-           *
-           * I do not think this can be a race condition. I think this fixes the race condition.
-           * - height updated after this runs -> final height is correct (this cond is rare, but could result in overlapping)
-           * - height updated before this runs -> This sees the correct height and does not ruin it
-           */
           height,
           width,
           x,
@@ -93,26 +80,27 @@ export const EventListener: React.FC<{
     });
 
     const resizeHandler = () => {
-      grossTerms
-        .current!.filter((t) => !t.completed)
-        .forEach((term, index) => {
-          const rect = wrapper.current!.getBoundingClientRect();
-          if (!isRectInBounds(term, rect)) {
-            const { x, y } = pickNewSpot(index, term, wrapper.current!);
+      if (!wrapper.current || !grossTerms.current) return;
+      const rect = wrapper.current.getBoundingClientRect();
+      grossTerms.current.forEach((term, index) => {
+        if (term.completed) return;
+        if (!isRectInBounds(term, rect) && wrapper.current) {
+          const { x, y } = pickNewSpot(index, term, wrapper.current);
 
-            setCard(index, {
-              ...term,
-              x,
-              y,
-              targetX: x,
-              targetY: y,
-            });
-          }
-        });
+          setCard(index, {
+            ...term,
+            x,
+            y,
+            targetX: x,
+            targetY: y,
+          });
+        }
+      });
     };
 
     window.addEventListener("resize", resizeHandler);
     return () => {
+      window.clearTimeout(initTimer);
       window.removeEventListener("resize", resizeHandler);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps

@@ -39,12 +39,25 @@ export const TestView: React.FC<TestViewProps> = ({ onSubmit }) => {
 
   const [settingsOpen, setSettingsOpen] = React.useState(false);
   const [enter, setEnter] = React.useState(true);
+  const resetTimerRef = React.useRef<number | null>(null);
+  const openTimerRef = React.useRef<number | null>(null);
+
+  React.useEffect(() => {
+    return () => {
+      if (resetTimerRef.current !== null)
+        window.clearTimeout(resetTimerRef.current);
+      if (openTimerRef.current !== null)
+        window.clearTimeout(openTimerRef.current);
+    };
+  }, []);
 
   const manualReset = () => {
     pushQueryParams(id, store.getState().settings, router);
 
     setEnter(false);
-    setTimeout(() => {
+    if (resetTimerRef.current !== null)
+      window.clearTimeout(resetTimerRef.current);
+    resetTimerRef.current = window.setTimeout(() => {
       reset();
       setEnter(true);
     }, 500);
@@ -52,7 +65,7 @@ export const TestView: React.FC<TestViewProps> = ({ onSubmit }) => {
 
   React.useEffect(() => {
     if (!searchParams?.get("count"))
-      setTimeout(() => {
+      openTimerRef.current = window.setTimeout(() => {
         setSettingsOpen(true);
       });
     // eslint-disable-next-line react-hooks/exhaustive-deps

@@ -132,7 +132,9 @@ export const useTelemetry = () => {
 
   const event = async <T extends keyof Events>(name: T, data: Events[T]) => {
     if (!TELEMETRY_ENABLED) {
-      console.log(`Local telemetry | ${name}:`, data);
+      if (process.env.NODE_ENV === "development") {
+        console.log(`Local telemetry | ${name}:`, data);
+      }
       return;
     }
     await analytics.track(name, data);

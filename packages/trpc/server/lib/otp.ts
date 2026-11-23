@@ -33,18 +33,19 @@ export const verifyOtp = (
   otp: string,
   hash: string,
 ): VerifyResult => {
-  if (!hash.match("."))
+  if (!hash.includes("."))
     return {
       success: false,
     };
 
   const [base, expires] = hash.split(".");
-  if (!base || !expires)
+  const expiresMs = Number.parseInt(expires ?? "", 10);
+  if (!base || !expires || !Number.isFinite(expiresMs))
     return {
       success: false,
     };
 
-  if (Date.now() > parseInt(expires))
+  if (Date.now() > expiresMs)
     return {
       success: false,
       expired: true,
@@ -56,5 +57,11 @@ export const verifyOtp = (
     .update(data)
     .digest("hex");
 
-  return { success: newHash === base, expired: false };
+  const expected = Buffer.from(newHash, "hex");
+  const actual = Buffer.from(base, "hex");
+  const valid =
+    expected.length === actual.length &&
+    crypto.timingSafeEqual(expected, actual);
+
+  return { success: valid, expired: false };
 };

@@ -51,21 +51,26 @@ export const addSetsHandler = async ({ ctx, input }: AddSetsOptions) => {
   }
   if (
     studySets.find(
-      (x) => x.visibility == "Private" && x.userId !== ctx.session.user.id,
+      (x) =>
+        (x.visibility == "Private" || x.visibility == "Class") &&
+        x.userId !== ctx.session.user.id,
     )
   ) {
     throw new TRPCError({
       code: "FORBIDDEN",
-      message: "Cannot add other users' private study sets to a folder",
+      message: "Cannot add other users' restricted study sets to a folder",
     });
   }
 
-  await ctx.prisma.studySetsOnFolders.createMany({
-    data: studySets.map((s) => ({
-      folderId: input.folderId,
-      studySetId: s.id,
-    })),
-  });
+  if (studySets.length) {
+    await ctx.prisma.studySetsOnFolders.createMany({
+      data: studySets.map((s) => ({
+        folderId: input.folderId,
+        studySetId: s.id,
+      })),
+      skipDuplicates: true,
+    });
+  }
 };
 
 export default addSetsHandler;

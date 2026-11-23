@@ -16,7 +16,11 @@ export default async function handler(
   req: NextApiRequest,
   res: NextApiResponse,
 ) {
-  const { id, session_id } = querySchema.parse(req.query);
+  const parsed = querySchema.safeParse(req.query);
+  if (!parsed.success) {
+    return res.status(400).json({ error: "Invalid query parameters" });
+  }
+  const { id, session_id } = parsed.data;
 
   const checkoutSession = await stripe.checkout.sessions.retrieve(session_id, {
     expand: ["subscription"],
@@ -25,6 +29,14 @@ export default async function handler(
     return res.status(404).json({ error: "Checkout session not found" });
 
   const subscription = checkoutSession.subscription as Stripe.Subscription;
+  if (
+    checkoutSession.metadata?.orgId !== id &&
+    subscription.metadata?.orgId !== id
+  ) {
+    return res
+      .status(403)
+      .json({ error: "Checkout session does not match organization" });
+  }
   if (checkoutSession.payment_status !== "paid")
     return res.status(402).json({ error: "Payment required" });
 
@@ -53,7 +65,7 @@ export default async function handler(
   }
 
   const session = await getServerAuthSession({ req, res });
-  if (!session) return { message: "Upgraded successfully" };
+  if (!session) return res.status(200).json({ message: "Upgraded successfully" });
 
   res.redirect(302, `/orgs/${org.id}?upgrade=success`);
 }

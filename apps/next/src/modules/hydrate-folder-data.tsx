@@ -5,6 +5,8 @@ import React from "react";
 
 import { type RouterOutputs, api } from "@quenti/trpc";
 
+import { Button, Center, Heading, Text, VStack } from "@chakra-ui/react";
+
 import { Loading } from "../components/loading";
 import { queryEventChannel } from "../events/query";
 import { useLoading } from "../hooks/use-loading";
@@ -94,11 +96,27 @@ export const HydrateFolderData: React.FC<
 
   if (folder.error?.data?.httpStatus === 404) return <Folder404 />;
   if (folder.error?.data?.httpStatus === 403) return <NoPublicSets />;
+  if (folder.error) {
+    return (
+      <Center h="60vh" px="4">
+        <VStack spacing="4" textAlign="center">
+          <Heading size="md">Unable to load folder</Heading>
+          <Text color="gray.500" maxW="md">
+            {folder.error.message ||
+              "An unexpected network or server error occurred while loading this folder."}
+          </Text>
+          <Button colorScheme="blue" onClick={() => void folder.refetch()}>
+            Retry
+          </Button>
+        </VStack>
+      </Center>
+    );
+  }
   if (loading || !folder.data || (disallowDirty && isDirty))
     return fallback ?? <Loading />;
 
   return (
-    <ContextLayer data={folder.data}>
+    <ContextLayer key={folder.data.id} data={folder.data}>
       <Head>
         <title>{folder.data.title} | Quenti</title>
       </Head>

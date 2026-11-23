@@ -23,6 +23,7 @@ export const CreateTestData: React.FC<React.PropsWithChildren> = ({
   const { id, terms, wordLanguage, definitionLanguage, container } =
     useAuthedSet();
 
+  const shouldRedirectRef = React.useRef(false);
   const storeRef = React.useRef<TestStore>();
   if (!storeRef.current) {
     storeRef.current = createTestStore(undefined, {
@@ -53,10 +54,7 @@ export const CreateTestData: React.FC<React.PropsWithChildren> = ({
     const cloned = Array.from(terms);
 
     if (!valid) {
-      void router.replace({
-        pathname: `/${id}/test`,
-        query: null,
-      });
+      shouldRedirectRef.current = true;
     }
 
     storeRef.current.setState({
@@ -75,6 +73,17 @@ export const CreateTestData: React.FC<React.PropsWithChildren> = ({
         settings.answerMode,
       );
   }
+
+  React.useEffect(() => {
+    if (shouldRedirectRef.current) {
+      shouldRedirectRef.current = false;
+      void router.replace({
+        pathname: `/${id}/test`,
+        query: null,
+      });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   React.useEffect(() => {
     const onRefetch = (data: SetData) => {

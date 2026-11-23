@@ -35,8 +35,11 @@ export const resend = env.RESEND_API_KEY
   : null;
 
 export const sendEmail = async (opts: CreateEmailOptions) => {
-  if (!resend) {
-    console.warn("Resend not configured, skipping email send", opts);
+  if (!resend || !env.EMAIL_SENDER) {
+    console.warn("Resend or EMAIL_SENDER not configured, skipping email send", {
+      to: opts.to,
+      subject: opts.subject,
+    });
     return;
   }
   await resend.sendEmail({ ...opts, to: to(opts.to) });

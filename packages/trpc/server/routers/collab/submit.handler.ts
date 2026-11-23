@@ -108,90 +108,97 @@ export const submitHandler = async ({ ctx, input }: SubmitOptions) => {
   // + other relations
 
   // Find all CDN asset urls that are no longer used
-  const deleteAssetTerms = await ctx.prisma.term.findMany({
-    where: {
-      studySetId: studySet.id,
-      authorId: ctx.session.user.id,
-      ephemeral: false,
-      assetUrl: {
-        startsWith: env.ASSETS_BUCKET_URL,
-        notIn: creatable.map((t) => t.assetUrl).filter((x) => !!x) as string[],
+  if (env.ASSETS_BUCKET_URL) {
+    const deleteAssetTerms = await ctx.prisma.term.findMany({
+      where: {
+        studySetId: studySet.id,
+        authorId: ctx.session.user.id,
+        ephemeral: false,
+        assetUrl: {
+          startsWith: env.ASSETS_BUCKET_URL,
+          notIn: creatable.map((t) => t.assetUrl).filter((x) => !!x) as string[],
+        },
       },
-    },
-    select: {
-      assetUrl: true,
-    },
-  });
+      select: {
+        assetUrl: true,
+      },
+    });
 
-  if (deleteAssetTerms.length) {
-    await deleteTermAssets(
-      deleteAssetTerms.map((t) => new URL(t.assetUrl!).pathname.slice(1)),
-    );
+    if (deleteAssetTerms.length) {
+      await deleteTermAssets(
+        deleteAssetTerms.map((t) => new URL(t.assetUrl!).pathname.slice(1)),
+      );
+    }
   }
 
-  const deleted = await ctx.prisma.term.deleteMany({
-    where: {
-      studySetId: studySet.id,
-      authorId: ctx.session.user.id,
-      ephemeral: false,
-    },
-  });
+  await ctx.prisma.$transaction(async (tx) => {
+    const deleted = await tx.term.deleteMany({
+      where: {
+        studySetId: studySet.id,
+        authorId: ctx.session.user.id,
+        ephemeral: false,
+      },
+    });
 
-  if (deleted.count) {
-    // After deleting terms, we need to reorder the ranks
-    await reorder(ctx.prisma, studySet.id);
-  }
+    if (deleted.count) {
+      // After deleting terms, we need to reorder the ranks
+      await reorder(tx, studySet.id);
+    }
 
-  // Now "append" to the set by properly setting the rank and setting ephemeral to false
-  const publishedCount = await ctx.prisma.term.count({
-    where: { studySetId: studySet.id, ephemeral: false },
-  });
+    // Now "append" to the set by properly setting the rank and setting ephemeral to false
+    const publishedCount = await tx.term.count({
+      where: { studySetId: studySet.id, ephemeral: false },
+    });
 
-  // Perform an update via insert with ON DUPLICATE KEY UPDATE (all required columns)
-  const vals = terms
-    .sort((a, b) => a.rank - b.rank)
-    .map((t, i) => [
-      t.id,
-      t.word,
-      t.definition,
-      publishedCount + i,
-      studySet.id,
-    ]);
-  const formatted = vals.map((x) => Prisma.sql`(${Prisma.join(x)})`);
-  // Only update the rank and ephemeral columns
-  const query = Prisma.sql`
-    INSERT INTO Term (id, word, definition, \`rank\`, studySetId)
-    VALUES ${Prisma.join(formatted)}
-    ON DUPLICATE KEY UPDATE \`rank\` = VALUES(\`rank\`), ephemeral = 0
-  `;
+    // Perform an update via insert with ON DUPLICATE KEY UPDATE (all required columns)
+    const vals = creatable
+      .sort((a, b) => a.rank - b.rank)
+      .map((t, i) => [
+        t.id,
+        t.word,
+        t.definition,
+        publishedCount + i,
+        studySet.id,
+      ]);
+    const formatted = vals.map((x) => Prisma.sql`(${Prisma.join(x)})`);
+    // Only update the rank and ephemeral columns
+    const query = Prisma.sql`
+      INSERT INTO Term (id, word, definition, \`rank\`, studySetId)
+      VALUES ${Prisma.join(formatted)}
+      ON DUPLICATE KEY UPDATE \`rank\` = VALUES(\`rank\`), ephemeral = 0
+    `;
 
-  await ctx.prisma.$executeRaw(query);
+    await tx.$executeRaw(query);
 
-  // Now create a collaborator if one does not exist
-  await ctx.prisma.studySetCollaborator.upsert({
-    where: {
-      studySetId_userId: {
+    // Now create a collaborator if one does not exist
+    await tx.studySetCollaborator.upsert({
+      where: {
+        studySetId_userId: {
+          studySetId: studySet.id,
+          userId: ctx.session.user.id,
+        },
+      },
+      create: {
         studySetId: studySet.id,
         userId: ctx.session.user.id,
       },
-    },
-    create: {
-      studySetId: studySet.id,
-      userId: ctx.session.user.id,
-    },
-    update: {},
-  });
+      update: {},
+    });
 
-  await markCortexStale(studySet.id);
+    await tx.studySet.update({
+      where: { id: studySet.id },
+      data: { cortexStale: true },
+    });
 
-  // All of the terms are published now, update the submission
-  await ctx.prisma.submission.update({
-    where: {
-      id: input.submissionId,
-    },
-    data: {
-      submittedAt: new Date(),
-    },
+    // All of the terms are published now, update the submission
+    await tx.submission.update({
+      where: {
+        id: input.submissionId,
+      },
+      data: {
+        submittedAt: new Date(),
+      },
+    });
   });
 
   const firstTime =

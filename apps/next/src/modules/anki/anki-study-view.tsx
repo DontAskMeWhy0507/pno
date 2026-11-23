@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import { useRouter } from "next/router";
 import {
   Box,
@@ -12,8 +12,15 @@ import {
   Spinner,
   Icon,
   useColorModeValue,
+  useToast,
 } from "@chakra-ui/react";
 import { IconArrowLeft, IconTrophy, IconRefresh } from "@tabler/icons-react";
+import {
+  calculateNextSchedule,
+  getIntervalEstimateLabel,
+  type AnkiQueue,
+  type CardScheduleState,
+} from "@quenti/lib/src/anki/srs";
 import { api } from "@quenti/trpc";
 import { AnkiCard } from "./anki-card";
 import { AnkiRatingBar } from "./anki-rating-bar";
@@ -22,13 +29,36 @@ export interface AnkiStudyViewProps {
   studySetId: string;
 }
 
+interface SessionCard {
+  termId: string;
+  word: string;
+  definition: string;
+  assetUrl: string | null;
+  rank: number;
+  queue: AnkiQueue;
+  step: number;
+  interval: number;
+  easeFactor: number;
+  reps: number;
+  lapses: number;
+  due: Date | string;
+  estimates: {
+    again: string;
+    hard: string;
+    good: string;
+    easy: string;
+  };
+}
+
 export const AnkiStudyView: React.FC<AnkiStudyViewProps> = ({ studySetId }) => {
   const router = useRouter();
+  const toast = useToast();
 
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isAnswerShown, setIsAnswerShown] = useState(false);
-
-  const [sessionCards, setSessionCards] = useState<any[]>([]);
+  const [sessionCards, setSessionCards] = useState<SessionCard[]>([]);
+  const [liveCounts, setLiveCounts] = useState({ new: 0, learn: 0, review: 0 });
+  const inFlightTermsRef = useRef<Set<string>>(new Set());
 
   const utils = api.useContext();
   const queueQuery = api.anki.getReviewQueue.useQuery(
@@ -36,24 +66,57 @@ export const AnkiStudyView: React.FC<AnkiStudyViewProps> = ({ studySetId }) => {
     {
       refetchOnWindowFocus: false,
       staleTime: 60000,
-    }
+    },
   );
 
+  // Reset local session state whenever navigating between decks
   useEffect(() => {
-    if (queueQuery.data?.cards && sessionCards.length === 0) {
-      setSessionCards(queueQuery.data.cards);
+    setCurrentIndex(0);
+    setIsAnswerShown(false);
+    setSessionCards([]);
+    setLiveCounts({ new: 0, learn: 0, review: 0 });
+    inFlightTermsRef.current.clear();
+  }, [studySetId]);
+
+  useEffect(() => {
+    if (queueQuery.data && sessionCards.length === 0) {
+      setSessionCards(queueQuery.data.cards as SessionCard[]);
+      setLiveCounts({
+        new: queueQuery.data.counts.new,
+        learn: queueQuery.data.counts.learn,
+        review: queueQuery.data.counts.review,
+      });
     }
-  }, [queueQuery.data?.cards, sessionCards.length]);
+  }, [queueQuery.data, sessionCards.length]);
 
   const submitReviewMutation = api.anki.submitReview.useMutation({
-    onError: (err) => {
-      console.error("Failed to submit review:", err);
+    onSuccess: (_data, variables) => {
+      inFlightTermsRef.current.delete(variables.termId);
+    },
+    onError: (err, variables) => {
+      inFlightTermsRef.current.delete(variables.termId);
+      toast({
+        title: "Could not save review",
+        description: err.message || "Check your connection and try again.",
+        status: "error",
+        duration: 4000,
+        isClosable: true,
+      });
     },
   });
 
   const cards = sessionCards;
   const currentCard = cards[currentIndex];
-  const isFinished = !queueQuery.isLoading && (cards.length === 0 || currentIndex >= cards.length);
+  const isFinished =
+    !queueQuery.isLoading &&
+    (cards.length === 0 || currentIndex >= cards.length);
+
+  // Invalidate queue when finishing a batch so remaining due cards or hub counts stay fresh
+  useEffect(() => {
+    if (isFinished && cards.length > 0) {
+      void utils.anki.getReviewQueue.invalidate({ studySetId });
+    }
+  }, [isFinished, cards.length, studySetId, utils.anki.getReviewQueue]);
 
   const handleShowAnswer = useCallback(() => {
     setIsAnswerShown(true);
@@ -61,10 +124,13 @@ export const AnkiStudyView: React.FC<AnkiStudyViewProps> = ({ studySetId }) => {
 
   const handleRate = useCallback(
     (rating: 1 | 2 | 3 | 4) => {
-      if (!currentCard) return;
+      if (!currentCard || inFlightTermsRef.current.has(currentCard.termId)) {
+        return;
+      }
       const ratedCard = currentCard;
+      inFlightTermsRef.current.add(ratedCard.termId);
 
-      // Fire mutation in the background (optimistic UI)
+      // Fire mutation in the background (optimistic UI with toast error reporting)
       submitReviewMutation.mutate({
         studySetId,
         termId: ratedCard.termId,
@@ -72,22 +138,57 @@ export const AnkiStudyView: React.FC<AnkiStudyViewProps> = ({ studySetId }) => {
       });
 
       setIsAnswerShown(false);
+
+      // Update live New/Learn/Review counters
+      setLiveCounts((prev) => {
+        const next = { ...prev };
+        if (ratedCard.queue === "New") next.new = Math.max(0, next.new - 1);
+        else if (ratedCard.queue === "Review")
+          next.review = Math.max(0, next.review - 1);
+        else next.learn = Math.max(0, next.learn - 1);
+        if (rating === 1) next.learn += 1;
+        return next;
+      });
+
       if (rating === 1) {
-        // Re-queue card to end of session queue so it repeats before session ends
-        setSessionCards((prev) => [...prev, ratedCard]);
+        const now = new Date();
+        const prevState: CardScheduleState = {
+          queue: ratedCard.queue,
+          step: ratedCard.step,
+          interval: ratedCard.interval,
+          easeFactor: ratedCard.easeFactor,
+          reps: ratedCard.reps,
+          lapses: ratedCard.lapses,
+          due: new Date(ratedCard.due),
+          lastReviewedAt: null,
+        };
+        const nextState = calculateNextSchedule(prevState, 1, now);
+        const requeued: SessionCard = {
+          ...ratedCard,
+          ...nextState,
+          estimates: {
+            again: getIntervalEstimateLabel(nextState, 1, now),
+            hard: getIntervalEstimateLabel(nextState, 2, now),
+            good: getIntervalEstimateLabel(nextState, 3, now),
+            easy: getIntervalEstimateLabel(nextState, 4, now),
+          },
+        };
+        setSessionCards((prev) => [...prev, requeued]);
       }
       setCurrentIndex((prev) => prev + 1);
     },
-    [currentCard, studySetId, submitReviewMutation]
+    [currentCard, studySetId, submitReviewMutation],
   );
 
-  // Global Keyboard shortcuts
+  // Global Keyboard shortcuts (disabled when finished or focused on inputs/buttons)
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      // Do not trigger if typing in an input
+      if (isFinished || queueQuery.isLoading || !currentCard) return;
       if (
         e.target instanceof HTMLInputElement ||
-        e.target instanceof HTMLTextAreaElement
+        e.target instanceof HTMLTextAreaElement ||
+        e.target instanceof HTMLButtonElement ||
+        (e.target instanceof HTMLElement && e.target.isContentEditable)
       ) {
         return;
       }
@@ -96,10 +197,10 @@ export const AnkiStudyView: React.FC<AnkiStudyViewProps> = ({ studySetId }) => {
         e.preventDefault();
         if (!isAnswerShown) {
           handleShowAnswer();
-        } else if (!submitReviewMutation.isLoading) {
-          handleRate(3); // Default to Good rating, matching Anki ergonomics
+        } else {
+          handleRate(3);
         }
-      } else if (isAnswerShown && !submitReviewMutation.isLoading) {
+      } else if (isAnswerShown) {
         if (e.key === "1") handleRate(1);
         else if (e.key === "2") handleRate(2);
         else if (e.key === "3") handleRate(3);
@@ -109,10 +210,17 @@ export const AnkiStudyView: React.FC<AnkiStudyViewProps> = ({ studySetId }) => {
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [isAnswerShown, handleShowAnswer, handleRate, submitReviewMutation.isLoading]);
+  }, [
+    isFinished,
+    queueQuery.isLoading,
+    currentCard,
+    isAnswerShown,
+    handleShowAnswer,
+    handleRate,
+  ]);
 
   const secondaryText = useColorModeValue("gray.600", "gray.400");
-  const counts = queueQuery.data?.counts || { new: 0, learn: 0, review: 0 };
+  const counts = liveCounts;
 
   if (queueQuery.isLoading) {
     return (

@@ -56,16 +56,18 @@ export const deleteTermAsset = async (studySetId: string, termId: string) => {
 };
 
 export const deleteTermAssets = async (keys: string[]) => {
-  if (!S3) return;
+  if (!S3 || !keys.length) return;
 
-  await S3.send(
-    new DeleteObjectsCommand({
-      Bucket: ASSETS_BUCKET,
-      Delete: {
-        Objects: keys.map((key) => ({ Key: key })),
-      },
-    }),
-  );
+  for (let i = 0; i < keys.length; i += 1000) {
+    await S3.send(
+      new DeleteObjectsCommand({
+        Bucket: ASSETS_BUCKET,
+        Delete: {
+          Objects: keys.slice(i, i + 1000).map((key) => ({ Key: key })),
+        },
+      }),
+    );
+  }
 };
 
 export const deleteStudySetAssets = async (studySetId: string) => {

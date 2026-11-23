@@ -1,5 +1,6 @@
 import React, { useMemo, useEffect } from "react";
 import { Box, Card, CardBody, Divider, Stack, useColorModeValue } from "@chakra-ui/react";
+import { sanitizeAnkiHtml } from "@quenti/lib/src/anki/template";
 import { AnkiAudioPlayer, stopAllAnkiAudio } from "./anki-audio-player";
 
 export interface AnkiCardProps {
@@ -20,10 +21,22 @@ export const AnkiCard: React.FC<AnkiCardProps> = ({
   const clozeBg = useColorModeValue("orange.100", "orange.900");
   const clozeColor = useColorModeValue("orange.800", "orange.200");
 
-  // Stop any playing audio whenever card side flips or new card is loaded
+  // Stop any playing audio whenever card side flips, new card loads, or component unmounts
   useEffect(() => {
     stopAllAnkiAudio();
+    return () => {
+      stopAllAnkiAudio();
+    };
   }, [frontHtml, isAnswerShown]);
+
+  const safeFrontHtml = useMemo(
+    () => sanitizeAnkiHtml(frontHtml).html,
+    [frontHtml],
+  );
+  const safeBackHtml = useMemo(
+    () => sanitizeAnkiHtml(backHtml).html,
+    [backHtml],
+  );
 
   // Extract audio files referenced in front HTML
   const frontAudioSources = useMemo(() => {
@@ -100,7 +113,7 @@ export const AnkiCard: React.FC<AnkiCardProps> = ({
       <CardBody display="flex" flexDirection="column" alignItems="center" justifyContent="center">
         {/* Question Side */}
         <Box textAlign="center" fontSize={{ base: "xl", md: "2xl" }} lineHeight="1.6" w="full">
-          <div dangerouslySetInnerHTML={{ __html: frontHtml }} />
+          <div dangerouslySetInnerHTML={{ __html: safeFrontHtml }} />
           {frontAudioSources.map((src, i) => (
             <AnkiAudioPlayer
               key={`front-audio-${src}-${i}`}
@@ -115,7 +128,7 @@ export const AnkiCard: React.FC<AnkiCardProps> = ({
           <Stack spacing={4} w="full" mt={6} align="center">
             <Divider borderColor={borderColor} />
             <Box textAlign="center" fontSize={{ base: "lg", md: "xl" }} lineHeight="1.6" w="full">
-              <div dangerouslySetInnerHTML={{ __html: backHtml }} />
+              <div dangerouslySetInnerHTML={{ __html: safeBackHtml }} />
               {/* Only render players for new back audio or allow playing them without duplicate autoplay */}
               {newBackAudioSources.map((src, i) => (
                 <AnkiAudioPlayer

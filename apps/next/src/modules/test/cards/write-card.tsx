@@ -112,7 +112,7 @@ export const WriteCard: React.FC<CardProps> = ({ i, result }) => {
             {!!specialCharacters.length && (
               <Box>
                 <div style={{ margin: -4, maxHeight: 128, overflowY: "auto" }}>
-                  {specialCharacters.sort().map((c, i) => (
+                  {[...specialCharacters].sort().map((c, i) => (
                     <CharacterButtonWrapper
                       key={i}
                       character={c}
@@ -141,7 +141,7 @@ export const WriteCard: React.FC<CardProps> = ({ i, result }) => {
               _placeholder={{
                 color: placeholderColor,
               }}
-              value={answer}
+              value={answer ?? ""}
               onChange={(e) => {
                 if (e.target.value.trim().length > 0) {
                   answerQuestion(i, e.target.value, true, true);

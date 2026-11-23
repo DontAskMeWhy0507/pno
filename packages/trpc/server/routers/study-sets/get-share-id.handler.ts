@@ -37,6 +37,38 @@ export const getShareIdHandler = async ({ ctx, input }: GetShareIdOptions) => {
     });
   }
 
+  if (
+    studySet.visibility === "Class" &&
+    studySet.userId !== ctx.session?.user?.id
+  ) {
+    if (!ctx.session?.user?.id) {
+      throw new TRPCError({
+        code: "FORBIDDEN",
+        message: "This set is restricted to specific classes.",
+      });
+    }
+    const allowed = await ctx.prisma.allowedClassesOnStudySets.findFirst({
+      where: {
+        studySetId: input.studySetId,
+        class: {
+          members: {
+            some: {
+              userId: ctx.session.user.id,
+              deletedAt: null,
+            },
+          },
+        },
+      },
+      select: { classId: true },
+    });
+    if (!allowed) {
+      throw new TRPCError({
+        code: "FORBIDDEN",
+        message: "This set is restricted to specific classes.",
+      });
+    }
+  }
+
   return (
     await ctx.prisma.entityShare.upsert({
       where: {

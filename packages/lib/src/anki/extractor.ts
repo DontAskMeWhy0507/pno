@@ -42,6 +42,7 @@ export interface RawExtractedCollection {
 }
 
 const ZSTD_MAGIC = [0x28, 0xb5, 0x2f, 0xfd];
+const MAX_DECOMPRESSED_BYTES = 200 * 1024 * 1024;
 
 function isZstd(bytes: Uint8Array): boolean {
   return (
@@ -50,69 +51,97 @@ function isZstd(bytes: Uint8Array): boolean {
 }
 
 function maybeDecompress(bytes: Uint8Array): Uint8Array {
-  return isZstd(bytes) ? fzstd.decompress(bytes) : bytes;
+  if (!isZstd(bytes)) return bytes;
+  const out = fzstd.decompress(bytes);
+  if (out.byteLength > MAX_DECOMPRESSED_BYTES) {
+    throw new Error(
+      "Decompressed Anki data exceeds maximum allowed size (200 MB).",
+    );
+  }
+  return out;
+}
+
+function readVarintSafe(bytes: Uint8Array, state: { pos: number }): number {
+  let result = 0;
+  let multiplier = 1;
+  let count = 0;
+  while (state.pos < bytes.length && count < 10) {
+    const b = bytes[state.pos++]!;
+    if (count < 7) {
+      result += (b & 0x7f) * multiplier;
+      multiplier *= 128;
+    }
+    count++;
+    if ((b & 0x80) === 0) return result;
+  }
+  throw new Error("Malformed varint in Anki protobuf data");
+}
+
+function skipProtobufField(
+  bytes: Uint8Array,
+  state: { pos: number },
+  wireType: number,
+  limit: number,
+): void {
+  if (wireType === 0) {
+    readVarintSafe(bytes, state);
+  } else if (wireType === 1) {
+    state.pos = Math.min(limit, state.pos + 8);
+  } else if (wireType === 2) {
+    const len = readVarintSafe(bytes, state);
+    if (len < 0 || state.pos + len > limit) {
+      throw new Error("Truncated length-delimited field in Anki protobuf");
+    }
+    state.pos += len;
+  } else if (wireType === 5) {
+    state.pos = Math.min(limit, state.pos + 4);
+  } else {
+    throw new Error(`Unsupported protobuf wire type ${wireType}`);
+  }
 }
 
 export function decodeProtobufMedia(
   bytes: Uint8Array,
 ): Record<string, string> {
   const map: Record<string, string> = {};
-  let pos = 0;
+  const state = { pos: 0 };
   let entryIndex = 0;
 
-  function readVarint(): number {
-    let result = 0;
-    let shift = 0;
-    while (pos < bytes.length) {
-      const b = bytes[pos++];
-      if (b === undefined) break;
-      result |= (b & 0x7f) << shift;
-      if ((b & 0x80) === 0) break;
-      shift += 7;
-    }
-    return result;
-  }
-
-  while (pos < bytes.length) {
-    const tag = readVarint();
+  while (state.pos < bytes.length) {
+    const tag = readVarintSafe(bytes, state);
     const fieldNum = tag >> 3;
     const wireType = tag & 0x07;
 
     if (fieldNum === 1 && wireType === 2) {
-      const entryLen = readVarint();
-      const endPos = pos + entryLen;
+      const entryLen = readVarintSafe(bytes, state);
+      if (entryLen < 0 || state.pos + entryLen > bytes.length) break;
+      const endPos = state.pos + entryLen;
       let filename = "";
 
-      while (pos < endPos) {
-        const innerTag = readVarint();
+      while (state.pos < endPos) {
+        const innerTag = readVarintSafe(bytes, state);
         const innerField = innerTag >> 3;
         const innerWire = innerTag & 0x07;
 
         if (innerField === 1 && innerWire === 2) {
-          const fnLen = readVarint();
-          filename = new TextDecoder().decode(bytes.slice(pos, pos + fnLen));
-          pos += fnLen;
-        } else if (innerWire === 0) {
-          readVarint();
-        } else if (innerWire === 2) {
-          const l = readVarint();
-          pos += l;
+          const fnLen = readVarintSafe(bytes, state);
+          if (fnLen < 0 || state.pos + fnLen > endPos) break;
+          filename = new TextDecoder().decode(
+            bytes.slice(state.pos, state.pos + fnLen),
+          );
+          state.pos += fnLen;
         } else {
-          pos++;
+          skipProtobufField(bytes, state, innerWire, endPos);
         }
       }
 
+      state.pos = endPos;
       if (filename) {
         map[String(entryIndex)] = filename;
-        entryIndex++;
       }
-    } else if (wireType === 2) {
-      const len = readVarint();
-      pos += len;
-    } else if (wireType === 0) {
-      readVarint();
+      entryIndex++;
     } else {
-      pos++;
+      skipProtobufField(bytes, state, wireType, bytes.length);
     }
   }
 
@@ -125,41 +154,27 @@ function decodeTemplateConfig(bytes: Uint8Array): {
 } {
   let qfmt = "";
   let afmt = "";
-  let pos = 0;
+  const state = { pos: 0 };
 
-  function readVarint(): number {
-    let result = 0;
-    let shift = 0;
-    while (pos < bytes.length) {
-      const b = bytes[pos++];
-      if (b === undefined) break;
-      result |= (b & 0x7f) << shift;
-      if ((b & 0x80) === 0) break;
-      shift += 7;
-    }
-    return result;
-  }
-
-  while (pos < bytes.length) {
-    const tag = readVarint();
+  while (state.pos < bytes.length) {
+    const tag = readVarintSafe(bytes, state);
     const fieldNum = tag >> 3;
     const wireType = tag & 0x07;
     if (wireType === 2) {
-      const len = readVarint();
-      const slice = bytes.slice(pos, pos + len);
+      const len = readVarintSafe(bytes, state);
+      if (len < 0 || state.pos + len > bytes.length) break;
+      const slice = bytes.slice(state.pos, state.pos + len);
       if (fieldNum === 1) qfmt = new TextDecoder().decode(slice);
       else if (fieldNum === 2) afmt = new TextDecoder().decode(slice);
-      pos += len;
-    } else if (wireType === 0) {
-      readVarint();
+      state.pos += len;
     } else {
-      pos++;
+      skipProtobufField(bytes, state, wireType, bytes.length);
     }
   }
   return { qfmt, afmt };
 }
 
-const SQL_JS_VERSION = "1.15.2";
+const SQL_JS_VERSION = "1.16.0";
 const WASM_CDN_URL = `https://cdn.jsdelivr.net/npm/sql.js@${SQL_JS_VERSION}/dist/sql-wasm.wasm`;
 
 async function loadWasmBinary(): Promise<Uint8Array> {
@@ -167,22 +182,48 @@ async function loadWasmBinary(): Promise<Uint8Array> {
   // (Embedding it as a base64 source file crashed the Vercel build
   // compiler with SIGSEGV, so it must not live in the bundle.)
   try {
-    const fs = await import("fs");
+    const fs = await import("fs/promises");
     const path = await import("path");
+    let resolved: string | undefined;
+    try {
+      const mod = (await import("module")) as {
+        createRequire?: (filename: string) => NodeRequire;
+        default?: {
+          createRequire?: (filename: string) => NodeRequire;
+        };
+      };
+      const createRequireFn = mod.createRequire ?? mod.default?.createRequire;
+      const basePath =
+        typeof __filename === "string"
+          ? __filename
+          : path.join(process.cwd(), "package.json");
+      resolved = createRequireFn?.(basePath).resolve(
+        "sql.js/dist/sql-wasm.wasm",
+      );
+    } catch {
+      // Not resolvable in bundled environment
+    }
     const rel = path.join("sql.js", "dist", "sql-wasm.wasm");
     const candidates = [
       process.env.SQL_WASM_PATH,
+      resolved,
       path.join(process.cwd(), "node_modules", rel),
       path.join(process.cwd(), "..", "..", "node_modules", rel),
       path.join("/var/task", "node_modules", rel),
     ].filter((c): c is string => !!c);
     for (const candidate of candidates) {
-      if (fs.existsSync(candidate)) return fs.readFileSync(candidate);
+      try {
+        return new Uint8Array(await fs.readFile(candidate));
+      } catch {
+        // Try next candidate
+      }
     }
   } catch {
     // Fall through to the CDN copy.
   }
-  const res = await fetch(WASM_CDN_URL);
+  const res = await fetch(WASM_CDN_URL, {
+    signal: AbortSignal.timeout(15_000),
+  });
   if (!res.ok)
     throw new Error(`Could not load sql.js wasm (HTTP ${res.status})`);
   return new Uint8Array(await res.arrayBuffer());
@@ -191,9 +232,12 @@ async function loadWasmBinary(): Promise<Uint8Array> {
 let sqlPromise: ReturnType<typeof initSqlJs> | null = null;
 function getSql() {
   if (!sqlPromise) {
-    sqlPromise = loadWasmBinary().then((wasmBinary) =>
-      initSqlJs({ wasmBinary }),
-    );
+    sqlPromise = loadWasmBinary()
+      .then((wasmBinary) => initSqlJs({ wasmBinary }))
+      .catch((err) => {
+        sqlPromise = null;
+        throw err;
+      });
   }
   return sqlPromise;
 }
@@ -229,34 +273,36 @@ export async function extractCollection(
 
   const dbEntry = names.includes("collection.anki21b")
     ? "collection.anki21b"
-    : "collection.anki2";
+    : names.includes("collection.anki21")
+      ? "collection.anki21"
+      : "collection.anki2";
   const dbFile = zip.file(dbEntry);
-  if (!dbFile) throw new Error(`No ${dbEntry} found in Anki package`);
+  if (!dbFile) throw new Error("No Anki collection database found in package");
   const dbBytes = maybeDecompress(await dbFile.async("uint8array"));
 
   const SQL = await getSql();
   let db = new SQL.Database(dbBytes);
-  // Anki's modern schema declares `COLLATE unicase` on several text
-  // columns, and sql.js cannot register custom collations — any query
-  // touching the fields/templates tables then fails ("no such collation
-  // sequence" / "no query solution"). Rewrite the schema in-memory to the
-  // built-in nocase collation and reopen from the exported bytes. We only
-  // ever read (full scans, sorted in JS), so index key ordering built
-  // under unicase does not affect results.
   try {
-    db.exec("PRAGMA writable_schema=ON");
-    db.exec(
-      "UPDATE sqlite_master SET sql = replace(sql, 'COLLATE unicase', 'COLLATE nocase') WHERE sql LIKE '%unicase%'",
-    );
-    if (db.getRowsModified() > 0) {
-      const exported = db.export();
-      db.close();
-      db = new SQL.Database(exported);
+    // Anki's modern schema declares `COLLATE unicase` on several text
+    // columns, and sql.js cannot register custom collations — any query
+    // touching the fields/templates tables then fails ("no such collation
+    // sequence" / "no query solution"). Rewrite the schema in-memory to the
+    // built-in nocase collation and reopen from the exported bytes. We only
+    // ever read (full scans, sorted in JS), so index key ordering built
+    // under unicase does not affect results.
+    try {
+      db.exec("PRAGMA writable_schema=ON");
+      db.exec(
+        "UPDATE sqlite_master SET sql = replace(sql, 'COLLATE unicase', 'COLLATE nocase') WHERE sql LIKE '%unicase%'",
+      );
+      if (db.getRowsModified() > 0) {
+        const exported = db.export();
+        db.close();
+        db = new SQL.Database(exported);
+      }
+    } catch {
+      // Legacy databases without unicase: nothing to rewrite.
     }
-  } catch {
-    // Legacy databases without unicase: nothing to rewrite.
-  }
-  try {
     // 1. Decks
     const decks: Record<string, string> = {};
     if (tableExists(db, "decks")) {

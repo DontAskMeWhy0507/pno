@@ -19,14 +19,30 @@ export const DefaultFlashcardWrapper = () => {
 
   const starredTerms = useContainerContext((s) => s.starredTerms);
 
-  let sortedTerms = termOrder.map((id) => terms.find((t) => t.id === id));
-  sortedTerms = cardsStudyStarred
-    ? sortedTerms.filter((t) => t && starredTerms.includes(t.id))
-    : sortedTerms;
+  const sortedTerms = React.useMemo(() => {
+    const termMap = new Map(terms.map((t) => [t.id, t]));
+    const ordered = termOrder
+      .map((id) => termMap.get(id))
+      .filter((t): t is NonNullable<typeof t> => !!t);
+    return cardsStudyStarred
+      ? ordered.filter((t) => starredTerms.includes(t.id))
+      : ordered;
+  }, [terms, termOrder, cardsStudyStarred, starredTerms]);
 
   const [index, setIndex] = React.useState(0);
   const indexRef = React.useRef(index);
   indexRef.current = index;
+
+  React.useEffect(() => {
+    if (sortedTerms.length > 0 && index >= sortedTerms.length) {
+      setIndex(sortedTerms.length - 1);
+    }
+  }, [sortedTerms.length, index]);
+
+  const sortedLenRef = React.useRef(sortedTerms.length);
+  sortedLenRef.current = sortedTerms.length;
+  const shouldFlipRef = React.useRef(shouldFlip);
+  shouldFlipRef.current = shouldFlip;
 
   const [isFlipped, setIsFlipped] = React.useState(shouldFlip);
   const flippedRef = React.useRef(isFlipped);
@@ -77,14 +93,16 @@ export const DefaultFlashcardWrapper = () => {
 
     const interval = setInterval(() => {
       void (async () => {
-        if (flippedRef.current !== shouldFlip) {
-          setIsFlipped(shouldFlip);
+        if (sortedLenRef.current === 0) return;
+        if (flippedRef.current !== shouldFlipRef.current) {
+          setIsFlipped(shouldFlipRef.current);
 
-          if (indexRef.current === sortedTerms.length - 1) {
+          if (indexRef.current >= sortedLenRef.current - 1) {
             setIndex(0);
             await animateTransition();
           } else {
-            await onNext();
+            setIndex((i) => (i + 1) % sortedLenRef.current);
+            await animateTransition();
           }
         } else {
           await flipCard();

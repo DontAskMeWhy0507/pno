@@ -1,7 +1,8 @@
+import { chunkArray } from "@quenti/lib/array";
 import { Prisma, type PrismaClient } from "@quenti/prisma/client";
 
 export const reorder = async (
-  prisma: PrismaClient,
+  prisma: Pick<PrismaClient, "term" | "$executeRaw">,
   studySetId: string,
   submissionId?: string,
 ) => {
@@ -16,6 +17,10 @@ export const reorder = async (
     orderBy: {
       rank: "asc",
     },
+    select: {
+      id: true,
+      studySetId: true,
+    },
   });
 
   if (!terms.length) return;
@@ -23,19 +28,22 @@ export const reorder = async (
   const vals = terms.map((term, i) => [
     term.id,
     term.studySetId,
-    term.word,
-    term.definition,
+    "",
+    "",
     i,
   ]);
-  const formatted = vals.map((x) => Prisma.sql`(${Prisma.join(x)})`);
 
-  // Query assumes that the update clause will always run
-  // word and definition are included as they are required properties for the "insertion"
-  const query = Prisma.sql`
-    INSERT INTO Term (id, studySetId, word, definition, \`rank\`)
-    VALUES ${Prisma.join(formatted)}
-    ON DUPLICATE KEY UPDATE Term.\`rank\` = VALUES(\`rank\`)
-  `;
+  for (const batch of chunkArray(vals, 250)) {
+    const formatted = batch.map((x) => Prisma.sql`(${Prisma.join(x)})`);
 
-  await prisma.$executeRaw(query);
+    // Query assumes that the update clause will always run
+    // word and definition are included as they are required properties for the "insertion"
+    const query = Prisma.sql`
+      INSERT INTO Term (id, studySetId, word, definition, \`rank\`)
+      VALUES ${Prisma.join(formatted)}
+      ON DUPLICATE KEY UPDATE Term.\`rank\` = VALUES(\`rank\`)
+    `;
+
+    await prisma.$executeRaw(query);
+  }
 };

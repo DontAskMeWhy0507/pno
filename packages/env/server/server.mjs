@@ -27,7 +27,7 @@ export const env = createEnv({
     USE_RESEND_PREVIEWS: z
       .string()
       .optional()
-      .default("true")
+      .default(process.env.NODE_ENV === "production" ? "false" : "true")
       .refine((s) => s === "true" || s === "false")
       .transform((s) => s === "true"),
     GRAFANA_DASHBOARD_URL: z.string().url().optional(),
@@ -38,6 +38,7 @@ export const env = createEnv({
     UPSTASH_REDIS_REST_URL: z.string().optional(),
     UPSTASH_REDIS_REST_TOKEN: z.string().optional(),
     QSTASH_TOKEN: z.string().optional(),
+    INNGEST_EVENT_KEY: z.string().optional(),
     COHERE_API_KEY: z.string().optional(),
     HUGGINGFACE_ENDPOINT: z.string().url().optional(),
     HUGGINGFACE_API_KEY: z.string().optional(),
@@ -49,6 +50,11 @@ export const env = createEnv({
     ASSETS_BUCKET_NAME: z.string().optional(),
     ASSETS_BUCKET_URL: z.string().url().optional(),
     UNSPLASH_ACCESS_KEY: z.string().optional(),
+    BLOB_READ_WRITE_TOKEN: z.string().optional(),
+    GITHUB_MEDIA_TOKEN: z.string().optional(),
+    GITHUB_MEDIA_OWNER: z.string().optional(),
+    GITHUB_MEDIA_REPO: z.string().optional(),
+    SQL_WASM_PATH: z.string().optional(),
     ENABLE_CLICKHOUSE: z.string().optional(),
     CLICKHOUSE_HOST: z.string().url().optional(),
     CLICKHOUSE_USER: z.string().optional(),

@@ -7,7 +7,7 @@ declare global {
 
 export const stripe =
   globalThis.stripe ||
-  new Stripe(process.env.STRIPE_PRIVATE_KEY!, {
+  new Stripe(process.env.STRIPE_PRIVATE_KEY || "sk_test_not_configured", {
     apiVersion: "2023-08-16",
     typescript: true,
   });

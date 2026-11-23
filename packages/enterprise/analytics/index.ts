@@ -12,24 +12,20 @@ type Activity = {
 };
 
 export const collectOrganizationActivity = async (orgId: string) => {
-  const users = await prisma.user.findMany({
+  const cutoff = new Date(Date.now() - LAST_30_MINUTES);
+  const grouped = await prisma.user.groupBy({
+    by: ["type"],
     where: {
       organizationId: orgId,
+      lastSeenAt: { gte: cutoff },
     },
-    select: {
-      id: true,
-      type: true,
-      lastSeenAt: true,
-    },
+    _count: { _all: true },
   });
 
-  const now = new Date().getTime();
-  const active = users.filter(
-    (u) => u.lastSeenAt.getTime() >= now - LAST_30_MINUTES,
-  );
-
-  const activeStudents = active.filter((u) => u.type === "Student").length;
-  const activeTeachers = active.filter((u) => u.type === "Teacher").length;
+  const activeStudents =
+    grouped.find((g) => g.type === "Student")?._count._all ?? 0;
+  const activeTeachers =
+    grouped.find((g) => g.type === "Teacher")?._count._all ?? 0;
 
   await cache?.set(
     `org:${orgId}:active-users`,

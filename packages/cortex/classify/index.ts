@@ -1,3 +1,5 @@
+import { env } from "@quenti/env/server";
+
 import { cohere } from "../lib/cohere";
 import CATEGORIES from "./categories";
 
@@ -23,6 +25,8 @@ export interface Classification {
 export const classifyClass = async (
   name: string,
 ): Promise<Classification | null> => {
+  if (!env.COHERE_API_KEY) return null;
+
   const response = await cohere.classify({
     examples: provided,
     inputs: [name],

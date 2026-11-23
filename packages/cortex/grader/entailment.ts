@@ -20,7 +20,7 @@ const processEntailment = async (
   input: string,
 ): Promise<EntailmentResult> => {
   const sanitize = (text: string) =>
-    text.trim().replace("[CLS]", "").replace("[SEP]", "");
+    text.trim().replaceAll("[CLS]", "").replaceAll("[SEP]", "");
 
   const results = await Hf!.request({
     // @ts-expect-error Argument of type

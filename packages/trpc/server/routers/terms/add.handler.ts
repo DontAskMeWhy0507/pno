@@ -47,64 +47,77 @@ export const addHandler = async ({ ctx, input }: AddOptions) => {
     studySet.created,
   );
 
-  // Insert empty terms below the current rank if it is greater than the current max rank
-  const merges = [];
-  if (input.term.rank > studySet._count.terms) {
-    await ctx.prisma.term.createMany({
-      data: Array(input.term.rank - studySet._count.terms)
-        .fill(null)
-        .map((_, i) => ({
-          studySetId: input.studySetId,
-          rank: studySet._count.terms + i,
-          word: "",
-          definition: "",
-        })),
+  if (input.term.rank - studySet._count.terms > 50) {
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: "Invalid term rank.",
     });
-
-    const created = await ctx.prisma.term.findMany({
-      where: {
-        studySetId: input.studySetId,
-        ephemeral: false,
-        rank: {
-          in: Array(input.term.rank - studySet._count.terms)
-            .fill(null)
-            .map((_, i) => studySet._count.terms + i),
-        },
-      },
-      select: {
-        id: true,
-        rank: true,
-      },
-    });
-
-    merges.push(...created.map((term) => ({ id: term.id, rank: term.rank })));
   }
 
-  // Censorup all ranks so that all values are consecutive
-  await ctx.prisma.term.updateMany({
-    where: {
-      studySetId: input.studySetId,
-      rank: {
-        gte: input.term.rank,
-      },
-      ephemeral: false,
-    },
-    data: {
-      rank: {
-        increment: 1,
-      },
-    },
-  });
+  // Insert empty terms below the current rank if it is greater than the current max rank
+  const { created, merges } = await ctx.prisma.$transaction(async (tx) => {
+    const merges: { id: string; rank: number }[] = [];
+    if (input.term.rank > studySet._count.terms) {
+      await tx.term.createMany({
+        data: Array(input.term.rank - studySet._count.terms)
+          .fill(null)
+          .map((_, i) => ({
+            studySetId: input.studySetId,
+            rank: studySet._count.terms + i,
+            word: "",
+            definition: "",
+          })),
+      });
 
-  const created = await ctx.prisma.term.create({
-    data: {
-      studySetId: input.studySetId,
-      rank: input.term.rank,
-      word,
-      definition,
-      wordRichText,
-      definitionRichText,
-    },
+      const createdEmpty = await tx.term.findMany({
+        where: {
+          studySetId: input.studySetId,
+          ephemeral: false,
+          rank: {
+            in: Array(input.term.rank - studySet._count.terms)
+              .fill(null)
+              .map((_, i) => studySet._count.terms + i),
+          },
+        },
+        select: {
+          id: true,
+          rank: true,
+        },
+      });
+
+      merges.push(
+        ...createdEmpty.map((term) => ({ id: term.id, rank: term.rank })),
+      );
+    }
+
+    // Censorup all ranks so that all values are consecutive
+    await tx.term.updateMany({
+      where: {
+        studySetId: input.studySetId,
+        rank: {
+          gte: input.term.rank,
+        },
+        ephemeral: false,
+      },
+      data: {
+        rank: {
+          increment: 1,
+        },
+      },
+    });
+
+    const created = await tx.term.create({
+      data: {
+        studySetId: input.studySetId,
+        rank: input.term.rank,
+        word,
+        definition,
+        wordRichText,
+        definitionRichText,
+      },
+    });
+
+    return { created, merges };
   });
 
   await markCortexStale(input.studySetId);

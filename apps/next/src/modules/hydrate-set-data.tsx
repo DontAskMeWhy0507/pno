@@ -7,6 +7,8 @@ import { EnabledFeature } from "@quenti/lib/feature";
 import type { Widen } from "@quenti/lib/widen";
 import { type RouterOutputs, api } from "@quenti/trpc";
 
+import { Button, Center, Heading, Text, VStack } from "@chakra-ui/react";
+
 import { Loading } from "../components/loading";
 import { queryEventChannel } from "../events/query";
 import { useFeature } from "../hooks/use-feature";
@@ -122,6 +124,22 @@ export const HydrateSetData: React.FC<
 
   if (error?.data?.httpStatus == 404) return <Set404 />;
   if ([401, 403].includes(error?.data?.httpStatus || 0)) return <SetPrivate />;
+  if (error && error.data?.httpStatus !== 412) {
+    return (
+      <Center h="60vh" px="4">
+        <VStack spacing="4" textAlign="center">
+          <Heading size="md">Unable to load study set</Heading>
+          <Text color="gray.500" maxW="md">
+            {error.message ||
+              "An unexpected network or server error occurred while loading this study set."}
+          </Text>
+          <Button colorScheme="blue" onClick={() => void refetch()}>
+            Retry
+          </Button>
+        </VStack>
+      </Center>
+    );
+  }
   if (
     status == "loading" ||
     (!isPublic && !session) ||
@@ -132,7 +150,7 @@ export const HydrateSetData: React.FC<
     return placeholder || <Loading />;
 
   return (
-    <ContextLayer data={createInjectedData(data)}>
+    <ContextLayer key={data.id} data={createInjectedData(data)}>
       <Head>
         <title>{data.title} | Quenti</title>
       </Head>
@@ -178,13 +196,15 @@ const ContextLayer: React.FC<React.PropsWithChildren<ContextLayerProps>> = ({
   const storeRef = React.useRef<ContainerStore>();
   if (!storeRef.current) {
     storeRef.current = createContainerStore(
-      status == "authenticated" ? getVal(data as AuthedData) : undefined,
+      status == "authenticated" && data.container
+        ? getVal(data as AuthedData)
+        : undefined,
     );
   }
 
   React.useEffect(() => {
     const trigger = (data: SetData) => {
-      if (status == "authenticated")
+      if (status == "authenticated" && data.container)
         storeRef.current?.setState(getVal(data as AuthedData));
     };
 

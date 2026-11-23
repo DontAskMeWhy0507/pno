@@ -17,7 +17,10 @@ export const thumbhashFromCdn = async (
 
   const endpoint = transform(url, `cover=${width}x${height}`);
 
-  const response = await fetch(endpoint);
+  const response = await fetch(endpoint, {
+    signal: AbortSignal.timeout(10_000),
+  });
+  if (!response.ok) return null;
   const buffer = await response.arrayBuffer();
   // Scale down the image to have the longest dimension be at most 100 px
   const scaledWidth = Math.floor(width > height ? 100 : (width / height) * 100);

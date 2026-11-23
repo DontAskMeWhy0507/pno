@@ -20,19 +20,21 @@ export const ActionBar = () => {
   const put = api.studiableTerms.put.useMutation();
 
   const handleAcknowledgeIncorrect = () => {
+    if (status !== "incorrect") return;
+    const active = roundTimeline[roundCounter];
+    if (!active) return;
+
     acknowledgeIncorrect();
 
-    const active = roundTimeline[roundCounter]!;
     if (active.type == "write") {
-      void (async () =>
-        await put.mutateAsync({
-          id: active.term.id,
-          containerId: container.id,
-          mode: "Learn",
-          correctness: -1,
-          appearedInRound: active.term.appearedInRound || 0,
-          incorrectCount: active.term.incorrectCount + 1,
-        }))();
+      put.mutate({
+        id: active.term.id,
+        containerId: container.id,
+        mode: "Learn",
+        correctness: -1,
+        appearedInRound: active.term.appearedInRound || 0,
+        incorrectCount: active.term.incorrectCount + 1,
+      });
     }
   };
 

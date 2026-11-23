@@ -8,7 +8,7 @@ type DeleteOptions = {
 };
 
 export const deleteHandler = async ({ ctx, input }: DeleteOptions) => {
-  await isClassTeacherOrThrow(input.classId, ctx.session.user.id);
+  await isClassTeacherOrThrow(input.classId, ctx.session.user.id, "mutation");
 
   await ctx.prisma.assignment.delete({
     where: {

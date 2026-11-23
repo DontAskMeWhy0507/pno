@@ -56,9 +56,15 @@ export const ImportTermsModal: React.FC<ImportTermsModalProps> = ({
     td: string,
     cd: string,
   ): { word: string; definition: string }[] => {
+    if (!value || !cd || !td) return [];
     return value
       .split(cd)
-      .map((card) => card.split(td))
+      .map((card) => {
+        const idx = card.indexOf(td);
+        return idx === -1
+          ? [card, ""]
+          : [card.slice(0, idx), card.slice(idx + td.length)];
+      })
       .map(([word, definition]) => ({
         word: word || "",
         definition: definition || "",

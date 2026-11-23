@@ -72,6 +72,7 @@ export const LinkArea = () => {
         name="Blocks"
         icon={<IconCube />}
         href={`/${id}/blocks`}
+        requireAuth
       />
       <Linkable name="Crossword" icon={<IconGridDots />} comingSoon />
       <Linkable name="Gravity" icon={<IconMeteor />} comingSoon />

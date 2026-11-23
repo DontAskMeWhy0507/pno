@@ -69,15 +69,28 @@ const TestContainer = () => {
 
   const [hasUnansweredOpen, setHasUnansweredOpen] = React.useState(false);
   const [loading, setLoading] = React.useState(false);
+  const submitTimeoutRef = React.useRef<number | null>(null);
+  const submittingRef = React.useRef(false);
+
+  React.useEffect(() => {
+    return () => {
+      if (submitTimeoutRef.current !== null) {
+        window.clearTimeout(submitTimeoutRef.current);
+      }
+    };
+  }, []);
 
   const bulkGrade = api.cortex.bulkGrade.useMutation({
     onSuccess: (data) => {
-      stateSubmit(
-        data,
-        new Date().getTime() - store.getState().endedAt!.getTime(),
-      );
+      const endedAt = store.getState().endedAt?.getTime() ?? Date.now();
+      stateSubmit(data, Date.now() - endedAt);
     },
-    retry: (count) => count <= 3,
+    onError: () => {
+      // Fall back to deterministic local grading instead of hanging on LoadingView
+      const endedAt = store.getState().endedAt?.getTime() ?? Date.now();
+      stateSubmit([], Date.now() - endedAt);
+    },
+    retry: (count) => count <= 2,
   });
 
   const stateSubmit = (
@@ -87,13 +100,17 @@ const TestContainer = () => {
     const doSubmit = () => {
       submit(cortexGraded);
       setLoading(false);
+      submittingRef.current = false;
     };
 
     if (apiElapsedMs > 2000) doSubmit();
     else
-      setTimeout(
+      submitTimeoutRef.current = window.setTimeout(
         doSubmit,
-        Math.floor(Math.random() * 2000) + 2000 - Math.min(1000, apiElapsedMs),
+        Math.max(
+          0,
+          Math.floor(Math.random() * 2000) + 2000 - Math.min(1000, apiElapsedMs),
+        ),
       );
   };
 
@@ -163,19 +180,22 @@ const TestContainer = () => {
     });
   };
 
-  const onSubmit = async (bypass = false) => {
+  const onSubmit = (bypass = false) => {
+    if (submittingRef.current || loading) return;
     if (!checkAllAnswered() && !bypass) {
       setHasUnansweredOpen(true);
       return;
     }
 
+    submittingRef.current = true;
+    setHasUnansweredOpen(false);
     setEndedAt(new Date());
     setLoading(true);
 
     const cortexEligible = getCortexEligible();
     if (!cortexEligible.length) stateSubmit([], 0);
     else {
-      await bulkGrade.mutateAsync({ answers: cortexEligible });
+      bulkGrade.mutate({ answers: cortexEligible });
     }
   };
 

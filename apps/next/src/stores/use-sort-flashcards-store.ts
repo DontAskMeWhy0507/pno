@@ -59,8 +59,8 @@ export const createSortFlashcardsStore = (
       },
       markStillLearning: (termId) => {
         set((state) => {
-          const active = state.termsThisRound[state.index]!;
-          if (active.id != termId) throw new Error("Mismatched term id");
+          const active = state.termsThisRound[state.index];
+          if (!active || active.id != termId) return {};
           active.correctness = -1;
           active.incorrectCount++;
           active.appearedInRound = state.currentRound;
@@ -71,8 +71,8 @@ export const createSortFlashcardsStore = (
       },
       markKnown: (termId) => {
         set((state) => {
-          const active = state.termsThisRound[state.index]!;
-          if (active.id != termId) throw new Error("Mismatched term id");
+          const active = state.termsThisRound[state.index];
+          if (!active || active.id != termId) return {};
           active.correctness = 1;
           active.appearedInRound = state.currentRound;
 
@@ -85,9 +85,12 @@ export const createSortFlashcardsStore = (
           if (state.index == 0 && !fromProgress) return {};
           return {
             progressView: false,
-            index: Math.min(
-              state.index - (!fromProgress ? 1 : 0),
-              state.termsThisRound.length - 1,
+            index: Math.max(
+              0,
+              Math.min(
+                state.index - (!fromProgress ? 1 : 0),
+                state.termsThisRound.length - 1,
+              ),
             ),
           };
         });

@@ -1,5 +1,4 @@
-import { useRouter } from "next/router";
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 
 import { Link } from "@quenti/components";
 
@@ -41,8 +40,7 @@ import { effectChannel } from "../../events/effects";
 import { useSet } from "../../hooks/use-set";
 import { playSound } from "./blocks-audio";
 import {
-  BlockPiece,
-  GRID_SIZE,
+  type BlockPiece,
   canPieceFitAnywhere,
   canPlacePiece,
   checkAndClearLines,
@@ -57,7 +55,6 @@ interface QuestionData {
 }
 
 export const BlocksContainer: React.FC = () => {
-  const router = useRouter();
   const set = useSet();
   const terms = set?.terms || [];
 
@@ -87,29 +84,47 @@ export const BlocksContainer: React.FC = () => {
     null,
   );
   const [selectedChoice, setSelectedChoice] = useState<string | null>(null);
-  const [isAnswerCorrect, setIsAnswerCorrect] = useState<boolean | null>(null);
+
+  const timeoutsRef = useRef<number[]>([]);
+  const scheduleTimeout = (fn: () => void, ms: number) => {
+    const id = window.setTimeout(() => {
+      timeoutsRef.current = timeoutsRef.current.filter((t) => t !== id);
+      fn();
+    }, ms);
+    timeoutsRef.current.push(id);
+  };
+  const clearAllTimeouts = () => {
+    timeoutsRef.current.forEach((id) => window.clearTimeout(id));
+    timeoutsRef.current = [];
+  };
+  useEffect(() => clearAllTimeouts, []);
 
   // LocalStorage high score key
   const highScoreKey = `quenti_blocks_highscore_${set?.id || "default"}`;
 
   useEffect(() => {
-    if (typeof window !== "undefined") {
-      const saved = localStorage.getItem(highScoreKey);
-      if (saved) setHighScore(Number(saved));
+    try {
+      const saved = window.localStorage.getItem(highScoreKey);
+      const parsed = saved ? Number(saved) : 0;
+      setHighScore(Number.isFinite(parsed) && parsed > 0 ? parsed : 0);
+    } catch {
+      setHighScore(0);
     }
   }, [highScoreKey]);
 
-  const updateScore = (delta: number) => {
-    setScore((prev) => {
-      const next = prev + delta;
-      if (next > highScore) {
-        setHighScore(next);
-        if (typeof window !== "undefined") {
-          localStorage.setItem(highScoreKey, next.toString());
-        }
+  useEffect(() => {
+    if (score > highScore) {
+      setHighScore(score);
+      try {
+        window.localStorage.setItem(highScoreKey, score.toString());
+      } catch {
+        // Storage unavailable in private mode or quota exceeded
       }
-      return next;
-    });
+    }
+  }, [score, highScore, highScoreKey]);
+
+  const updateScore = (delta: number) => {
+    setScore((prev) => prev + delta);
   };
 
   // Generate a multiple choice question from set terms
@@ -126,17 +141,18 @@ export const BlocksContainer: React.FC = () => {
       ? target.definition || target.word
       : target.word || target.definition;
 
-    // Pick 3 distractors
-    const otherAnswers = terms
-      .filter((_, idx) => idx !== targetIdx)
-      .map((t) =>
-        isTermPrompt
-          ? t.definition || t.word
-          : t.word || t.definition,
-      )
-      .filter((a) => a !== correctAnswer);
+    // Pick up to 3 distinct distractors
+    const otherAnswers = Array.from(
+      new Set(
+        terms
+          .filter((_, idx) => idx !== targetIdx)
+          .map((t) =>
+            isTermPrompt ? t.definition || t.word : t.word || t.definition,
+          )
+          .filter((a) => Boolean(a) && a !== correctAnswer),
+      ),
+    );
 
-    // Shuffle and pick up to 3
     const shuffledOthers = [...otherAnswers].sort(() => 0.5 - Math.random());
     const distractors = shuffledOthers.slice(0, 3);
 
@@ -156,15 +172,15 @@ export const BlocksContainer: React.FC = () => {
     const q = generateQuestion();
     setCurrentQuestion(q);
     setSelectedChoice(null);
-    setIsAnswerCorrect(null);
     setPhase("question");
   };
 
-  // On mount: start first question
+  // On mount or when terms become available: start first question
   useEffect(() => {
     if (terms.length > 0 && phase === "question" && !currentQuestion) {
       triggerNextQuestion();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [terms]);
 
   // Answer handler
@@ -173,7 +189,6 @@ export const BlocksContainer: React.FC = () => {
     setSelectedChoice(choice);
 
     const correct = choice === currentQuestion.correctAnswer;
-    setIsAnswerCorrect(correct);
 
     if (correct) {
       playSound("correct", soundEnabled);
@@ -185,18 +200,23 @@ export const BlocksContainer: React.FC = () => {
       const newPieces = [getRandomPiece(), getRandomPiece(), getRandomPiece()];
       setPieces(newPieces);
       setSelectedPieceId(newPieces[0]!.id);
+      const anyNewFits = newPieces.some((p) => canPieceFitAnywhere(board, p));
 
-      // Transition to placing phase after short delay
-      setTimeout(() => {
-        setPhase("placing");
+      // Transition to placing phase (or gameover if no new piece fits)
+      scheduleTimeout(() => {
         setSelectedChoice(null);
-        setIsAnswerCorrect(null);
+        if (!anyNewFits) {
+          playSound("gameover", soundEnabled);
+          setPhase("gameover");
+        } else {
+          setPhase("placing");
+        }
       }, 700);
     } else {
       playSound("wrong", soundEnabled);
       setStreak(0);
       // Let user see correct answer for 1.4s then give another question
-      setTimeout(() => {
+      scheduleTimeout(() => {
         triggerNextQuestion();
       }, 1400);
     }
@@ -259,7 +279,7 @@ export const BlocksContainer: React.FC = () => {
       // All pieces placed: next card question!
       setSelectedPieceId(null);
       setHoverPos(null);
-      setTimeout(() => {
+      scheduleTimeout(() => {
         triggerNextQuestion();
       }, 400);
     } else {
@@ -273,7 +293,7 @@ export const BlocksContainer: React.FC = () => {
 
       if (!anyCanFit) {
         playSound("gameover", soundEnabled);
-        setTimeout(() => {
+        scheduleTimeout(() => {
           setPhase("gameover");
         }, 600);
       }
@@ -281,6 +301,7 @@ export const BlocksContainer: React.FC = () => {
   };
 
   const restartGame = () => {
+    clearAllTimeouts();
     setBoard(createEmptyBoard());
     setPieces([]);
     setSelectedPieceId(null);
@@ -292,14 +313,18 @@ export const BlocksContainer: React.FC = () => {
     triggerNextQuestion();
   };
 
-  // Color schemes
+  // All ColorMode hooks hoisted unconditionally to the top level
   const bg = useColorModeValue("gray.50", "gray.900");
   const panelBg = useColorModeValue("white", "gray.800");
+  const gridFrameBg = useColorModeValue("gray.200", "gray.900");
   const cellEmptyBg = useColorModeValue("gray.100", "gray.750");
   const cellEmptyBorder = useColorModeValue("gray.200", "gray.700");
   const statBoxBg = useColorModeValue("gray.100", "gray.750");
-  const promptBg = useColorModeValue("blue.50", "blue.950");
-  const promptBorder = useColorModeValue("blue.200", "blue.800");
+  const promptBg = useColorModeValue("blue.50", "blue.900");
+  const promptBorder = useColorModeValue("blue.200", "blue.700");
+  const selectedPieceBg = useColorModeValue("blue.50", "blue.900");
+  const placingBannerBg = useColorModeValue("green.50", "green.900");
+  const placingBannerBorder = useColorModeValue("green.200", "green.700");
 
   return (
     <Box minH="calc(100vh - 80px)" bg={bg} py={4}>
@@ -366,7 +391,7 @@ export const BlocksContainer: React.FC = () => {
               <HStack spacing={1}>
                 <IconTrophy size={14} color="#f59e0b" />
                 <Text color="gray.500">BEST</Text>
-                <Text color="amber.500" fontSize="sm">
+                <Text color="orange.400" fontSize="sm">
                   {highScore}
                 </Text>
               </HStack>
@@ -423,7 +448,7 @@ export const BlocksContainer: React.FC = () => {
               <Box
                 display="inline-block"
                 p={2}
-                bg={useColorModeValue("gray.200", "gray.900")}
+                bg={gridFrameBg}
                 rounded="xl"
                 onMouseLeave={() => setHoverPos(null)}
               >
@@ -508,7 +533,7 @@ export const BlocksContainer: React.FC = () => {
                         rounded="xl"
                         border="2px solid"
                         borderColor={isSelected ? piece.color : "transparent"}
-                        bg={isSelected ? useColorModeValue("blue.50", "blue.900") : "transparent"}
+                        bg={isSelected ? selectedPieceBg : "transparent"}
                         cursor="pointer"
                         transition="all 0.15s"
                         transform={isSelected ? "scale(1.08)" : "scale(1)"}
@@ -556,7 +581,16 @@ export const BlocksContainer: React.FC = () => {
               </Heading>
             </Flex>
 
-            {phase === "question" && currentQuestion ? (
+            {terms.length === 0 ? (
+              <Stack spacing={3} py={4} textAlign="center">
+                <Text fontSize="sm" color="gray.500">
+                  This study set has no terms yet.
+                </Text>
+                <Button as={Link} href={`/${set?.id}`} colorScheme="blue" size="sm">
+                  Back to Set
+                </Button>
+              </Stack>
+            ) : phase === "question" && currentQuestion ? (
               <Stack spacing={4}>
                 <Box
                   p={4}
@@ -583,16 +617,25 @@ export const BlocksContainer: React.FC = () => {
                     const isCorrect = choice === currentQuestion.correctAnswer;
 
                     let btnColor = undefined;
+                    let explicitBg: string | undefined = undefined;
                     if (selectedChoice !== null) {
-                      if (isCorrect) btnColor = "green";
-                      else if (isSelected && !isCorrect) btnColor = "red";
+                      if (isCorrect) {
+                        btnColor = "green";
+                        explicitBg = "green.500";
+                      } else if (isSelected && !isCorrect) {
+                        btnColor = "red";
+                        explicitBg = "red.500";
+                      }
                     }
 
                     return (
                       <Button
                         key={i}
-                        variant={isSelected ? "solid" : "outline"}
+                        variant={isSelected || (selectedChoice !== null && isCorrect) ? "solid" : "outline"}
                         colorScheme={btnColor}
+                        bg={explicitBg}
+                        color={explicitBg ? "white" : undefined}
+                        _hover={explicitBg ? { bg: explicitBg } : undefined}
                         size="md"
                         h="auto"
                         py={3}
@@ -616,9 +659,9 @@ export const BlocksContainer: React.FC = () => {
               <Stack spacing={4}>
                 <Box
                   p={4}
-                  bg={useColorModeValue("green.50", "green.950")}
+                  bg={placingBannerBg}
                   border="1px solid"
-                  borderColor={useColorModeValue("green.200", "green.800")}
+                  borderColor={placingBannerBorder}
                   rounded="xl"
                   textAlign="center"
                 >
@@ -681,7 +724,7 @@ export const BlocksContainer: React.FC = () => {
                   <Text fontSize="xs" fontWeight={600} color="gray.500">
                     HIGH SCORE
                   </Text>
-                  <Text fontSize="md" fontWeight={700} color="amber.500">
+                  <Text fontSize="md" fontWeight={700} color="orange.400">
                     {highScore}
                   </Text>
                 </Flex>

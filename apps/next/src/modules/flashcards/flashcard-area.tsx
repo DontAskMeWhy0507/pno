@@ -10,7 +10,10 @@ export const FlashcardArea = () => {
   const { terms } = useSetFolderUnison();
   if (!terms) throw new Error("Terms data is missing in unison!");
 
-  const _termOrder = terms.sort((a, b) => a.rank - b.rank).map((t) => t.id);
+  const _termOrder = React.useMemo(
+    () => [...terms].sort((a, b) => a.rank - b.rank).map((t) => t.id),
+    [terms],
+  );
 
   const shuffle = useContainerContext((s) => s.shuffleFlashcards);
   const [termOrder, setTermOrder] = React.useState<string[]>(

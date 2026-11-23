@@ -55,24 +55,28 @@ export const bulkJoinOrgUsersByFilter = async (
     }
   }
 
-  await prisma.user.updateMany({
-    where: {
-      id: { in: students },
-    },
-    data: {
-      organizationId: orgId,
-      type: "Student",
-    },
-  });
-  await prisma.user.updateMany({
-    where: {
-      id: { in: teachers },
-    },
-    data: {
-      organizationId: orgId,
-      type: "Teacher",
-    },
-  });
+  if (students.length) {
+    await prisma.user.updateMany({
+      where: {
+        id: { in: students },
+      },
+      data: {
+        organizationId: orgId,
+        type: "Student",
+      },
+    });
+  }
+  if (teachers.length) {
+    await prisma.user.updateMany({
+      where: {
+        id: { in: teachers },
+      },
+      data: {
+        organizationId: orgId,
+        type: "Teacher",
+      },
+    });
+  }
 };
 
 export const bulkJoinOrgMembersAsTeachers = async (orgId: string) => {

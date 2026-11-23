@@ -19,9 +19,7 @@ export const env = createEnv({
   runtimeEnv: {
     NEXT_PUBLIC_APP_URL: process.env.NEXT_PUBLIC_APP_URL,
     NEXT_PUBLIC_WEBSITE_URL: process.env.NEXT_PUBLIC_WEBSITE_URL,
-    NEXT_PUBLIC_DEPLOYMENT: deployment.parse(
-      process.env.NEXT_PUBLIC_DEPLOYMENT,
-    ),
+    NEXT_PUBLIC_DEPLOYMENT: process.env.NEXT_PUBLIC_DEPLOYMENT || undefined,
     NEXT_PUBLIC_HIGHLIGHT_PROJECT_ID:
       process.env.NEXT_PUBLIC_HIGHLIGHT_PROJECT_ID,
     NEXT_PUBLIC_BETTERUPTIME_ID: process.env.NEXT_PUBLIC_BETTERUPTIME_ID,

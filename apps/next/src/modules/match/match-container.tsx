@@ -99,12 +99,16 @@ export const MatchContainer = () => {
       const elapsed = Math.floor((summary.endTime - startTime) / 100);
 
       if (elapsed > MATCH_MIN_TIME) {
-        await add.mutateAsync({
-          entityId: id,
-          mode: "Match",
-          time: elapsed,
-          eligible: isEligibleForLeaderboard,
-        });
+        try {
+          await add.mutateAsync({
+            entityId: id,
+            mode: "Match",
+            time: elapsed,
+            eligible: isEligibleForLeaderboard,
+          });
+        } catch {
+          // Still navigate to leaderboard even if score submission fails
+        }
       }
 
       await router.push(

@@ -1,5 +1,7 @@
 import React, { useState, useMemo } from "react";
 import { useRouter } from "next/router";
+import { useSession } from "next-auth/react";
+import { sanitizeAnkiHtml } from "@quenti/lib/src/anki/template";
 import {
   Badge,
   Box,
@@ -45,9 +47,10 @@ export const AnkiDeckHub: React.FC<AnkiDeckHubProps> = ({ data }) => {
   const [searchQuery, setSearchQuery] = useState("");
   const [displayCount, setDisplayCount] = useState(20);
 
+  const { status } = useSession();
   const queueQuery = api.anki.getReviewQueue.useQuery(
     { studySetId: data.id },
-    { staleTime: 30000 }
+    { staleTime: 30000, enabled: status === "authenticated" }
   );
 
   const counts = queueQuery.data?.counts || {
@@ -82,7 +85,7 @@ export const AnkiDeckHub: React.FC<AnkiDeckHubProps> = ({ data }) => {
             leftIcon={<IconArrowLeft size={16} />}
             onClick={() => router.push("/home")}
           >
-            Trang chủ
+            Home
           </Button>
           <Badge colorScheme="purple" fontSize="sm" px={3} py={1} rounded="full">
             <HStack spacing={1}>
@@ -107,13 +110,13 @@ export const AnkiDeckHub: React.FC<AnkiDeckHubProps> = ({ data }) => {
                   size="lg"
                   colorScheme="orange"
                   leftIcon={<IconPlayerPlay size={20} />}
-                  onClick={() => router.push(`/sets/${data.id}/anki`)}
+                  onClick={() => router.push(`/${data.id}/anki`)}
                   fontSize="md"
                   px={8}
                   h="52px"
                   shadow="md"
                 >
-                  Học ngay (Study Now)
+                  Study Now
                 </Button>
               </HStack>
             </Stack>
@@ -129,7 +132,7 @@ export const AnkiDeckHub: React.FC<AnkiDeckHubProps> = ({ data }) => {
               </Box>
               <Stack spacing={0}>
                 <Text fontSize="xs" fontWeight={600} color={secondaryColor} textTransform="uppercase">
-                  Thẻ mới (New)
+                  New
                 </Text>
                 <Heading size="lg" color="blue.500">
                   {queueQuery.isLoading ? <Spinner size="sm" /> : counts.new}
@@ -145,7 +148,7 @@ export const AnkiDeckHub: React.FC<AnkiDeckHubProps> = ({ data }) => {
               </Box>
               <Stack spacing={0}>
                 <Text fontSize="xs" fontWeight={600} color={secondaryColor} textTransform="uppercase">
-                  Đang học (Learn)
+                  Learning
                 </Text>
                 <Heading size="lg" color="red.500">
                   {queueQuery.isLoading ? <Spinner size="sm" /> : counts.learn}
@@ -161,7 +164,7 @@ export const AnkiDeckHub: React.FC<AnkiDeckHubProps> = ({ data }) => {
               </Box>
               <Stack spacing={0}>
                 <Text fontSize="xs" fontWeight={600} color={secondaryColor} textTransform="uppercase">
-                  Cần ôn (Review)
+                  To Review
                 </Text>
                 <Heading size="lg" color="green.500">
                   {queueQuery.isLoading ? <Spinner size="sm" /> : counts.review}
@@ -176,7 +179,7 @@ export const AnkiDeckHub: React.FC<AnkiDeckHubProps> = ({ data }) => {
           <HStack spacing={3}>
             <Icon as={IconFlame} boxSize={5} color="orange.400" />
             <Text fontSize="sm" color={secondaryColor}>
-              Tổng số thẻ trong bộ: <b>{data.terms.length} thẻ</b>. Thuật toán SM-2 sẽ tự động phân phối thời gian ôn tập tối ưu để ghi nhớ lâu dài.
+              Total cards in deck: <b>{data.terms.length} cards</b>. The SM-2 spaced repetition algorithm schedules reviews automatically for long-term retention.
             </Text>
           </HStack>
         </Card>
@@ -184,13 +187,13 @@ export const AnkiDeckHub: React.FC<AnkiDeckHubProps> = ({ data }) => {
         {/* Card Explorer (Progressive Chunked 20 cards at a time) */}
         <Stack spacing={4} pt={4}>
           <HStack justify="space-between" align="center" wrap="wrap" gap={3}>
-            <Heading size="md">Danh sách thẻ trong bộ ({data.terms.length})</Heading>
+            <Heading size="md">Cards in Deck ({data.terms.length})</Heading>
             <InputGroup maxW="320px" size="sm">
               <InputLeftElement pointerEvents="none">
                 <Icon as={IconSearch} color="gray.400" />
               </InputLeftElement>
               <Input
-                placeholder="Tìm kiếm thẻ..."
+                placeholder="Search cards..."
                 rounded="lg"
                 value={searchQuery}
                 onChange={(e) => {
@@ -233,22 +236,26 @@ export const AnkiDeckHub: React.FC<AnkiDeckHubProps> = ({ data }) => {
                 <HStack justify="space-between" align="flex-start" spacing={4} wrap={{ base: "wrap", md: "nowrap" }}>
                   <Box flex="1" minW={{ base: "100%", md: "45%" }}>
                     <Text fontSize="xs" fontWeight="bold" color="purple.500" mb={1}>
-                      Mặt trước #{index + 1}
+                      Front #{index + 1}
                     </Text>
                     <Box
                       fontSize="md"
                       fontWeight={500}
-                      dangerouslySetInnerHTML={{ __html: term.word }}
+                      dangerouslySetInnerHTML={{
+                        __html: sanitizeAnkiHtml(term.word).html,
+                      }}
                     />
                   </Box>
                   <Box flex="1" minW={{ base: "100%", md: "45%" }}>
                     <Text fontSize="xs" fontWeight="bold" color="blue.500" mb={1}>
-                      Mặt sau (Answer / Definition)
+                      Back (Answer / Definition)
                     </Text>
                     <Box
                       fontSize="sm"
                       color={secondaryColor}
-                      dangerouslySetInnerHTML={{ __html: term.definition }}
+                      dangerouslySetInnerHTML={{
+                        __html: sanitizeAnkiHtml(term.definition).html,
+                      }}
                     />
                   </Box>
                 </HStack>
@@ -260,7 +267,7 @@ export const AnkiDeckHub: React.FC<AnkiDeckHubProps> = ({ data }) => {
           {displayCount < filteredCards.length && (
             <HStack justify="space-between" pt={2} wrap="wrap" gap={3}>
               <Text fontSize="sm" color={secondaryColor}>
-                Đang hiển thị {visibleCards.length} / {filteredCards.length} thẻ
+                Showing {visibleCards.length} / {filteredCards.length} cards
               </Text>
               <HStack spacing={2}>
                 <Button
@@ -272,14 +279,14 @@ export const AnkiDeckHub: React.FC<AnkiDeckHubProps> = ({ data }) => {
                     )
                   }
                 >
-                  Xem thêm ({Math.min(20, filteredCards.length - displayCount)} thẻ)
+                  Load more ({Math.min(20, filteredCards.length - displayCount)})
                 </Button>
                 <Button
                   size="sm"
                   variant="ghost"
                   onClick={() => setDisplayCount(filteredCards.length)}
                 >
-                  Tải tất cả ({filteredCards.length})
+                  Show all ({filteredCards.length})
                 </Button>
               </HStack>
             </HStack>

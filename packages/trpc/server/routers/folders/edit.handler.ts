@@ -24,15 +24,17 @@ export const editHandler = async ({ ctx, input }: EditOptions) => {
     });
   }
 
-  const slug = slugify(input.title, { lower: true });
-  const existing = await ctx.prisma.folder.findUnique({
-    where: {
-      userId_slug: {
-        userId: ctx.session.user.id,
-        slug,
-      },
-    },
-  });
+  const slug = slugify(input.title, { lower: true }).slice(0, 191) || null;
+  const existing = slug
+    ? await ctx.prisma.folder.findUnique({
+        where: {
+          userId_slug: {
+            userId: ctx.session.user.id,
+            slug,
+          },
+        },
+      })
+    : null;
 
   return await ctx.prisma.folder.update({
     where: {

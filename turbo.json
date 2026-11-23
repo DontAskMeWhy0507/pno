@@ -4,7 +4,24 @@
     "@quenti/next#build": {
       "dependsOn": ["^build"],
       "outputs": [".next/**", "!.next/cache/**"],
-      "env": ["DATABASE_URL"]
+      "env": [
+        "DATABASE_URL",
+        "NEXTAUTH_SECRET",
+        "NEXTAUTH_URL",
+        "QUENTI_ENCRYPTION_KEY",
+        "GOOGLE_CLIENT_ID",
+        "GOOGLE_CLIENT_SECRET",
+        "METRICS_API_USER",
+        "METRICS_API_PASSWORD",
+        "RESEND_API_KEY",
+        "EMAIL_SENDER",
+        "GITHUB_MEDIA_TOKEN",
+        "GITHUB_MEDIA_OWNER",
+        "GITHUB_MEDIA_REPO",
+        "BLOB_READ_WRITE_TOKEN",
+        "SQL_WASM_PATH",
+        "SERVER_NAME"
+      ]
     },
     "build": {
       "dependsOn": ["^build"],
@@ -25,7 +42,7 @@
   },
   "globalDependencies": [
     "**/.env",
-    "yarn.lock",
+    "bun.lockb",
     "packages/console/**/*",
     "packages/integrations/**/*"
   ],

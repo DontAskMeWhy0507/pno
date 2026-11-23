@@ -51,6 +51,23 @@ export const editMemberRoleHandler = async ({
     const target = members.find((m) => m.id === input.genericId);
     if (!target) throw new TRPCError({ code: "NOT_FOUND" });
 
+    if (membership.role == "Admin" && target.role == "Owner") {
+      throw new TRPCError({
+        code: "FORBIDDEN",
+        message: "Must be an owner to change an owner's role",
+      });
+    }
+    if (
+      target.role == "Owner" &&
+      input.role !== "Owner" &&
+      members.filter((m) => m.role === "Owner").length <= 1
+    ) {
+      throw new TRPCError({
+        code: "FORBIDDEN",
+        message: "Organization must have at least one owner",
+      });
+    }
+
     await ctx.prisma.organizationMembership.update({
       where: {
         id: input.genericId,

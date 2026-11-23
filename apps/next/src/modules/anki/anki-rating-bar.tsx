@@ -25,10 +25,11 @@ export const AnkiRatingBar: React.FC<AnkiRatingBarProps> = ({
         maxW="140px"
         h="60px"
         colorScheme="red"
-        variant="subtle"
+        variant="outline"
+        bg="red.50"
         borderWidth="1px"
         borderColor="red.300"
-        _dark={{ borderColor: "red.700" }}
+        _dark={{ bg: "red.900", borderColor: "red.700" }}
         onClick={() => onRate(1)}
         isDisabled={isLoading}
       >
@@ -46,10 +47,11 @@ export const AnkiRatingBar: React.FC<AnkiRatingBarProps> = ({
         maxW="140px"
         h="60px"
         colorScheme="yellow"
-        variant="subtle"
+        variant="outline"
+        bg="yellow.50"
         borderWidth="1px"
         borderColor="yellow.400"
-        _dark={{ borderColor: "yellow.600" }}
+        _dark={{ bg: "yellow.900", borderColor: "yellow.600" }}
         onClick={() => onRate(2)}
         isDisabled={isLoading}
       >
@@ -67,10 +69,11 @@ export const AnkiRatingBar: React.FC<AnkiRatingBarProps> = ({
         maxW="140px"
         h="60px"
         colorScheme="blue"
-        variant="subtle"
+        variant="outline"
+        bg="blue.50"
         borderWidth="1px"
         borderColor="blue.300"
-        _dark={{ borderColor: "blue.700" }}
+        _dark={{ bg: "blue.900", borderColor: "blue.700" }}
         onClick={() => onRate(3)}
         isDisabled={isLoading}
       >
@@ -88,10 +91,11 @@ export const AnkiRatingBar: React.FC<AnkiRatingBarProps> = ({
         maxW="140px"
         h="60px"
         colorScheme="green"
-        variant="subtle"
+        variant="outline"
+        bg="green.50"
         borderWidth="1px"
         borderColor="green.300"
-        _dark={{ borderColor: "green.700" }}
+        _dark={{ bg: "green.900", borderColor: "green.700" }}
         onClick={() => onRate(4)}
         isDisabled={isLoading}
       >

@@ -33,7 +33,7 @@ model Account {
   access_token      String? @db.Text
   expires_at        Int?
   token_type        String?
-  scope             String?
+  scope             String? @db.Text
   id_token          String? @db.Text
   session_state     String?
   user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -731,6 +731,7 @@ model StudiableTerm {
   // Full composite primary key will always be used for lookups
   @@id([userId, containerId, termId, mode])
   @@index([containerId])
+  @@index([termId])
 }
 
 model StarredTerm {
@@ -744,6 +745,7 @@ model StarredTerm {
 
   @@id([userId, termId])
   @@index([containerId])
+  @@index([termId])
 }
 
 enum AnkiCardQueue {
@@ -776,4 +778,6 @@ model AnkiCardSchedule {
 
   @@unique([userId, termId])
   @@index([userId, studySetId, due, queue])
+  @@index([termId])
+  @@index([studySetId])
 }

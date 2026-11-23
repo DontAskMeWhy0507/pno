@@ -1,11 +1,12 @@
-import { TRPCError } from "@trpc/server";
-import type { NonNullableUserContext } from "../../lib/types";
-import type { TGetReviewQueueSchema } from "./get-review-queue.schema";
 import {
   CardScheduleState,
   getIntervalEstimateLabel,
   AnkiQueue,
-} from "../../../../lib/src/anki/srs";
+} from "@quenti/lib/src/anki/srs";
+
+import type { NonNullableUserContext } from "../../lib/types";
+import { assertStudySetReadable } from "./access";
+import type { TGetReviewQueueSchema } from "./get-review-queue.schema";
 
 type GetReviewQueueOptions = {
   ctx: NonNullableUserContext;
@@ -19,25 +20,14 @@ export const getReviewQueueHandler = async ({
   const userId = ctx.session.user.id;
   const now = new Date();
 
+  await assertStudySetReadable(ctx, input.studySetId);
+
   // Step 1: Lightweight fetch of term IDs and ranks only
   const terms = await ctx.prisma.term.findMany({
     where: { studySetId: input.studySetId, ephemeral: false },
     orderBy: { rank: "asc" },
     select: { id: true, rank: true },
   });
-
-  if (terms.length === 0) {
-    const studySet = await ctx.prisma.studySet.findUnique({
-      where: { id: input.studySetId },
-      select: { id: true },
-    });
-    if (!studySet) {
-      throw new TRPCError({
-        code: "NOT_FOUND",
-        message: "Study set not found",
-      });
-    }
-  }
 
   // Step 2: Fetch existing schedules for this user in this set
   const existingSchedules = await ctx.prisma.ankiCardSchedule.findMany({

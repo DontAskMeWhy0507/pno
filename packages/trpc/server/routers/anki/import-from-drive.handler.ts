@@ -1,7 +1,7 @@
 import type { NonNullableUserContext } from "../../lib/types";
-import type { TImportFromDriveSchema } from "./import-from-drive.schema";
 import { downloadDriveFile, getGoogleAccessToken } from "./google-drive";
-import { importPackageHandler } from "./import-package.handler";
+import type { TImportFromDriveSchema } from "./import-from-drive.schema";
+import { importAnkiBuffer } from "./import-package.handler";
 
 type ImportFromDriveOptions = {
   ctx: NonNullableUserContext;
@@ -14,13 +14,7 @@ export const importFromDriveHandler = async ({
 }: ImportFromDriveOptions) => {
   const token = await getGoogleAccessToken(ctx);
   const buffer = await downloadDriveFile(token, input.fileId);
-  return importPackageHandler({
-    ctx,
-    input: {
-      fileBase64: buffer.toString("base64"),
-      fileName: input.fileName,
-    },
-  });
+  return importAnkiBuffer(ctx, buffer, input.fileName);
 };
 
 export default importFromDriveHandler;

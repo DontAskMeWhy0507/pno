@@ -11,7 +11,7 @@ export const setPublishedHandler = async ({
   ctx,
   input,
 }: SetPublishedOptions) => {
-  await isClassTeacherOrThrow(input.classId, ctx.session.user.id);
+  await isClassTeacherOrThrow(input.classId, ctx.session.user.id, "mutation");
 
   await ctx.prisma.assignment.update({
     where: {

@@ -50,9 +50,10 @@ export const addStudentsHandler = async ({
     });
   }
 
-  const section = await ctx.prisma.section.findUnique({
+  const section = await ctx.prisma.section.findFirst({
     where: {
       id: input.sectionId,
+      classId: input.classId,
     },
   });
   if (!section) {
@@ -114,40 +115,47 @@ export const addStudentsHandler = async ({
     }
   }
 
-  await ctx.prisma.pendingClassInvite.createMany({
-    data: inviteEmails.map((email) => ({
-      classId: input.classId,
-      sectionId: input.sectionId,
-      type: "Student",
-      email,
-    })),
-  });
+  await ctx.prisma.$transaction(async (tx) => {
+    if (inviteEmails.length) {
+      await tx.pendingClassInvite.createMany({
+        data: inviteEmails.map((email) => ({
+          classId: input.classId,
+          sectionId: input.sectionId,
+          type: "Student",
+          email,
+        })),
+        skipDuplicates: true,
+      });
+    }
 
-  if (createMemberships.length) {
-    await ctx.prisma.classMembership.createMany({
-      data: createMemberships.map(({ userId, email }) => ({
-        userId,
-        email,
-        classId: input.classId,
-        type: "Student",
-        sectionId: input.sectionId,
-      })),
-    });
-  }
+    if (createMemberships.length) {
+      await tx.classMembership.createMany({
+        data: createMemberships.map(({ userId, email }) => ({
+          userId,
+          email,
+          classId: input.classId,
+          type: "Student",
+          sectionId: input.sectionId,
+        })),
+        skipDuplicates: true,
+      });
+    }
 
-  if (updateMemberships.length) {
-    await ctx.prisma.classMembership.updateMany({
-      where: {
-        classId: input.classId,
-        userId: {
-          in: updateMemberships.map((u) => u.userId),
+    if (updateMemberships.length) {
+      await tx.classMembership.updateMany({
+        where: {
+          classId: input.classId,
+          userId: {
+            in: updateMemberships.map((u) => u.userId),
+          },
         },
-      },
-      data: {
-        deletedAt: null,
-      },
-    });
-  }
+        data: {
+          deletedAt: null,
+          sectionId: input.sectionId,
+        },
+      });
+    }
+  });
 };
 
 export default addStudentsHandler;

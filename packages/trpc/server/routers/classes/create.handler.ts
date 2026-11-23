@@ -41,13 +41,19 @@ export const createHandler = async ({ ctx, input }: CreateOptions) => {
     },
   });
 
-  await inngest.send({
-    name: "cortex/classify-class",
-    data: {
-      classId: created.id,
-      name: created.name,
-    },
-  });
+  try {
+    await inngest.send({
+      name: "cortex/classify-class",
+      data: {
+        classId: created.id,
+        name: created.name,
+      },
+    });
+  } catch (err) {
+    ctx.req.log?.warn("Failed to enqueue cortex/classify-class event", {
+      err,
+    });
+  }
 
   return created;
 };

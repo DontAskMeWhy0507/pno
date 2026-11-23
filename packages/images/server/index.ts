@@ -15,7 +15,8 @@ const hasEnv =
   !!env.R2_ACCESS_KEY_ID &&
   !!env.R2_SECRET_ACCESS_KEY &&
   !!env.USERS_BUCKET_URL &&
-  !!env.ASSETS_BUCKET_NAME;
+  !!env.ASSETS_BUCKET_NAME &&
+  !!env.ASSETS_BUCKET_URL;
 
 export const S3 = hasEnv
   ? new S3Client({

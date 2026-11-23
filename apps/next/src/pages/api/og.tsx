@@ -73,28 +73,35 @@ export default async function handler(request: NextRequest) {
   switch (imageType) {
     case "StudySet":
     case "Folder": {
-      const total = searchParams.get("collaborators");
-      const avatars = searchParams.get("avatars");
-      const collab =
-        total && avatars
-          ? {
-              total: parseInt(total),
-              avatars: JSON.parse(avatars) as string[],
-            }
-          : undefined;
+      let parsedInput: z.infer<typeof entitySchema>;
+      try {
+        const total = searchParams.get("collaborators");
+        const avatars = searchParams.get("avatars");
+        const collab =
+          total && avatars
+            ? {
+                total: parseInt(total, 10),
+                avatars: JSON.parse(avatars) as string[],
+              }
+            : undefined;
 
-      const { type, title, description, numItems, user, collaborators } =
-        entitySchema.parse({
+        parsedInput = entitySchema.parse({
           type: searchParams.get("type"),
           title: searchParams.get("title"),
           description: searchParams.get("description"),
-          numItems: parseInt(searchParams.get("numItems")!),
+          numItems: parseInt(searchParams.get("numItems") ?? "", 10),
           user: {
             image: searchParams.get("userImage"),
             username: searchParams.get("username"),
           },
           collaborators: collab,
         });
+      } catch {
+        return new Response("Invalid query parameters", { status: 400 });
+      }
+
+      const { type, title, description, numItems, user, collaborators } =
+        parsedInput;
 
       const img = new ImageResponse(
         (
@@ -117,12 +124,19 @@ export default async function handler(request: NextRequest) {
     }
 
     case "profile": {
-      const { username, image, name, verified } = profileSchema.parse({
-        username: searchParams.get("username"),
-        image: searchParams.get("image"),
-        name: searchParams.get("name"),
-        verified: searchParams.get("verified") === "true",
-      });
+      let parsedProfile: z.infer<typeof profileSchema>;
+      try {
+        parsedProfile = profileSchema.parse({
+          username: searchParams.get("username"),
+          image: searchParams.get("image"),
+          name: searchParams.get("name"),
+          verified: searchParams.get("verified") === "true",
+        });
+      } catch {
+        return new Response("Invalid query parameters", { status: 400 });
+      }
+
+      const { username, image, name, verified } = parsedProfile;
 
       const img = new ImageResponse(
         (

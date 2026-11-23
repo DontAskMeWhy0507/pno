@@ -11,6 +11,45 @@ type AddOptions = {
 };
 
 export const addHandler = async ({ ctx, input }: AddOptions) => {
+  const [studySet, folder] = await Promise.all([
+    ctx.prisma.studySet.findUnique({
+      where: { id: input.entityId },
+      select: { id: true, visibility: true, userId: true },
+    }),
+    ctx.prisma.folder.findUnique({
+      where: { id: input.entityId },
+      select: {
+        id: true,
+        userId: true,
+        studySets: {
+          select: {
+            studySet: {
+              select: { id: true, userId: true, visibility: true },
+            },
+          },
+        },
+      },
+    }),
+  ]);
+
+  validateLeaderboardAccess({ studySet, folder }, ctx.session.user.id);
+
+  if (studySet?.visibility === "Class" && studySet.userId !== ctx.session.user.id) {
+    const allowed = await ctx.prisma.allowedClassesOnStudySets.findFirst({
+      where: {
+        studySetId: studySet.id,
+        class: { members: { some: { userId: ctx.session.user.id, deletedAt: null } } },
+      },
+      select: { classId: true },
+    });
+    if (!allowed) {
+      throw new TRPCError({
+        code: "FORBIDDEN",
+        message: "This set is restricted to specific classes.",
+      });
+    }
+  }
+
   const leaderboard = await ctx.prisma.leaderboard.upsert({
     where: {
       entityId_type: {
@@ -25,33 +64,8 @@ export const addHandler = async ({ ctx, input }: AddOptions) => {
     update: {},
     select: {
       id: true,
-      entityId: true,
-      studySet: {
-        select: {
-          id: true,
-          visibility: true,
-          userId: true,
-        },
-      },
-      folder: {
-        select: {
-          userId: true,
-          studySets: {
-            select: {
-              studySet: {
-                select: {
-                  id: true,
-                  userId: true,
-                  visibility: true,
-                },
-              },
-            },
-          },
-        },
-      },
     },
   });
-  validateLeaderboardAccess(leaderboard, ctx.session.user.id);
 
   if (input.time < MATCH_MIN_TIME) {
     throw new TRPCError({

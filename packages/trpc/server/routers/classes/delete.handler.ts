@@ -14,29 +14,33 @@ export const deleteHandler = async ({ ctx, input }: DeleteOptions) => {
 
   // If we delete a class, study sets with visibility "Class" could be left without
   // anyone having access to them whatsoever—set the visibility to "Unlisted" instead
-  await ctx.prisma.studySet.updateMany({
-    where: {
-      AND: [
-        { visibility: "Class" },
-        {
-          classesWithAccess: {
-            every: {
-              classId: input.id,
+  await ctx.prisma.$transaction([
+    ctx.prisma.studySet.updateMany({
+      where: {
+        AND: [
+          { visibility: "Class" },
+          {
+            classesWithAccess: {
+              some: {
+                classId: input.id,
+              },
+              every: {
+                classId: input.id,
+              },
             },
           },
-        },
-      ],
-    },
-    data: {
-      visibility: "Unlisted",
-    },
-  });
-
-  await ctx.prisma.class.delete({
-    where: {
-      id: input.id,
-    },
-  });
+        ],
+      },
+      data: {
+        visibility: "Unlisted",
+      },
+    }),
+    ctx.prisma.class.delete({
+      where: {
+        id: input.id,
+      },
+    }),
+  ]);
 
   await deleteObjectAssets("class", input.id);
 };

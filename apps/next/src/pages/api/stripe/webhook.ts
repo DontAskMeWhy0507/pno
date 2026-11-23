@@ -94,7 +94,7 @@ export default async function handler(
     console.error(`Webhook error: ${err.message}`);
     res.status(err.statusCode || 500).json({
       message: err.message,
-      stack: !env.SERVER_NAME ? err.stack : undefined,
+      stack: env.NODE_ENV === "development" ? err.stack : undefined,
     });
 
     return;

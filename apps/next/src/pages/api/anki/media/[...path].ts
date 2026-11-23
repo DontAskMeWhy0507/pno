@@ -56,20 +56,73 @@ export default function handler(req: NextApiRequest, res: NextApiResponse) {
   }
 
   const resolved = path.resolve(targetFile);
-  if (!resolved.startsWith(baseUploadsDir + path.sep) && resolved !== baseUploadsDir) {
+  if (!resolved.startsWith(baseUploadsDir + path.sep)) {
     return res.status(403).json({ error: "Access denied" });
   }
 
-  const stat = fs.statSync(targetFile);
+  let stat: fs.Stats;
+  try {
+    stat = fs.statSync(resolved);
+  } catch {
+    return res.status(404).json({ error: "Media not found" });
+  }
+  if (!stat.isFile()) {
+    return res.status(404).json({ error: "Media not found" });
+  }
 
   res.setHeader("Content-Type", mimeType);
-  res.setHeader("Content-Length", stat.size);
-  res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
+  res.setHeader("Accept-Ranges", "bytes");
+  res.setHeader("X-Content-Type-Options", "nosniff");
+  if (ext === ".svg") {
+    res.setHeader(
+      "Content-Security-Policy",
+      "sandbox; default-src 'none'; style-src 'unsafe-inline'",
+    );
+  }
+  res.setHeader("Cache-Control", "public, max-age=3600, must-revalidate");
 
   if (req.method === "HEAD") {
+    res.setHeader("Content-Length", stat.size);
     return res.status(200).end();
   }
 
-  const stream = fs.createReadStream(targetFile);
+  let start = 0;
+  let end = Math.max(0, stat.size - 1);
+  const range = req.headers.range;
+  if (range && stat.size > 0) {
+    const match = /^bytes=(\d*)-(\d*)$/.exec(range);
+    if (!match) {
+      return res
+        .status(416)
+        .setHeader("Content-Range", `bytes */${stat.size}`)
+        .end();
+    }
+    start = match[1] ? parseInt(match[1], 10) : 0;
+    end = match[2] ? parseInt(match[2], 10) : stat.size - 1;
+    if (isNaN(start) || isNaN(end) || start > end || end >= stat.size) {
+      return res
+        .status(416)
+        .setHeader("Content-Range", `bytes */${stat.size}`)
+        .end();
+    }
+    res.status(206);
+    res.setHeader("Content-Range", `bytes ${start}-${end}/${stat.size}`);
+    res.setHeader("Content-Length", end - start + 1);
+  } else {
+    res.setHeader("Content-Length", stat.size);
+  }
+
+  const stream = fs.createReadStream(
+    resolved,
+    stat.size > 0 ? { start, end } : undefined,
+  );
+  stream.on("error", () => {
+    if (!res.headersSent) {
+      res.status(500).json({ error: "Failed to read media file" });
+    } else {
+      res.end();
+    }
+  });
+  res.on("close", () => stream.destroy());
   stream.pipe(res);
 }

@@ -1,7 +1,7 @@
 
-if [ "$GITHUB_ACCESS_TOKEN" == "" ]; then
-  echo "GITHUB_ACCESS_TOKEN is not set"
-  exit 1
+if [ -z "$GITHUB_ACCESS_TOKEN" ]; then
+  echo "GITHUB_ACCESS_TOKEN is not set; skipping private submodules"
+  exit 0
 fi
 
 set -e

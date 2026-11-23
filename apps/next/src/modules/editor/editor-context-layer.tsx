@@ -57,34 +57,33 @@ export const EditorContextLayer: React.FC<
   const apiAddTerm = api.terms.add.useMutation({
     onSuccess: (data, { term: termInput }) => {
       const state = storeRef.current!.getState();
-
-      state.setServerTermId(
-        state.terms.find((x) => x.rank === termInput.rank)!.clientKey,
-        data.created.id,
-      );
+      const matched = state.terms.find((x) => x.rank === termInput.rank);
+      if (matched) {
+        state.setServerTermId(matched.clientKey, data.created.id);
+      }
       state.addServerTerms(
         [data.created.id].concat(data.merges.map((x) => x.id)),
       );
 
       if (data.merges.length) {
-        storeRef.current!.setState((state) => {
-          const terms = state.terms;
-
-          for (const merge of data.merges) {
-            const term = terms.find((x) => x.rank === merge.rank);
-            if (term) {
-              term.id = merge.id;
-            }
-          }
-
-          return { terms };
-        });
+        storeRef.current!.setState((state) => ({
+          terms: state.terms.map((t) => {
+            const merge = data.merges.find((m) => m.rank === t.rank);
+            return merge ? { ...t, id: merge.id } : t;
+          }),
+        }));
       }
     },
   });
   const apiBulkAddTerms = api.terms.bulkAdd.useMutation({
     onSuccess: (data) => {
       const state = storeRef.current!.getState();
+      storeRef.current!.setState((s) => ({
+        terms: s.terms.map((t) => {
+          const created = data.find((d) => d.rank === t.rank);
+          return created ? { ...t, id: created.id } : t;
+        }),
+      }));
       state.addServerTerms(data.map((x) => x.id));
     },
   });
@@ -130,17 +129,27 @@ export const EditorContextLayer: React.FC<
     apiBulkEdit.isLoading ||
     apiReorderTerm.isLoading;
 
+  const hasSaveError =
+    apiEditSet.isError ||
+    apiAddTerm.isError ||
+    apiBulkAddTerms.isError ||
+    apiBulkDeleteTerms.isError ||
+    apiDeleteTerm.isError ||
+    apiEditTerm.isError ||
+    apiBulkEdit.isError ||
+    apiReorderTerm.isError;
+
   React.useEffect(() => {
     const state = storeRef.current!.getState();
     state.setIsSaving(isSaving);
     if (isSaving) setSavedLocally(true);
 
-    if (!isSaving && savedLocally) {
+    if (!isSaving && savedLocally && !hasSaveError) {
       state.setSavedAt(new Date());
       state.setSaveError(undefined);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isSaving]);
+  }, [isSaving, hasSaveError]);
 
   React.useEffect(() => {
     // Needed because IDs may be innacurate at the time the modal is opened
@@ -210,17 +219,21 @@ export const EditorContextLayer: React.FC<
         },
         bulkAddTerms: (terms, deleted) => {
           void (async () => {
-            if (!!deleted?.length) {
-              await apiBulkDeleteTerms.mutateAsync({
-                studySetId: data.id,
-                terms: deleted,
-              });
-            }
+            try {
+              if (!!deleted?.length) {
+                await apiBulkDeleteTerms.mutateAsync({
+                  studySetId: data.id,
+                  terms: deleted,
+                });
+              }
 
-            apiBulkAddTerms.mutate({
-              studySetId: data.id,
-              terms,
-            });
+              apiBulkAddTerms.mutate({
+                studySetId: data.id,
+                terms,
+              });
+            } catch {
+              // Error state is tracked by mutation hooks
+            }
           })();
         },
         deleteTerm: (termId) => {
@@ -257,6 +270,8 @@ export const EditorContextLayer: React.FC<
               definitionRichText,
             });
           } else {
+            const targetTerm = state.terms.find((x) => x.id == termId);
+            if (!targetTerm) return;
             apiAddTerm.mutate({
               studySetId: data.id,
               term: {
@@ -264,7 +279,7 @@ export const EditorContextLayer: React.FC<
                 definition,
                 wordRichText,
                 definitionRichText,
-                rank: state.terms.find((x) => x.id == termId)!.rank,
+                rank: targetTerm.rank,
               },
             });
           }
@@ -277,63 +292,76 @@ export const EditorContextLayer: React.FC<
         },
         reorderTerm: (id, rank) => {
           void (async () => {
-            const state = storeRef.current!.getState();
+            try {
+              const state = storeRef.current!.getState();
 
-            const term = state.terms.find((x) => x.id === id)!;
+              const term = state.terms.find((x) => x.id === id);
+              if (!term) return;
 
-            if (state.serverTerms.includes(term.id)) {
-              await apiReorderTerm.mutateAsync({
-                studySetId: data.id,
-                term: {
-                  id,
-                  rank,
-                },
-              });
-            } else {
-              await apiAddTerm.mutateAsync({
-                studySetId: data.id,
-                term: {
-                  word: term.word,
-                  definition: term.definition,
-                  rank,
-                },
-              });
+              if (state.serverTerms.includes(term.id)) {
+                await apiReorderTerm.mutateAsync({
+                  studySetId: data.id,
+                  term: {
+                    id,
+                    rank,
+                  },
+                });
+              } else {
+                await apiAddTerm.mutateAsync({
+                  studySetId: data.id,
+                  term: {
+                    word: term.word,
+                    definition: term.definition,
+                    rank,
+                  },
+                });
+              }
+            } catch {
+              // Error state is tracked by mutation hooks
             }
           })();
         },
         flipTerms: () => {
           void (async () => {
-            const state = storeRef.current!.getState();
+            try {
+              const state = storeRef.current!.getState();
 
-            await apiBulkEdit.mutateAsync({
-              studySetId: data.id,
-              terms: state.terms.map((x) => ({
-                id: x.id,
-                word: x.word,
-                definition: x.definition,
-                wordRichText: x.wordRichText
-                  ? richTextToHtml(x.wordRichText)
-                  : undefined,
-                definitionRichText: x.definitionRichText
-                  ? richTextToHtml(x.definitionRichText)
-                  : undefined,
-              })),
-            });
+              await apiBulkEdit.mutateAsync({
+                studySetId: data.id,
+                terms: state.terms.map((x) => ({
+                  id: x.id,
+                  word: x.word,
+                  definition: x.definition,
+                  wordRichText: x.wordRichText
+                    ? richTextToHtml(x.wordRichText)
+                    : undefined,
+                  definitionRichText: x.definitionRichText
+                    ? richTextToHtml(x.definitionRichText)
+                    : undefined,
+                })),
+              });
+            } catch {
+              // Error state is tracked by mutation hooks
+            }
           })();
         },
         onSubscribeDelegate: () => {
           void (async () => {
-            const state = storeRef.current!.getState();
+            try {
+              const state = storeRef.current!.getState();
 
-            await apiEditSet.mutateAsync({
-              id: data.id,
-              title: state.title,
-              description: state.description,
-              tags: state.tags,
-              wordLanguage: state.wordLanguage,
-              definitionLanguage: state.definitionLanguage,
-              visibility: state.visibility,
-            });
+              await apiEditSet.mutateAsync({
+                id: data.id,
+                title: state.title,
+                description: state.description,
+                tags: state.tags,
+                wordLanguage: state.wordLanguage,
+                definitionLanguage: state.definitionLanguage,
+                visibility: state.visibility,
+              });
+            } catch {
+              // Handled by apiEditSet onError
+            }
           })();
         },
         onComplete: () => {

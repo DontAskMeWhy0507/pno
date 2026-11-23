@@ -57,31 +57,36 @@ export const fromUrlHandler = async ({ ctx, input }: FromUrlOptions) => {
     });
   }
 
-  const studySet = await ctx.prisma.studySet.create({
-    data: {
-      title: title.slice(0, 255),
-      description: input.url && !rawText
-        ? `Imported from Quizlet (${input.url})`
-        : `Imported from Quizlet (${terms.length} terms)`,
-      userId,
-      created: true,
-      tags: ["quizlet"],
-    },
-  });
-
-  const batchSize = 500;
-  for (let i = 0; i < terms.length; i += batchSize) {
-    const chunk = terms.slice(i, i + batchSize);
-    await ctx.prisma.term.createMany({
-      data: chunk.map((t, idx) => ({
-        word: t.word.slice(0, 1000),
-        definition: t.definition.slice(0, 1000),
-        rank: i + idx,
-        studySetId: studySet.id,
-        assetUrl: t.imageUrl || null,
-      })),
+  const studySet = await ctx.prisma.$transaction(async (tx) => {
+    const created = await tx.studySet.create({
+      data: {
+        title: title.slice(0, 255),
+        description: (input.url && !rawText
+          ? `Imported from Quizlet (${input.url})`
+          : `Imported from Quizlet (${terms.length} terms)`
+        ).slice(0, 2000),
+        userId,
+        created: true,
+        tags: ["quizlet"],
+      },
     });
-  }
+
+    const batchSize = 500;
+    for (let i = 0; i < terms.length; i += batchSize) {
+      const chunk = terms.slice(i, i + batchSize);
+      await tx.term.createMany({
+        data: chunk.map((t, idx) => ({
+          word: t.word.slice(0, 1000),
+          definition: t.definition.slice(0, 1000),
+          rank: i + idx,
+          studySetId: created.id,
+          assetUrl: t.imageUrl && t.imageUrl.length <= 255 ? t.imageUrl : null,
+        })),
+      });
+    }
+
+    return created;
+  });
 
   return {
     createdSetId: studySet.id,

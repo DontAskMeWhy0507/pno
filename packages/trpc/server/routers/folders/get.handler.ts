@@ -202,7 +202,11 @@ export const getHandler = async ({ ctx, input }: GetOptions) => {
     ).map((t) => t.termId);
   }
 
-  if (!starredTerms.length) {
+  if (
+    input.includeTerms &&
+    !starredTerms.length &&
+    (container.cardsStudyStarred || container.matchStudyStarred)
+  ) {
     await ctx.prisma.container.update({
       where: {
         id: container.id,
@@ -213,7 +217,7 @@ export const getHandler = async ({ ctx, input }: GetOptions) => {
       },
     });
     container.cardsStudyStarred = false;
-    container.cardsStudyStarred = false;
+    container.matchStudyStarred = false;
   }
 
   return {

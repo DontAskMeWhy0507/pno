@@ -9,28 +9,39 @@ type EditOptions = {
 };
 
 export const editHandler = async ({ ctx, input }: EditOptions) => {
-  if (
-    (await ctx.prisma.studySet.findUnique({
-      where: {
-        id_userId: {
-          id: input.id,
-          userId: ctx.session.user.id,
-        },
-        created: true,
+  const existingSet = await ctx.prisma.studySet.findUnique({
+    where: {
+      id_userId: {
+        id: input.id,
+        userId: ctx.session.user.id,
       },
-    })) &&
-    input.title.length < 1
-  ) {
+    },
+    select: {
+      id: true,
+      created: true,
+    },
+  });
+
+  if (!existingSet) {
+    throw new TRPCError({
+      code: "NOT_FOUND",
+      message: "Study set not found.",
+    });
+  }
+
+  if (existingSet.created && input.title.trim().length < 1) {
     throw new TRPCError({
       code: "BAD_REQUEST",
       message: "Set title is required.",
     });
   }
 
+  let defaultClassId: string | undefined;
+
   if (input.visibility == "Class") {
     if (ctx.session.user.type != "Teacher")
       throw new TRPCError({
-        code: "BAD_REQUEST",
+        code: "FORBIDDEN",
       });
 
     const existing = await ctx.prisma.allowedClassesOnStudySets.findFirst({
@@ -64,30 +75,39 @@ export const editHandler = async ({ ctx, input }: EditOptions) => {
           message: "No classes found",
         });
 
-      await ctx.prisma.allowedClassesOnStudySets.create({
-        data: {
-          classId: firstTeacherClass.class.id,
-          studySetId: input.id,
-        },
-      });
+      defaultClassId = firstTeacherClass.class.id;
     }
   }
 
-  const studySet = await ctx.prisma.studySet.update({
-    where: {
-      id_userId: {
-        id: input.id,
-        userId: ctx.session.user.id,
+  const studySet = await ctx.prisma.$transaction(async (tx) => {
+    if (defaultClassId) {
+      await tx.allowedClassesOnStudySets.createMany({
+        data: [
+          {
+            classId: defaultClassId,
+            studySetId: input.id,
+          },
+        ],
+        skipDuplicates: true,
+      });
+    }
+
+    return await tx.studySet.update({
+      where: {
+        id_userId: {
+          id: input.id,
+          userId: ctx.session.user.id,
+        },
       },
-    },
-    data: {
-      title: input.title,
-      description: input.description,
-      tags: input.tags,
-      wordLanguage: input.wordLanguage,
-      definitionLanguage: input.definitionLanguage,
-      visibility: input.visibility,
-    },
+      data: {
+        title: input.title,
+        description: input.description,
+        tags: input.tags,
+        wordLanguage: input.wordLanguage,
+        definitionLanguage: input.definitionLanguage,
+        visibility: input.visibility,
+      },
+    });
   });
 
   return studySet;

@@ -86,6 +86,8 @@ export const addTermHandler = async ({ ctx, input }: AddTermOptions) => {
     const created = await ctx.prisma.term.findMany({
       where: {
         studySetId: studySet.id,
+        submissionId: submission.id,
+        ephemeral: true,
         rank: {
           in: Array(input.term.rank - submission._count.terms)
             .fill(null)

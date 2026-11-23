@@ -34,7 +34,7 @@ import {
   useColorModeValue,
 } from "@chakra-ui/react";
 
-import { QUIZLET_IMPORT_REGEXP } from "../../../../packages/lib/constants/characters";
+import { QUIZLET_IMPORT_REGEXP } from "@quenti/lib/constants/characters";
 import { effectChannel } from "../events/effects";
 import { queryEventChannel } from "../events/query";
 import { useTelemetry } from "../lib/telemetry";
@@ -176,8 +176,7 @@ export const ImportFromQuizletModal: React.FC<ImportFromQuizletModalProps> = ({
       setMessage((msg) => {
         let newMsg = msg;
         while (newMsg === msg) {
-          newMsg =
-            messages[Math.floor(Math.random() * (messages.length - 1))]!;
+          newMsg = messages[Math.floor(Math.random() * messages.length)]!;
         }
         return newMsg;
       });
@@ -194,7 +193,17 @@ export const ImportFromQuizletModal: React.FC<ImportFromQuizletModalProps> = ({
   }, [isLoading]);
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} size="2xl" isCentered={false}>
+    <Modal
+      isOpen={isOpen}
+      onClose={() => {
+        if (!isLoading) {
+          setError("");
+          onClose();
+        }
+      }}
+      size="2xl"
+      isCentered={false}
+    >
       <Modal.Overlay />
       <Modal.Content
         className={styles.card}
@@ -365,7 +374,7 @@ export const ImportFromQuizletModal: React.FC<ImportFromQuizletModalProps> = ({
                     {previewTerms.length > 0 && (
                       <Box>
                         <Text fontSize="xs" fontWeight={700} mb={1} color={subtleText}>
-                          Preview first {Math.min(previewTerms.length, 3)} of{" "}
+                          Preview first {Math.min(previewTerms.length, 5)} of{" "}
                           {previewTerms.length} cards:
                         </Text>
                         <Stack spacing={2} maxH="130px" overflowY="auto" pr={1}>
@@ -484,15 +493,15 @@ export const ImportFromQuizletModal: React.FC<ImportFromQuizletModalProps> = ({
                         ? !url || invalidUrl
                         : previewTerms.length === 0
                     }
-                    onClick={async () => {
+                    onClick={() => {
                       setError("");
                       setImportStarted(Date.now());
                       if (isUrlMode) {
-                        await fromUrl.mutateAsync({
+                        fromUrl.mutate({
                           url,
                         });
                       } else {
-                        await fromUrl.mutateAsync({
+                        fromUrl.mutate({
                           text: rawText,
                           title: customTitle.trim() || undefined,
                           termDelimiter: termDelimType,
@@ -503,7 +512,7 @@ export const ImportFromQuizletModal: React.FC<ImportFromQuizletModalProps> = ({
                       }
                     }}
                   >
-                    Import {previewTerms.length > 0 && `(${previewTerms.length})`}
+                    Import {!isUrlMode && previewTerms.length > 0 && `(${previewTerms.length})`}
                   </Button>
                 </ButtonGroup>
               </Fade>

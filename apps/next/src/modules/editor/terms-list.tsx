@@ -54,12 +54,16 @@ export const TermsList = () => {
   const activeRef = React.useRef(active);
   activeRef.current = active;
 
+  const findCurrentTerm = () =>
+    terms.find((x) => x.clientKey === current || x.id === current);
+
   useShortcut(
     ["ArrowDown"],
     () => {
-      if (!current) return;
-      const rank = terms.find((x) => x.id === current)!.rank;
-      if (rank < terms.length - 1) reorderTerm(current, rank + 1);
+      const activeTerm = findCurrentTerm();
+      if (!activeTerm) return;
+      if (activeTerm.rank < terms.length - 1)
+        reorderTerm(activeTerm.id, activeTerm.rank + 1);
     },
     {
       altKey: true,
@@ -69,9 +73,9 @@ export const TermsList = () => {
   useShortcut(
     ["ArrowUp"],
     () => {
-      if (!current) return;
-      const rank = terms.find((x) => x.id === current)!.rank;
-      if (rank > 0) reorderTerm(current, rank - 1);
+      const activeTerm = findCurrentTerm();
+      if (!activeTerm) return;
+      if (activeTerm.rank > 0) reorderTerm(activeTerm.id, activeTerm.rank - 1);
     },
     {
       altKey: true,
@@ -81,9 +85,9 @@ export const TermsList = () => {
   useShortcut(
     ["R"],
     () => {
-      if (!current) return;
-      const currentRank = terms.find((x) => x.id === current)!.rank;
-      addTerm(currentRank + 1);
+      const activeTerm = findCurrentTerm();
+      if (!activeTerm) return;
+      addTerm(activeTerm.rank + 1);
     },
     {
       ctrlKey: true,
@@ -100,14 +104,17 @@ export const TermsList = () => {
     const { active, over } = event;
 
     if (over?.id && active.id !== over.id) {
-      const rank = terms.find((x) => x.id == over.id)!.rank;
-      reorderTerm(active.id as string, rank);
+      const overTerm = terms.find((x) => x.id == over.id);
+      if (overTerm) reorderTerm(active.id as string, overTerm.rank);
     }
 
     setCurrentDrag(null);
   };
 
-  const items = terms.sort((a, b) => a.rank - b.rank);
+  const items = React.useMemo(
+    () => [...terms].sort((a, b) => a.rank - b.rank),
+    [terms],
+  );
   const disableAdd =
     collab && collab.maxTerms ? terms.length >= collab.maxTerms : false;
 
@@ -140,9 +147,7 @@ export const TermsList = () => {
               strategy={verticalListSortingStrategy}
             >
               <AnimatePresence>
-                {items
-                  .sort((a, b) => a.rank - b.rank)
-                  .map((term, i) => (
+                {items.map((term, i) => (
                     <React.Fragment key={term.clientKey}>
                       <SortableTermCard
                         justCreated={lastCreated === term.clientKey}

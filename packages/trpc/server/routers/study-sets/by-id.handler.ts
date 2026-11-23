@@ -133,7 +133,12 @@ export const byIdHandler = async ({ ctx, input }: ByIdOptions) => {
     });
   }
 
-  if (!container.starredTerms.length) {
+  if (
+    !container.starredTerms.length &&
+    (container.studyStarred ||
+      container.cardsStudyStarred ||
+      container.matchStudyStarred)
+  ) {
     await ctx.prisma.container.update({
       where: {
         userId_entityId_type: {
@@ -145,6 +150,7 @@ export const byIdHandler = async ({ ctx, input }: ByIdOptions) => {
       data: {
         studyStarred: false,
         cardsStudyStarred: false,
+        matchStudyStarred: false,
       },
     });
     container.studyStarred = false;

@@ -52,17 +52,13 @@ export const studiableTermsRouter = createTRPCRouter({
       }),
     )
     .mutation(async ({ ctx, input }) => {
-      try {
-        await ctx.prisma.studiableTerm.delete({
-          where: {
-            userId_containerId_termId_mode: {
-              userId: ctx.session.user.id,
-              containerId: input.containerId,
-              termId: input.id,
-              mode: input.mode,
-            },
-          },
-        });
-      } catch {}
+      await ctx.prisma.studiableTerm.deleteMany({
+        where: {
+          userId: ctx.session.user.id,
+          containerId: input.containerId,
+          termId: input.id,
+          mode: input.mode,
+        },
+      });
     }),
 });

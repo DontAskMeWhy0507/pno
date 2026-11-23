@@ -62,10 +62,11 @@ export const upgradeOrganization = async (
   await bulkJoinOrgMembersAsTeachers(org.id);
   await bulkJoinOrgClasses(org.id);
 
-  try {
-    await prisma.organizationMembership.update({
+  if (userId) {
+    await prisma.organizationMembership.updateMany({
       where: {
         userId,
+        orgId: org.id,
       },
       data: {
         metadata: {
@@ -73,7 +74,7 @@ export const upgradeOrganization = async (
         },
       },
     });
-  } catch {}
+  }
 
   return org;
 };

@@ -10,7 +10,7 @@ type UpdateOptions = {
 };
 
 export const updateHandler = async ({ ctx, input }: UpdateOptions) => {
-  await isClassTeacherOrThrow(input.id, ctx.session.user.id);
+  await isClassTeacherOrThrow(input.id, ctx.session.user.id, "mutation");
 
   const currentName = await ctx.prisma.class.findUniqueOrThrow({
     where: {
@@ -38,14 +38,21 @@ export const updateHandler = async ({ ctx, input }: UpdateOptions) => {
     },
   });
 
-  if (currentName.name !== updated.name)
-    await inngest.send({
-      name: "cortex/classify-class",
-      data: {
-        classId: updated.id,
-        name: updated.name,
-      },
-    });
+  if (currentName.name !== updated.name) {
+    try {
+      await inngest.send({
+        name: "cortex/classify-class",
+        data: {
+          classId: updated.id,
+          name: updated.name,
+        },
+      });
+    } catch (err) {
+      ctx.req.log?.warn("Failed to enqueue cortex/classify-class event", {
+        err,
+      });
+    }
+  }
 
   return updated;
 };

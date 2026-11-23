@@ -7,12 +7,10 @@ type UnstarTermOptions = {
 };
 
 export const unstarTermHandler = async ({ ctx, input }: UnstarTermOptions) => {
-  await ctx.prisma.starredTerm.delete({
+  await ctx.prisma.starredTerm.deleteMany({
     where: {
-      userId_termId: {
-        termId: input.termId,
-        userId: ctx.session.user.id,
-      },
+      termId: input.termId,
+      userId: ctx.session.user.id,
     },
   });
 };

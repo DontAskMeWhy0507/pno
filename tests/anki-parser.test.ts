@@ -33,29 +33,33 @@ describe("Anki Archive Parser", () => {
     expect(Object.keys(result).length).toBe(2);
   });
 
-  test("parseAnkiPackage extracts all decks, notes, cards, and complete media mapping from All Decks.apkg", async () => {
-    const apkgPath = path.resolve(__dirname, "../All Decks.apkg");
-    if (!fs.existsSync(apkgPath)) {
-      console.warn("All Decks.apkg not found, skipping test");
-      return;
-    }
+  const apkgPath = path.resolve(__dirname, "../All Decks.apkg");
+  const testIfFixture = fs.existsSync(apkgPath) ? test : test.skip;
 
-    const result = await parseAnkiPackage(apkgPath);
+  testIfFixture(
+    "parseAnkiPackage extracts all decks, notes, cards, and complete media mapping from All Decks.apkg",
+    async () => {
+      const result = await parseAnkiPackage(apkgPath);
 
-    expect(result.decks.length).toBeGreaterThanOrEqual(8);
-    // All Decks.apkg has 14,951 media files: must be > 14,000 without collision dropping
-    expect(Object.keys(result.mediaMap).length).toBeGreaterThan(14000);
+      expect(result.decks.length).toBeGreaterThanOrEqual(8);
+      // All Decks.apkg has 14,951 media files: must be > 14,000 without collision dropping
+      expect(Object.keys(result.mediaMap).length).toBeGreaterThan(14000);
 
-    // Verify deck structure
-    const book1 = result.decks.find((d) => d.name.includes("1.Book"));
-    expect(book1).toBeDefined();
-    expect(book1!.cards.length).toBeGreaterThan(0);
+      // Verify deck structure
+      const book1 = result.decks.find((d) => d.name.includes("1.Book"));
+      expect(book1).toBeDefined();
+      expect(book1!.cards.length).toBeGreaterThan(0);
 
-    // Verify first card in Book 1 has rendered front, back, audio and images
-    const sampleCard = book1!.cards[0];
-    expect(sampleCard.front).toBeTruthy();
-    expect(sampleCard.back).toBeTruthy();
-    expect(sampleCard.rawFields).toBeDefined();
-    expect(sampleCard.audioFiles.length + sampleCard.imageFiles.length).toBeGreaterThan(0);
-  });
+      // Verify first card in Book 1 has rendered front, back, audio and images
+      const sampleCard = book1!.cards[0]!;
+      expect(sampleCard).toBeDefined();
+      expect(sampleCard.front).toBeTruthy();
+      expect(sampleCard.back).toBeTruthy();
+      expect(sampleCard.rawFields).toBeDefined();
+      expect(
+        sampleCard.audioFiles.length + sampleCard.imageFiles.length,
+      ).toBeGreaterThan(0);
+    },
+    30_000,
+  );
 });

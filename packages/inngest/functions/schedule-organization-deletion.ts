@@ -30,14 +30,23 @@ export const scheduleOrgDeletion = inngest.createFunction(
       await step.sleep("wait-48-hours", "48h");
     }
 
-    await cancelOrganizationSubscription(event.data.org.id);
+    const org = await step.run("Verify organization pending deletion", () =>
+      prisma.organization.findUnique({
+        where: { id: event.data.org.id },
+        select: { id: true, deletedAt: true },
+      }),
+    );
+    if (!org || !org.deletedAt) return;
 
-    const deleted = await prisma.organization.delete({
-      where: {
-        id: event.data.org.id,
-      },
+    await step.run("Cancel organization subscription", () =>
+      cancelOrganizationSubscription(org.id),
+    );
+
+    await step.run("Delete organization and disband users", async () => {
+      await prisma.organization.deleteMany({
+        where: { id: org.id },
+      });
+      await disbandOrgUsers(org.id);
     });
-
-    await disbandOrgUsers(deleted.id);
   },
 );

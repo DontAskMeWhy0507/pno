@@ -77,14 +77,21 @@ export const cancelOrganizationSubscription = async (orgId: string) => {
   const metadata = orgMetadataSchema.parse(org.metadata);
   if (!metadata?.subscriptionId) return;
 
-  try {
-    const subscription = await stripe.subscriptions.retrieve(
-      metadata.subscriptionId,
-    );
-    if (subscription && subscription.status !== "canceled")
-      await stripe.subscriptions.cancel(metadata.subscriptionId);
-  } catch (e) {
-    log.error(getErrorFromUnknown(e).message);
+  if (process.env.STRIPE_PRIVATE_KEY) {
+    try {
+      const subscription = await stripe.subscriptions.retrieve(
+        metadata.subscriptionId,
+      );
+      if (subscription && subscription.status !== "canceled")
+        await stripe.subscriptions.cancel(metadata.subscriptionId);
+    } catch (e) {
+      const err = getErrorFromUnknown(e);
+      log.error(err.message);
+      const statusCode = (e as { statusCode?: number })?.statusCode;
+      if (statusCode !== 404) {
+        throw e;
+      }
+    }
   }
 
   await prisma.organization.update({

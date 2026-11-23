@@ -23,10 +23,11 @@ export const CreateLearnData: React.FC<React.PropsWithChildren> = ({
     storeRef.current = createLearnStore();
 
     const studiable = container.studiableTerms.filter((s) => s.mode == "Learn");
+    const studiableMap = new Map(studiable.map((s) => [s.id, s]));
 
     let learnTerms: StudiableTerm[] = terms
       .map((term) => {
-        const studiableTerm = studiable.find((s) => s.id === term.id);
+        const studiableTerm = studiableMap.get(term.id);
         return {
           ...term,
           correctness: studiableTerm?.correctness ?? 0,
@@ -36,7 +37,7 @@ export const CreateLearnData: React.FC<React.PropsWithChildren> = ({
         };
       })
       .sort((a, b) =>
-        a.studiableRank && b.studiableRank
+        a.studiableRank != null && b.studiableRank != null
           ? a.studiableRank - b.studiableRank
           : a.rank - b.rank,
       );

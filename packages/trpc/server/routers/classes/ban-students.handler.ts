@@ -16,27 +16,32 @@ export const banStudentsHandler = async ({
   const members = await ctx.prisma.classMembership.findMany({
     where: {
       classId: input.classId,
+      type: "Student",
       id: {
         in: input.users,
       },
     },
   });
 
-  await ctx.prisma.classMembership.deleteMany({
-    where: {
-      id: {
-        in: members.map((member) => member.id),
-      },
-    },
-  });
+  if (!members.length) return;
 
-  await ctx.prisma.classBan.createMany({
-    data: members.map((m) => ({
-      classId: input.classId,
-      userId: m.userId,
-      email: m.email,
-    })),
-  });
+  await ctx.prisma.$transaction([
+    ctx.prisma.classMembership.deleteMany({
+      where: {
+        id: {
+          in: members.map((member) => member.id),
+        },
+      },
+    }),
+    ctx.prisma.classBan.createMany({
+      data: members.map((m) => ({
+        classId: input.classId,
+        userId: m.userId,
+        email: m.email,
+      })),
+      skipDuplicates: true,
+    }),
+  ]);
 };
 
 export default banStudentsHandler;

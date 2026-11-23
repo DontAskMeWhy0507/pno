@@ -14,28 +14,31 @@ export function CustomPrismaAdapter(p: PrismaClient): Adapter {
 
       let uniqueUsername = null;
       if (name) {
-        const sanitized = name.replace(USERNAME_REPLACE_REGEXP, "");
-        uniqueUsername = sanitized;
-
-        const existing = (
-          await p.user.findMany({
-            where: {
-              username: {
-                not: null,
-                startsWith: sanitized,
+        const sanitized = name.replace(USERNAME_REPLACE_REGEXP, "").slice(0, 32);
+        if (sanitized.length >= 3) {
+          const existing = (
+            await p.user.findMany({
+              where: {
+                username: {
+                  not: null,
+                  startsWith: sanitized,
+                },
               },
-            },
-          })
-        ).map((user) => user.username?.toLowerCase());
+              select: { username: true },
+              take: 1000,
+            })
+          ).map((user) => user.username?.toLowerCase());
 
-        if (existing.length) {
-          let suffix = "1";
-          while (
-            existing.some((u) => u === (sanitized + suffix).toLowerCase())
-          ) {
-            suffix = (Number(suffix) + 1).toString();
+          const existingSet = new Set(existing);
+          if (!existingSet.has(sanitized.toLowerCase())) {
+            uniqueUsername = sanitized;
+          } else {
+            let suffix = 1;
+            while (existingSet.has(`${sanitized}${suffix}`.toLowerCase())) {
+              suffix++;
+            }
+            uniqueUsername = `${sanitized}${suffix}`;
           }
-          uniqueUsername = sanitized + suffix;
         }
       }
 

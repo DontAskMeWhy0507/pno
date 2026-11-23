@@ -50,25 +50,28 @@ export const removeUserHandler = async ({ ctx, input }: RemoveUserOptions) => {
     });
   }
 
-  await ctx.prisma.user.update({
-    where: {
-      id: input.userId,
-    },
-    data: {
-      organizationId: null,
-    },
-  });
-
-  await ctx.prisma.classMembership.updateMany({
-    where: {
-      class: {
-        orgId: input.orgId,
+  await ctx.prisma.$transaction([
+    ctx.prisma.user.update({
+      where: {
+        id: input.userId,
       },
-    },
-    data: {
-      deletedAt: null,
-    },
-  });
+      data: {
+        organizationId: null,
+      },
+    }),
+    ctx.prisma.classMembership.updateMany({
+      where: {
+        userId: input.userId,
+        deletedAt: null,
+        class: {
+          orgId: input.orgId,
+        },
+      },
+      data: {
+        deletedAt: new Date(),
+      },
+    }),
+  ]);
 };
 
 export default removeUserHandler;

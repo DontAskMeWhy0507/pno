@@ -32,6 +32,7 @@ export const removeMembersHandler = async ({
       where: {
         classId: input.id,
         type: "Teacher",
+        deletedAt: null,
       },
       select: {
         id: true,

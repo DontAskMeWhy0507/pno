@@ -21,9 +21,7 @@ interface InternalSetProps {
 const InternalSetContent: React.FC<InternalSetProps> = ({ collab }) => {
   const data = useSet();
 
-  const isAnki =
-    data.tags?.includes("anki") ||
-    data.description?.toLowerCase().includes("anki");
+  const isAnki = Array.isArray(data.tags) && data.tags.includes("anki");
 
   if (isAnki) {
     return <AnkiDeckHub data={data} />;

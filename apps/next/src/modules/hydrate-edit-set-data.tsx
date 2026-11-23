@@ -19,12 +19,12 @@ export const HydrateEditSetData: React.FC<React.PropsWithChildren> = ({
   const { data } = api.studySets.byId.useQuery(
     { studySetId: id },
     {
-      enabled: !!id,
+      enabled: !!id && session.status === "authenticated",
       staleTime: 0,
       cacheTime: 0,
       onError: (e) => {
         if (e.data?.httpStatus == 403) {
-          void router.push("/[id]", `/${id}`);
+          void router.push(`/${id}`);
         } else if (e.data?.httpStatus == 412) {
           void router.push(`/${id}/create`);
         }
@@ -32,7 +32,7 @@ export const HydrateEditSetData: React.FC<React.PropsWithChildren> = ({
       onSuccess: (data) => {
         if (data.userId !== session.data?.user?.id) {
           void (async () => {
-            await router.push("/[id]", `/${id}`);
+            await router.push(`/${id}`);
           })();
         }
       },

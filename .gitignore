@@ -60,3 +60,4 @@ yarn-error.log*
 .turbo
 *.apkg
 /apps/next/public/uploads/
+*.log

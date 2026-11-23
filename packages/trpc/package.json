@@ -26,6 +26,8 @@
     "@upstash/ratelimit": "^0.4.4",
     "@upstash/redis": "^1.22.1",
     "email-providers": "^2.0.1",
+    "fzstd": "^0.1.1",
+    "jszip": "^3.10.2",
     "nanoid": "^5.0.3",
     "next": "^14.0.4",
     "next-auth": "^4.24.5",

@@ -61,6 +61,7 @@ export const ChoiceCard: React.FC<ChoiceCardProps> = ({ active }) => {
   const put = api.studiableTerms.put.useMutation();
 
   const choose = (term: FacingTerm) => {
+    if (answered) return;
     const elapsed = Date.now() - start;
 
     if (term.id === active.term.id) {

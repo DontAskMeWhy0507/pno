@@ -7,9 +7,13 @@ export const getSub = async (request: Request, env: Env) => {
   const jwt = auth?.split("Bearer ")[1];
   if (!jwt) return new Response("Unauthorized", { status: 401 });
 
-  const secret = new TextEncoder().encode(env.QUENTI_ENCRYPTION_KEY);
-  const result = await jose.jwtVerify(jwt, secret);
-  if (!result.payload.sub) return new Response("Unauthorized", { status: 401 });
+  try {
+    const secret = new TextEncoder().encode(env.QUENTI_ENCRYPTION_KEY);
+    const result = await jose.jwtVerify(jwt, secret);
+    if (!result.payload.sub) return new Response("Unauthorized", { status: 401 });
 
-  return result.payload.sub;
+    return result.payload.sub;
+  } catch {
+    return new Response("Unauthorized", { status: 401 });
+  }
 };

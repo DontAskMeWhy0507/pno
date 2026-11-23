@@ -6,8 +6,6 @@ import { api } from "@quenti/trpc";
 import {
   Button,
   ButtonGroup,
-  FormControl,
-  FormLabel,
   Stack,
   Text,
   Progress,
@@ -20,7 +18,6 @@ import {
 import {
   IconUpload,
   IconFileZip,
-  IconCheck,
   IconAlertCircle,
   IconBrandGoogleDrive,
 } from "@tabler/icons-react";
@@ -71,7 +68,14 @@ export const ImportFromAnkiModal: React.FC<ImportFromAnkiModalProps> = ({
   };
   const onImportError = (err: { message?: string }) => {
     setLoading(false);
-    setError(err.message || "Failed to import Anki package");
+    const msg = err.message || "";
+    if (msg.includes("DRIVE_NEEDS_CONSENT") || msg.includes("DRIVE_NO_ACCOUNT")) {
+      setDriveFiles(null);
+      setDriveNeedsConsent(true);
+      setError("");
+      return;
+    }
+    setError(msg || "Failed to import Anki package. Please try again.");
   };
 
   const importMutation = api.anki.importPackage.useMutation({
@@ -109,9 +113,9 @@ export const ImportFromAnkiModal: React.FC<ImportFromAnkiModalProps> = ({
 
   const handleDriveImport = (file: DriveFileItem) => {
     const sizeMb = file.sizeBytes / (1024 * 1024);
-    if (sizeMb > 150) {
+    if (sizeMb > 50) {
       setError(
-        `This file is ${sizeMb.toFixed(1)}MB. In-app import works best under 150MB; very large decks may fail here.`,
+        `This file is ${sizeMb.toFixed(1)}MB. In-app Google Drive import supports packages up to 50MB.`,
       );
       return;
     }
@@ -121,26 +125,27 @@ export const ImportFromAnkiModal: React.FC<ImportFromAnkiModalProps> = ({
     driveImportMutation.mutate({ fileId: file.id, fileName: file.name });
   };
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const acceptApkgFile = (file?: File | null) => {
+    if (!file) return;
     setError("");
-    const file = e.target.files?.[0];
-    if (file) {
-      if (!file.name.endsWith(".apkg")) {
-        setError("Please select a valid Anki package (.apkg) file.");
-        return;
-      }
-      setSelectedFile(file);
+    if (!file.name.toLowerCase().endsWith(".apkg")) {
+      setError("Please select a valid Anki package (.apkg) file.");
+      return;
     }
+    setSelectedFile(file);
   };
 
-  const handleImport = async () => {
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    acceptApkgFile(e.target.files?.[0]);
+  };
+
+  const handleImport = () => {
     if (!selectedFile) return;
 
-    // Check size warning
     const sizeMb = selectedFile.size / (1024 * 1024);
-    if (sizeMb > 150) {
+    if (sizeMb > 3.2) {
       setError(
-        `This file is ${sizeMb.toFixed(1)}MB. For packages over 150MB, please use the CLI importer "npm run anki:import '${selectedFile.name}'" for best performance.`
+        `This file is ${sizeMb.toFixed(1)}MB. Direct browser uploads are limited to ~3MB on serverless deployments; please use "Import from Google Drive" above (up to 50MB) or the CLI importer.`,
       );
       return;
     }
@@ -150,7 +155,7 @@ export const ImportFromAnkiModal: React.FC<ImportFromAnkiModalProps> = ({
 
     try {
       const reader = new FileReader();
-      reader.onload = async () => {
+      reader.onload = () => {
         const base64 = (reader.result as string).split(",")[1] ?? "";
         setProgressMsg("Parsing decks, cards, and media...");
         importMutation.mutate({
@@ -163,9 +168,9 @@ export const ImportFromAnkiModal: React.FC<ImportFromAnkiModalProps> = ({
         setError("Error reading local file.");
       };
       reader.readAsDataURL(selectedFile);
-    } catch (err: any) {
+    } catch (err: unknown) {
       setLoading(false);
-      setError(err.message || "Error processing file.");
+      setError(err instanceof Error ? err.message : "Error processing file.");
     }
   };
 
@@ -208,6 +213,13 @@ export const ImportFromAnkiModal: React.FC<ImportFromAnkiModalProps> = ({
               textAlign="center"
               cursor={loading ? "not-allowed" : "pointer"}
               onClick={() => !loading && fileInputRef.current?.click()}
+              onDragOver={(e) => {
+                e.preventDefault();
+              }}
+              onDrop={(e) => {
+                e.preventDefault();
+                if (!loading) acceptApkgFile(e.dataTransfer.files?.[0]);
+              }}
               _hover={{ borderColor: "orange.400" }}
               transition="all 0.2s"
             >

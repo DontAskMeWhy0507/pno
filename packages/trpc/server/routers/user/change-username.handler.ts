@@ -1,4 +1,5 @@
 import { failsPrecondition } from "@quenti/lib/usernames";
+import { Prisma } from "@quenti/prisma/client";
 
 import { TRPCError } from "@trpc/server";
 
@@ -25,26 +26,50 @@ export const changeUsernameHandler = async ({
     });
   }
 
+  if (failsPrecondition(input.username)) {
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: "Username is not available.",
+    });
+  }
+
+  let consoleAvailable = true;
   try {
+    consoleAvailable = (await importConsole("index")).usernameAvailable(
+      input.username,
+    );
+  } catch {
+    // Optional @quenti/console submodule may not be installed
+  }
+
+  if (!consoleAvailable) {
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: "Username is not available.",
+    });
+  }
+
+  try {
+    await ctx.prisma.user.update({
+      where: {
+        id: ctx.session.user.id,
+      },
+      data: {
+        username: input.username,
+      },
+    });
+  } catch (e) {
     if (
-      failsPrecondition(input.username) ||
-      !(await importConsole("index")).usernameAvailable(input.username)
+      e instanceof Prisma.PrismaClientKnownRequestError &&
+      e.code === "P2002"
     ) {
       throw new TRPCError({
-        code: "BAD_REQUEST",
-        message: "Username is not available.",
+        code: "CONFLICT",
+        message: "Username is already taken.",
       });
     }
-  } catch {}
-
-  await ctx.prisma.user.update({
-    where: {
-      id: ctx.session.user.id,
-    },
-    data: {
-      username: input.username,
-    },
-  });
+    throw e;
+  }
 };
 
 export default changeUsernameHandler;

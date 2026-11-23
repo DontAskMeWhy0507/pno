@@ -12,7 +12,7 @@ export const EditorListener = () => {
   }, []);
 
   React.useEffect(() => {
-    store.subscribe(
+    const unsubscribe = store.subscribe(
       (s) => [
         s.title,
         s.description,
@@ -26,6 +26,7 @@ export const EditorListener = () => {
         equalityFn: shallow,
       },
     );
+    return unsubscribe;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 

@@ -22,6 +22,11 @@ export const CreateSortFlashcardsData: React.FC<React.PropsWithChildren> = ({
   const starredTerms = useContainerContext((s) => s.starredTerms);
   const storeRef = React.useRef<SortFlashcardsStore>();
 
+  const termOrderRef = React.useRef(termOrder);
+  termOrderRef.current = termOrder;
+  const starredTermsRef = React.useRef(starredTerms);
+  starredTermsRef.current = starredTerms;
+
   const initState = (
     round: number,
     studiableTerms: Pick<
@@ -29,23 +34,28 @@ export const CreateSortFlashcardsData: React.FC<React.PropsWithChildren> = ({
       "id" | "correctness" | "appearedInRound" | "incorrectCount"
     >[],
     terms: FacingTerm[],
-    termOrder: string[],
+    order: string[],
     studyStarred: boolean,
   ) => {
-    let flashcardTerms: StudiableTerm[] = termOrder.map((id) => {
-      const term = terms.find((t) => t.id === id)!;
-      const studiableTerm = studiableTerms.find((s) => s.id === term.id);
-      return {
-        ...term,
-        correctness: studiableTerm?.correctness ?? 0,
-        appearedInRound: studiableTerm?.appearedInRound ?? undefined,
-        incorrectCount: studiableTerm?.incorrectCount ?? 0,
-      };
-    });
+    const termMap = new Map(terms.map((t) => [t.id, t]));
+    const studiableMap = new Map(studiableTerms.map((s) => [s.id, s]));
+
+    let flashcardTerms: StudiableTerm[] = order
+      .map((id) => termMap.get(id))
+      .filter((t): t is FacingTerm => !!t)
+      .map((term) => {
+        const studiableTerm = studiableMap.get(term.id);
+        return {
+          ...term,
+          correctness: studiableTerm?.correctness ?? 0,
+          appearedInRound: studiableTerm?.appearedInRound ?? undefined,
+          incorrectCount: studiableTerm?.incorrectCount ?? 0,
+        };
+      });
 
     if (studyStarred) {
       flashcardTerms = flashcardTerms.filter((x) =>
-        starredTerms.includes(x.id),
+        starredTermsRef.current.includes(x.id),
       );
     }
 
@@ -64,14 +74,16 @@ export const CreateSortFlashcardsData: React.FC<React.PropsWithChildren> = ({
   }
 
   React.useEffect(() => {
-    const trigger = (data: SetData | FolderData) =>
+    const trigger = (data: SetData | FolderData) => {
+      if (!data.container) return;
       initState(
-        data.container!.cardsRound,
-        data.container!.studiableTerms.filter((x) => x.mode == "Flashcards"),
+        data.container.cardsRound,
+        data.container.studiableTerms.filter((x) => x.mode == "Flashcards"),
         data.terms,
-        termOrder,
-        data.container!.cardsStudyStarred,
+        termOrderRef.current,
+        data.container.cardsStudyStarred,
       );
+    };
 
     queryEventChannel.on("setQueryRefetched", trigger);
     queryEventChannel.on("folderQueryRefetched", trigger);

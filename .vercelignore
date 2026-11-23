@@ -1,1 +1,14 @@
+node_modules
+.git
+.next
+.turbo
+.vercel
+*.tsbuildinfo
+*.log
+.env
+.env.*
+!.env.example
+*.apkg
 apps/cdn
+apps/next/public/uploads
+tests

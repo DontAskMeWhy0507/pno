@@ -196,7 +196,10 @@ export const getHandler = async ({ ctx, input }: GetOptions) => {
   const member = await getClassMember(input.classId, ctx.session.user.id);
   let orgMember: Awaited<ReturnType<typeof getClassOrganizationMember>> = null;
   if (!member) {
-    orgMember = await getClassOrganizationMember(input.id, ctx.session.user.id);
+    orgMember = await getClassOrganizationMember(
+      input.classId,
+      ctx.session.user.id,
+    );
     if (!orgMember) throw new TRPCError({ code: "NOT_FOUND" });
   }
 

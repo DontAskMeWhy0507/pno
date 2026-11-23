@@ -14,6 +14,13 @@ export const validateLeaderboardAccess = (
   },
   userId: string,
 ) => {
+  if (!leaderboard.studySet && !leaderboard.folder) {
+    throw new TRPCError({
+      code: "NOT_FOUND",
+      message: "Entity not found.",
+    });
+  }
+
   if (
     leaderboard.studySet &&
     leaderboard.studySet.visibility === "Private" &&

@@ -29,6 +29,7 @@ const teacherCountSelect =
       members: {
         where: {
           type: "Student",
+          deletedAt: null,
         },
       },
     },

@@ -107,7 +107,7 @@ export const register =
 
     new client.Gauge({
       name: "version_info",
-      help: "Quizlet version info.",
+      help: "Quenti version info.",
       labelNames: ["version", "major", "minor", "patch"],
       aggregator: "first",
       collect() {

@@ -81,8 +81,15 @@ const t = initTRPC
   .context<Awaited<ReturnType<typeof createTRPCContext>>>()
   .create({
     transformer: superjson,
-    errorFormatter({ shape }) {
-      return shape;
+    errorFormatter({ shape, error }) {
+      const isInternal = error.code === "INTERNAL_SERVER_ERROR";
+      return {
+        ...shape,
+        message:
+          isInternal && env.NODE_ENV === "production"
+            ? "An unexpected error occurred. Please try again."
+            : shape.message,
+      };
     },
   });
 
@@ -159,10 +166,13 @@ export const enforceUserIsAuthed = t.middleware(({ ctx, next }) => {
   const ms = now.getTime();
 
   if ((lastSeenAt || 0) < ms - lastSeenUpdateInterval) {
-    void (async () => {
-      await prisma.$executeRaw`UPDATE User SET lastSeenAt = NOW() WHERE id = ${userId};`;
-    })();
+    if (userMap.size > 10_000) userMap.clear();
     userMap.set(userId, ms);
+    void prisma.$executeRaw`UPDATE User SET lastSeenAt = NOW() WHERE id = ${userId};`.catch(
+      (err) => {
+        ctx.req.log?.error("Failed to update user lastSeenAt", { err });
+      },
+    );
   }
 
   return next({
@@ -208,7 +218,7 @@ export const enforceUserIsTeacher = enforceUserIsAuthed.unstable_pipe(
 export const teacherProcedure = protectedProcedure.use(enforceUserIsTeacher);
 
 export const enforceDevMode = t.middleware(({ next }) => {
-  if (env.SERVER_NAME !== undefined) {
+  if (env.NODE_ENV !== "development" || env.SERVER_NAME !== undefined) {
     throw new TRPCError({ code: "FORBIDDEN" });
   }
   return next();

@@ -64,3 +64,5 @@ export const bulkAddCollabTopicsHandler = async ({
     },
   });
 };
+
+export default bulkAddCollabTopicsHandler;

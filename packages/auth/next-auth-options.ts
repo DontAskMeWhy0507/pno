@@ -31,18 +31,24 @@ export const authOptions: NextAuthOptions = {
       return session;
     },
     redirect({ url, baseUrl }) {
-      // Allows relative callback URLs
-      if (url.startsWith("/")) return `${baseUrl}${url}`;
-      // Allows callback URLs on the same domain
-      else if (new URL(url).hostname === new URL(APP_URL).hostname) return url;
+      // Allows relative callback URLs (block protocol-relative //)
+      if (url.startsWith("/") && !url.startsWith("//")) return `${baseUrl}${url}`;
+      try {
+        const parsed = new URL(url);
+        const appUrl = new URL(APP_URL);
+        if (parsed.origin === appUrl.origin) return url;
+      } catch {
+        // Invalid callback URL falls back to baseUrl
+      }
       return baseUrl;
     },
     async signIn({ user }) {
       if (env.ENABLE_EMAIL_WHITELIST === "true") {
         if (
+          !user.email ||
           !(await prisma.whitelistedEmail.findUnique({
             where: {
-              email: user.email!,
+              email: user.email,
             },
           }))
         )

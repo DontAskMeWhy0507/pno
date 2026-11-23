@@ -29,13 +29,16 @@ export const getUserAvatarUrl = async (userId: string) => {
       (key) => !!key,
     ) as string[];
 
-    const timestamps = keys.map((key) => {
-      const timestamp = key.split("/")[2]!.split(".")[0]!;
-      return parseInt(timestamp, 10);
-    });
+    const parsed = keys
+      .map((key) => ({
+        key,
+        ts: Number.parseInt(key.split("/")[2]?.split(".")[0] ?? "", 10),
+      }))
+      .filter((x) => Number.isFinite(x.ts));
 
-    const latest = Math.max(...timestamps);
-    const latestKey = keys[timestamps.indexOf(latest)];
+    if (!parsed.length) return null;
+
+    const latestKey = parsed.reduce((a, b) => (b.ts > a.ts ? b : a)).key;
     const toPrune = keys.filter((key) => key !== latestKey);
 
     if (toPrune.length) {

@@ -19,7 +19,8 @@ export default async function handler(
   req: NextApiRequest,
   res: NextApiResponse,
 ) {
-  if (!IS_PAYMENT_ENABLED) return;
+  if (!IS_PAYMENT_ENABLED)
+    return res.status(503).json({ error: "Payments are currently disabled" });
 
   const session = await getServerAuthSession({ req, res });
 

@@ -60,6 +60,7 @@ export const bulkAddHandler = async ({ ctx, input }: BulkAddOptions) => {
     },
     select: {
       id: true,
+      rank: true,
     },
   });
 };

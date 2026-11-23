@@ -153,6 +153,29 @@ export const createTestStore = (
             starredTerms.includes(t.id),
           );
 
+        const effectiveCount = Math.min(questionCount, initialTerms.length);
+        if (effectiveCount <= 0) {
+          set({
+            settings: {
+              questionCount: 0,
+              questionTypes,
+              answerMode,
+              studyStarred,
+            },
+            allTerms: all,
+            starredTerms,
+            questionCount: 0,
+            questionTypes,
+            answerMode,
+            outline: [],
+            timeline: [],
+            specialCharacters: [],
+            startedAt: new Date(),
+            endedAt: undefined,
+          });
+          return;
+        }
+
         const words =
           answerMode != "Both"
             ? initialTerms.map((x) => word(answerMode, x, "answer"))
@@ -176,32 +199,34 @@ export const createTestStore = (
 
         const typeOrder = Object.values(TestQuestionType);
         let types = typeOrder.filter((t) => questionTypes.includes(t));
+        if (types.length === 0) {
+          types = [TestQuestionType.MultipleChoice];
+        }
 
         const generateOutline = (
-          questionTypes: TestQuestionType[],
+          qTypes: TestQuestionType[],
         ): TestQuestionType[] => {
+          if (qTypes.length === 0) return [];
           let outline: TestQuestionType[] = [];
 
           // Split the questions as evenly as possible based on the question count
-          if (questionCount % questionTypes.length == 0) {
-            for (const type of questionTypes) {
+          if (effectiveCount % qTypes.length == 0) {
+            for (const type of qTypes) {
               outline = outline.concat(
-                Array(questionCount / questionTypes.length).fill(type),
+                Array(effectiveCount / qTypes.length).fill(type),
               );
             }
           } else {
-            const basePerType = Math.floor(
-              questionCount / questionTypes.length,
-            );
-            let remainder = questionCount % questionTypes.length;
+            const basePerType = Math.floor(effectiveCount / qTypes.length);
+            let remainder = effectiveCount % qTypes.length;
 
-            for (const type of questionTypes) {
+            for (const type of qTypes) {
               outline = outline.concat(Array(basePerType).fill(type));
             }
 
             // Insert the remaning questions as evenly as possible between types
             while (remainder > 0) {
-              for (const type of questionTypes) {
+              for (const type of qTypes) {
                 if (remainder == 0) break;
                 const insertionPoint = outline.findLastIndex((t) => t == type);
                 outline.splice(insertionPoint + 1, 0, type);
@@ -215,7 +240,8 @@ export const createTestStore = (
 
         let outline = generateOutline(types);
         if (outline.filter((t) => t == TestQuestionType.Match).length < 2) {
-          types = types.filter((t) => t != TestQuestionType.Match);
+          const nonMatch = types.filter((t) => t != TestQuestionType.Match);
+          types = nonMatch.length > 0 ? nonMatch : [TestQuestionType.MultipleChoice];
           outline = generateOutline(types);
         }
 
@@ -243,7 +269,7 @@ export const createTestStore = (
         // Now if there are match questions with less than 2 terms, we need to merge them with the previous question
         for (let i = consolidated.length - 1; i >= 0; i--) {
           const entry = consolidated[i]!;
-          if (entry.type == TestQuestionType.Match && entry.count < 2) {
+          if (entry.type == TestQuestionType.Match && entry.count < 2 && i > 0) {
             consolidated[i - 1]!.count += entry.count;
             consolidated.splice(i, 1);
           }
@@ -254,26 +280,29 @@ export const createTestStore = (
         for (const { type, count } of consolidated) {
           switch (type) {
             case TestQuestionType.TrueFalse: {
-              const term = pool.pop()!;
-              timeline.push(
-                generateTrueFalseQuestion(term, answerMode, allTerms),
-              );
+              const term = pool.pop();
+              if (term)
+                timeline.push(
+                  generateTrueFalseQuestion(term, answerMode, allTerms),
+                );
               break;
             }
             case TestQuestionType.MultipleChoice: {
-              const term = pool.pop()!;
-              timeline.push(generateMcqQuestion(term, answerMode, allTerms));
+              const term = pool.pop();
+              if (term)
+                timeline.push(generateMcqQuestion(term, answerMode, allTerms));
               break;
             }
             case TestQuestionType.Match: {
               const terms = takeNRandom(pool, count);
               pool = pool.filter((t) => !terms.find((x) => x.id == t.id));
-              timeline.push(generateMatchQuestion(terms, answerMode));
+              if (terms.length)
+                timeline.push(generateMatchQuestion(terms, answerMode));
               break;
             }
             case TestQuestionType.Write: {
-              const term = pool.pop()!;
-              timeline.push(generateWriteQuestion(term, answerMode));
+              const term = pool.pop();
+              if (term) timeline.push(generateWriteQuestion(term, answerMode));
               break;
             }
           }
@@ -281,14 +310,14 @@ export const createTestStore = (
 
         set({
           settings: {
-            questionCount,
+            questionCount: effectiveCount,
             questionTypes,
             answerMode,
             studyStarred,
           },
           allTerms: all,
           starredTerms,
-          questionCount,
+          questionCount: effectiveCount,
           questionTypes,
           answerMode,
           outline: consolidated,
@@ -327,9 +356,11 @@ export const createTestStore = (
       },
       clearAnswer: (index) => {
         set((state) => {
-          const question = state.timeline[index]!;
+          const question = state.timeline[index];
+          if (!question) return {};
           question.answered = false;
-          question.data.answer = undefined;
+          question.data.answer =
+            question.type === TestQuestionType.Match ? [] : undefined;
           return { timeline: [...state.timeline] };
         });
       },
@@ -445,7 +476,7 @@ export const createTestStore = (
                 increment(question.type);
                 answerCorrectly(index);
 
-                if ((data.cortexResponse?.entailment?.score || 1) < 0.7) {
+                if ((data.cortexResponse?.entailment?.score ?? 1) < 0.7) {
                   pushRemark(data.term.id, true, CORRECT_IS_SIMILAR);
                   break;
                 }
@@ -457,11 +488,12 @@ export const createTestStore = (
             }
             case TestQuestionType.Match: {
               const data = question.data as MatchData;
+              const matchAnswers = data.answer ?? [];
 
               const matchRemarks = new Array<{ id: string; remark: string }>();
               // Start with the assumption that all answers are correct if everything is answered
-              let allCorrect = data.answer.length == data.terms.length;
-              for (const { term, zone } of data.answer) {
+              let allCorrect = matchAnswers.length == data.terms.length;
+              for (const { term, zone } of matchAnswers) {
                 if (term == zone) {
                   increment(question.type);
                   matchRemarks.push({ id: zone, remark: getRandom(CORRECT) });

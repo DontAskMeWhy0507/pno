@@ -3,7 +3,10 @@ import { createClient } from "@clickhouse/client";
 import { env } from "@quenti/env/server";
 
 export const CLICKHOUSE_ENABLED =
-  env.CLICKHOUSE_HOST && env.CLICKHOUSE_USER && env.CLICKHOUSE_PASSWORD;
+  env.ENABLE_CLICKHOUSE === "true" &&
+  !!env.CLICKHOUSE_HOST &&
+  !!env.CLICKHOUSE_USER &&
+  !!env.CLICKHOUSE_PASSWORD;
 
 export const clickhouse = CLICKHOUSE_ENABLED
   ? createClient({

@@ -7,10 +7,13 @@ import { getRecentDrafts, getRecentStudySets } from "./study-sets/utils/recent";
 
 export const recentRouter = createTRPCRouter({
   get: protectedProcedure.query(async ({ ctx }) => {
-    const sets = await getRecentStudySets(ctx.prisma, ctx.session!.user.id);
-    const folders = await getRecentFolders(ctx.prisma, ctx.session!.user.id);
-    const drafts = await getRecentDrafts(ctx.prisma, ctx.session!.user.id);
-    const classes = await getBelongingClasses(ctx.session!.user.id);
+    const userId = ctx.session!.user.id;
+    const [sets, folders, drafts, classes] = await Promise.all([
+      getRecentStudySets(ctx.prisma, userId),
+      getRecentFolders(ctx.prisma, userId),
+      getRecentDrafts(ctx.prisma, userId),
+      getBelongingClasses(userId),
+    ]);
     const entities = new Array<SetFolderEntity>();
 
     for (const set of sets) {

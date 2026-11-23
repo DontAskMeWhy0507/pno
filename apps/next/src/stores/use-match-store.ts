@@ -103,6 +103,8 @@ export const createMatchStore = (
     highlightedIndices: [],
   };
 
+  let cleanupTimer: ReturnType<typeof setTimeout> | null = null;
+
   return createStore<MatchState>()(
     subscribeWithSelector((set, get) => ({
       ...DEFAULT_PROPS,
@@ -115,29 +117,26 @@ export const createMatchStore = (
         });
       },
       answerCorrectly(termId) {
-        set((state) => {
-          state.answerCallback();
-          state.roundQuestions.find(
-            (question) => question.id == termId,
-          )!.completed = true;
-          return {
-            roundProgress: state.roundProgress + 1,
-            roundQuestions: state.roundQuestions,
-          };
-        });
+        set((state) => ({
+          roundProgress: state.roundProgress + 1,
+          roundQuestions: state.roundQuestions.map((q) =>
+            q.id === termId ? { ...q, completed: true } : q,
+          ),
+        }));
+        get().answerCallback();
       },
       answerIncorrectly() {
-        set((state) => {
-          state.answerCallback();
-          return {
-            incorrectGuesses: state.incorrectGuesses + 1,
-            roundQuestions: state.roundQuestions,
-          };
-        });
+        set((state) => ({
+          incorrectGuesses: state.incorrectGuesses + 1,
+        }));
       },
       answerCallback() {
         const state = get();
-        if (state.roundProgress === state.termsThisRound - 1) {
+        if (
+          !state.completed &&
+          state.termsThisRound > 0 &&
+          state.roundProgress >= state.termsThisRound
+        ) {
           const summary = {
             endTime: Date.now(),
             termsThisRound: state.termsThisRound,
@@ -153,6 +152,10 @@ export const createMatchStore = (
         }
       },
       nextRound() {
+        if (cleanupTimer) {
+          clearTimeout(cleanupTimer);
+          cleanupTimer = null;
+        }
         set((state) => ({
           roundStartTime: Date.now() + MATCH_SHUFFLE_TIME * 1000,
           roundProgress: 0,
@@ -184,9 +187,11 @@ export const createMatchStore = (
         });
       },
       getIndicesUnder: (index: number, newInfo?: Partial<Rect>) => {
-        const cur = get().terms[index]!;
+        const cur = get().terms[index];
+        if (!cur) return [];
         return get().terms.flatMap((term, i) => {
-          if (i == index || term.completed) return [];
+          if (i == index || term.completed || term.state === "correct")
+            return [];
           if (newInfo) {
             if (areRectanglesOverlapping({ ...cur, ...newInfo }, term)) {
               return [i];
@@ -200,12 +205,12 @@ export const createMatchStore = (
         let x = 0,
           y = 0;
 
+        const maxX = Math.max(0, elem.clientWidth - term.width);
+        const maxY = Math.max(0, elem.clientHeight - term.height);
+
         for (let i = 1; i < MATCH_MAX_OVERLAP_TRIES; i++) {
-          x = pad(
-            Math.random() * (elem.clientWidth - term.width),
-            MATCH_SIDE_WALL_PADDING,
-          );
-          y = Math.random() * (elem.clientHeight - term.height);
+          x = pad(Math.random() * maxX, MATCH_SIDE_WALL_PADDING);
+          y = Math.random() * maxY;
 
           // Avoid spawning on the timer
           if (x < MATCH_TIMER_BOUNDS.x && y < MATCH_TIMER_BOUNDS.y) continue;
@@ -224,21 +229,19 @@ export const createMatchStore = (
         return { x, y };
       },
       validateUnderIndices: (index: number, elem: HTMLDivElement) => {
-        const term = get().terms[index]!;
+        const term = get().terms[index];
+        if (!term || term.completed || term.state === "correct") return false;
         const target = term.id;
-        const targetType =
-          get().terms[index]!.type == "word" ? "definition" : "word";
+        const targetType = term.type == "word" ? "definition" : "word";
 
         const indexes = get().getIndicesUnder(index);
         let correctIndex: number | undefined;
         const incorrects: number[] = [];
-        indexes.forEach((index) => {
-          if (
-            get().terms[index]!.id == target &&
-            get().terms[index]!.type == targetType
-          )
-            correctIndex = index;
-          else incorrects.push(index);
+        indexes.forEach((idx) => {
+          const candidate = get().terms[idx];
+          if (candidate && candidate.id == target && candidate.type == targetType)
+            correctIndex = idx;
+          else incorrects.push(idx);
         });
 
         if (correctIndex != undefined) {
@@ -274,7 +277,9 @@ export const createMatchStore = (
           get().answerIncorrectly();
         }
 
-        setTimeout(() => {
+        if (cleanupTimer) clearTimeout(cleanupTimer);
+        cleanupTimer = setTimeout(() => {
+          cleanupTimer = null;
           set((state) => ({
             highlightedIndices: [],
             terms: state.terms.map((x) => ({

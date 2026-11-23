@@ -28,15 +28,22 @@ export enum RateLimitType {
   Slowmode = "slowmode",
 }
 
+let cachedLimiter:
+  | ((opts: RateLimiterOptions) => Promise<RateLimitResponse> | RateLimitResponse)
+  | null = null;
+
 export const rateLimiter = () => {
+  if (cachedLimiter) return cachedLimiter;
+
   if (!env.UPSTASH_REDIS_REST_URL || !env.UPSTASH_REDIS_REST_TOKEN) {
-    return () =>
+    cachedLimiter = () =>
       ({
         success: true,
         limit: 10,
         remaining: 999,
         reset: 0,
       }) as RateLimitResponse;
+    return cachedLimiter;
   }
 
   const redis = Redis.fromEnv();
@@ -85,23 +92,23 @@ export const rateLimiter = () => {
     }),
   };
 
-  const doRatelimit = async ({
+  cachedLimiter = async ({
     type = RateLimitType.Core,
     identifier,
   }: RateLimiterOptions) => {
     return await limiter[type].limit(identifier);
   };
 
-  return doRatelimit;
+  return cachedLimiter;
 };
 
 export const rateLimitOrThrow = async ({
   type = RateLimitType.Core,
   identifier,
 }: RateLimiterOptions) => {
-  const { remaining } = await rateLimiter()({ type, identifier });
+  const { success } = await rateLimiter()({ type, identifier });
 
-  if (remaining < 0) {
+  if (!success) {
     throw new TRPCError({
       code: "TOO_MANY_REQUESTS",
       message: "too_many_requests",

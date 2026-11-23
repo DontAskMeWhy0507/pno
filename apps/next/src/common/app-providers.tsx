@@ -7,6 +7,9 @@ import { theme } from "@quenti/lib/chakra-theme";
 
 import { ChakraProvider } from "@chakra-ui/provider";
 
+import { ErrorBoundary } from "../components/error-boundary";
+import { ToastWrapper } from "./toast-wrapper";
+
 const HighlightInit = dynamic(
   () => import("@highlight-run/next/client").then((mod) => mod.HighlightInit),
   { ssr: false },
@@ -49,24 +52,28 @@ type AppPropsWithChildren = AppProps & { children: React.ReactNode };
 export const AppProviders = (props: AppPropsWithChildren) => {
   return (
     <ChakraProvider theme={theme}>
-      <TelemetryProvider>
-        <HighlightInit
-          manualStart
-          excludedHostnames={["localhost"]}
-          projectId={env.NEXT_PUBLIC_HIGHLIGHT_PROJECT_ID}
-          tracingOrigins
-          networkRecording={{
-            enabled: true,
-            recordHeadersAndBody: true,
-          }}
-          environment={env.NEXT_PUBLIC_DEPLOYMENT}
-        />
-        <SessionProvider session={props.pageProps.session ?? undefined}>
-          <SessionListener />
-          <EventListeners />
-          {props.children}
-        </SessionProvider>
-      </TelemetryProvider>
+      <ToastWrapper>
+        <ErrorBoundary>
+          <TelemetryProvider>
+            <HighlightInit
+              manualStart
+              excludedHostnames={["localhost"]}
+              projectId={env.NEXT_PUBLIC_HIGHLIGHT_PROJECT_ID}
+              tracingOrigins
+              networkRecording={{
+                enabled: true,
+                recordHeadersAndBody: true,
+              }}
+              environment={env.NEXT_PUBLIC_DEPLOYMENT}
+            />
+            <SessionProvider session={props.pageProps.session ?? undefined}>
+              <SessionListener />
+              <EventListeners />
+              {props.children}
+            </SessionProvider>
+          </TelemetryProvider>
+        </ErrorBoundary>
+      </ToastWrapper>
     </ChakraProvider>
   );
 };

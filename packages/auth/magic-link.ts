@@ -1,12 +1,15 @@
 import { sendMagicLinkEmail } from "@quenti/emails";
+import { env } from "@quenti/env/server";
 
 export const sendVerificationRequest = async (params: {
   identifier: string;
   url: string;
 }) => {
-  console.log("\n=======================================================");
-  console.log(`🔗 [LOCAL AUTH] Magic Login Link for ${params.identifier}:`);
-  console.log(params.url);
-  console.log("=======================================================\n");
+  if (env.NODE_ENV === "development") {
+    console.log("\n=======================================================");
+    console.log(`🔗 [LOCAL AUTH] Magic Login Link for ${params.identifier}:`);
+    console.log(params.url);
+    console.log("=======================================================\n");
+  }
   await sendMagicLinkEmail(params.identifier, params);
 };

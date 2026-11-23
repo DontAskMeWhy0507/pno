@@ -20,6 +20,7 @@ export interface ScheduleConfig {
   minimumEaseFactor: number;      // default: 1300
   hardIntervalMultiplier: number; // default: 1.2
   easyIntervalBonus: number;      // default: 1.3
+  maxIntervalDays: number;        // default: 36500 (100 years)
 }
 
 export const DEFAULT_SCHEDULE_CONFIG: ScheduleConfig = {
@@ -30,6 +31,7 @@ export const DEFAULT_SCHEDULE_CONFIG: ScheduleConfig = {
   minimumEaseFactor: 1300,
   hardIntervalMultiplier: 1.2,
   easyIntervalBonus: 1.3,
+  maxIntervalDays: 36500,
 };
 
 export function calculateNextSchedule(
@@ -38,22 +40,26 @@ export function calculateNextSchedule(
   now: Date = new Date(),
   customConfig?: Partial<ScheduleConfig>
 ): CardScheduleState {
+  if (current.queue === "Suspended") {
+    return current;
+  }
+
   const config: ScheduleConfig = { ...DEFAULT_SCHEDULE_CONFIG, ...customConfig };
   const reps = current.reps + 1;
   const isLearning = current.queue === "New" || current.queue === "Learning" || current.queue === "DayLearn";
 
   if (isLearning) {
     switch (rating) {
-      case 1: { // Again
+      case 1: { // Again (do not penalize ease/lapses for cards not yet graduated)
         const step = 0;
         const minutes = config.learningStepsMinutes[step] ?? 1;
         return {
           queue: "Learning",
           step,
           interval: 0,
-          easeFactor: Math.max(config.minimumEaseFactor, current.easeFactor - 200),
+          easeFactor: current.easeFactor,
           reps,
-          lapses: current.lapses + 1,
+          lapses: current.lapses,
           due: new Date(now.getTime() + minutes * 60 * 1000),
           lastReviewedAt: now,
         };
@@ -119,6 +125,7 @@ export function calculateNextSchedule(
   }
 
   // Card is in Review queue
+  const safeInterval = Math.max(1, current.interval);
   switch (rating) {
     case 1: { // Again
       const step = 0;
@@ -135,7 +142,10 @@ export function calculateNextSchedule(
       };
     }
     case 2: { // Hard
-      const interval = Math.max(current.interval + 1, Math.round(current.interval * config.hardIntervalMultiplier));
+      const interval = Math.min(
+        config.maxIntervalDays,
+        Math.max(safeInterval + 1, Math.round(safeInterval * config.hardIntervalMultiplier)),
+      );
       const easeFactor = Math.max(config.minimumEaseFactor, current.easeFactor - 150);
       return {
         queue: "Review",
@@ -150,7 +160,10 @@ export function calculateNextSchedule(
     }
     case 3: { // Good
       const factor = current.easeFactor / 1000;
-      const interval = Math.max(current.interval + 1, Math.round(current.interval * factor));
+      const interval = Math.min(
+        config.maxIntervalDays,
+        Math.max(safeInterval + 1, Math.round(safeInterval * factor)),
+      );
       return {
         queue: "Review",
         step: 0,
@@ -164,7 +177,10 @@ export function calculateNextSchedule(
     }
     case 4: { // Easy
       const factor = (current.easeFactor / 1000) * config.easyIntervalBonus;
-      const interval = Math.max(current.interval + 1, Math.round(current.interval * factor));
+      const interval = Math.min(
+        config.maxIntervalDays,
+        Math.max(safeInterval + 1, Math.round(safeInterval * factor)),
+      );
       return {
         queue: "Review",
         step: 0,

@@ -22,18 +22,19 @@ export const generateTrueFalseQuestion = (
   answerMode: StudySetAnswerMode,
   allTerms: FacingTerm[],
 ): TestQuestion<TrueFalseData> => {
+  const mode = getAnswerMode(answerMode);
   const evaluation = Math.random() > 0.5;
   const distractor = !evaluation
-    ? getRandom(term.distractors.filter((d) => d.type == answerMode))
+    ? getRandom(term.distractors.filter((d) => d.type == mode))
     : undefined;
 
   return {
     type: TestQuestionType.TrueFalse,
-    answerMode: getAnswerMode(answerMode),
+    answerMode: mode,
     data: {
       term,
       distractor: distractor
-        ? allTerms.find((t) => t.id == distractor.distractingId)!
+        ? allTerms.find((t) => t.id == distractor.distractingId)
         : undefined,
     },
     answered: false,
@@ -50,9 +51,9 @@ export const generateMcqQuestion = (
   const distractors = shuffleArray(
     term.distractors.filter((d) => d.type == mode),
   );
-  const distractorTerms = distractors.map(
-    (d) => alTerms.find((t) => t.id == d.distractingId)!,
-  );
+  const distractorTerms = distractors
+    .map((d) => alTerms.find((t) => t.id == d.distractingId))
+    .filter((t): t is FacingTerm => !!t);
 
   const choices = shuffleArray([term, ...distractorTerms]);
 

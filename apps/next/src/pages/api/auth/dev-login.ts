@@ -3,14 +3,14 @@ import { prisma } from "@quenti/prisma";
 import crypto from "crypto";
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
-  if (process.env.NODE_ENV === "production" && process.env.ENABLE_DEV_LOGIN !== "true") {
-    return res.status(403).json({ error: "Dev login is only enabled in development" });
+  if (process.env.NODE_ENV !== "development") {
+    return res.status(404).end();
   }
 
-  const email = (req.query.email as string) || "tuantrung0705@gmail.com";
-  let user = await prisma.user.findFirst({
-    where: { email },
-  });
+  const email = typeof req.query.email === "string" ? req.query.email.trim() : "";
+  let user = email
+    ? await prisma.user.findUnique({ where: { email } })
+    : await prisma.user.findFirst();
 
   if (!user) {
     user = await prisma.user.findFirst();
@@ -36,7 +36,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     `next-auth.session-token=${sessionToken}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${30 * 24 * 60 * 60}`
   );
 
-  const redirectUrl = (req.query.callbackUrl as string) || "/home";
+  const rawCallback =
+    typeof req.query.callbackUrl === "string" ? req.query.callbackUrl : "/home";
+  const redirectUrl =
+    rawCallback.startsWith("/") && !rawCallback.startsWith("//")
+      ? rawCallback
+      : "/home";
   res.redirect(302, redirectUrl);
   return;
 }

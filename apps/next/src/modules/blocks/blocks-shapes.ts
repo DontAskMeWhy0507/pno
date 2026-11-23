@@ -114,7 +114,12 @@ export function canPlacePiece(
   const numRows = shape.length;
   const numCols = shape[0]?.length || 0;
 
-  if (startRow + numRows > GRID_SIZE || startCol + numCols > GRID_SIZE) {
+  if (
+    startRow < 0 ||
+    startCol < 0 ||
+    startRow + numRows > GRID_SIZE ||
+    startCol + numCols > GRID_SIZE
+  ) {
     return false;
   }
 
