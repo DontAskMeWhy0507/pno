@@ -142,6 +142,43 @@ let config = {
       ],
     },
   ],
+  redirects: async () => [
+    {
+      source: "/features",
+      destination: "/",
+      permanent: false,
+    },
+    {
+      source: "/pricing",
+      destination: "/",
+      permanent: false,
+    },
+    {
+      source: "/solutions",
+      destination: "/",
+      permanent: false,
+    },
+    {
+      source: "/organizations",
+      destination: "/",
+      permanent: false,
+    },
+    {
+      source: "/organizations/:path*",
+      destination: "/",
+      permanent: false,
+    },
+    {
+      source: "/orgs",
+      destination: "/",
+      permanent: false,
+    },
+    {
+      source: "/orgs/:path*",
+      destination: "/",
+      permanent: false,
+    },
+  ],
   rewrites: async () => [
     ...(await getConsoleRewrites()),
     {

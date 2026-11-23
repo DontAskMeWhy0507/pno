@@ -110,17 +110,6 @@ export const MobileUserOptions: React.FC<MobileUserOptionsProps> = ({
         >
           {colorMode == "dark" ? "Light mode" : "Dark mode"}
         </Button>
-        <Button
-          variant="outline"
-          leftIcon={<IconLogout size={18} />}
-          onClick={async () => {
-            await signOut({
-              callbackUrl: "/auth/login",
-            });
-          }}
-        >
-          Sign out
-        </Button>
       </Stack>
     </Stack>
   );

@@ -1,7 +1,5 @@
 import Link from "next/link";
 
-import { SUPPORT_EMAIL } from "@quenti/lib/constants/email";
-
 import {
   Box,
   Button,
@@ -132,12 +130,12 @@ export const NotFoundPage: React.FC<NotFoundPageProps> = ({
             _dark={{
               color: "gray.200",
             }}
-            size="4xl"
+            size={{ base: "2xl", sm: "3xl" }}
             fontWeight={700}
             maxW="xl"
             textAlign="center"
           >
-            Looks like you&apos;ve been ghosted.
+            Không tìm thấy trang này
           </Heading>
           <HStack
             spacing="3"
@@ -172,28 +170,18 @@ export const NotFoundPage: React.FC<NotFoundPageProps> = ({
               rounded="full"
             />
             <Text fontSize="lg" fontWeight={500}>
-              The page you&apos;re looking for doesn&apos;t exist.
+              Trang bạn đang tìm không tồn tại hoặc đã được gỡ bỏ.
             </Text>
           </HStack>
-          <HStack mt={{ base: 0, sm: "8" }}>
-            <Button as={Link} href="/" variant="ghost" colorScheme="gray">
-              Home
+          <HStack mt={{ base: 2, sm: "8" }} spacing="3" flexWrap="wrap" justify="center">
+            <Button as={Link} href="/" colorScheme="blue">
+              Về trang chủ PNO
             </Button>
-            <Button
-              as={Link}
-              href="https://status.quenti.io"
-              variant="ghost"
-              colorScheme="gray"
-            >
-              System status
+            <Button as={Link} href="/home" variant="outline" colorScheme="gray">
+              Quiz
             </Button>
-            <Button
-              as={Link}
-              href={`mailto:${SUPPORT_EMAIL}`}
-              variant="ghost"
-              colorScheme="gray"
-            >
-              Support
+            <Button as={Link} href="/ielts" variant="outline" colorScheme="purple">
+              Thi IELTS
             </Button>
           </HStack>
         </VStack>

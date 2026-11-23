@@ -122,7 +122,6 @@ export const Footer = () => {
             <FooterLink href="/" text="Trang chủ" />
             <FooterLink href="/home" text="Quiz" />
             <FooterLink href="/ielts" text="Thi IELTS" />
-            <FooterLink href="/features" text="Tính năng" />
             <FooterLink href="/privacy" text="Chính sách bảo mật" />
             <FooterLink href="/terms" text="Điều khoản sử dụng" />
           </Flex>

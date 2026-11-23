@@ -12,7 +12,6 @@ import { WithFooter } from "../components/with-footer";
 import { getLayout } from "../layouts/main-layout";
 import { ClassesGrid } from "../modules/home/classes-grid";
 import { EmptyDashboard } from "../modules/home/empty-dashboard";
-import { News } from "../modules/home/news";
 import { SetGrid } from "../modules/home/set-grid";
 
 const Home = () => {
@@ -24,7 +23,7 @@ const Home = () => {
 
   return (
     <AuthedPage>
-      <HeadSeo title="Home" />
+      <HeadSeo title="Quiz" />
       <LazyWrapper>
         <WithFooter>
           <Container maxW="7xl">
@@ -32,7 +31,6 @@ const Home = () => {
               {!isLoading && isEmpty && <EmptyDashboard />}
               <SetGrid />
               <ClassesGrid />
-              <News />
             </Stack>
           </Container>
         </WithFooter>

@@ -93,17 +93,6 @@ export const UserMenu = () => {
         <Link href="/settings" passHref>
           <MenuOption icon={<IconSettings size={18} />} label="Settings" />
         </Link>
-        {me?.orgMembership && (
-          <TeacherOnly>
-            <MenuDivider />
-            <Link href={`/orgs/${me.orgMembership.organization.id}`} passHref>
-              <MenuOption
-                icon={<IconBuildingSkyscraper size={18} />}
-                label={me.orgMembership.organization.name}
-              />
-            </Link>
-          </TeacherOnly>
-        )}
         <MenuDivider />
         <MenuOption
           icon={
@@ -111,15 +100,6 @@ export const UserMenu = () => {
           }
           label={colorMode == "dark" ? "Light mode" : "Dark mode"}
           onClick={toggleColorMode}
-        />
-        <MenuOption
-          icon={<IconLogout size={18} />}
-          label="Sign out"
-          onClick={async () => {
-            await signOut({
-              callbackUrl: "/auth/login",
-            });
-          }}
         />
       </MenuList>
     </Menu>

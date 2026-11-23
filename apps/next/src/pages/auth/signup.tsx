@@ -1,19 +1,12 @@
-import { useRouter } from "next/router";
-
-import { PageWrapper } from "../../common/page-wrapper";
-import { AuthLayout } from "../../components/auth-layout";
+import type { GetServerSideProps } from "next";
 
 export default function Signup() {
-  const router = useRouter();
-
-  return (
-    <AuthLayout
-      mode="signup"
-      onUserExists={(callback) => {
-        void router.push(callback);
-      }}
-    />
-  );
+  return null;
 }
 
-Signup.PageWrapper = PageWrapper;
+export const getServerSideProps: GetServerSideProps = async () => ({
+  redirect: {
+    destination: "/home",
+    permanent: false,
+  },
+});

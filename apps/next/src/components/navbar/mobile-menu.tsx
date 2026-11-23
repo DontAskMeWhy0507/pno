@@ -134,121 +134,75 @@ export const MobileMenu: React.FC<MobileMenuProps> = ({
           >
             Thi IELTS
           </Button>
-          {session?.user && (
-            <Menu
-              boundary="scrollParent"
-              placement="bottom"
-              isOpen={menuOpen}
-              onOpen={() => setMenuOpen(true)}
-              onClose={() => setMenuOpen(false)}
-            >
-              <MenuButton>
-                <Button
-                  w="full"
-                  fontWeight={700}
-                  fontSize="sm"
-                  rightIcon={
-                    <IconChevronDown
-                      style={{
-                        transition: "rotate ease-in-out 200ms",
-                        rotate: menuOpen ? "180deg" : "0deg",
-                      }}
-                    />
-                  }
-                  as="div"
-                >
-                  Create
-                </Button>
-              </MenuButton>
-              <MenuList
-                bg={menuBg}
-                py={0}
-                overflow="hidden"
-                w="calc(100vw - 48px)"
-              >
-                <NextLink href="/create" passHref>
-                  <MenuOption
-                    icon={<IconBooks size={20} />}
-                    label="Study set"
-                    onClick={() => {
-                      onClose();
+          <Menu
+            boundary="scrollParent"
+            placement="bottom"
+            isOpen={menuOpen}
+            onOpen={() => setMenuOpen(true)}
+            onClose={() => setMenuOpen(false)}
+          >
+            <MenuButton>
+              <Button
+                w="full"
+                fontWeight={700}
+                fontSize="sm"
+                rightIcon={
+                  <IconChevronDown
+                    style={{
+                      transition: "rotate ease-in-out 200ms",
+                      rotate: menuOpen ? "180deg" : "0deg",
                     }}
                   />
-                </NextLink>
+                }
+                as="div"
+              >
+                Create
+              </Button>
+            </MenuButton>
+            <MenuList
+              bg={menuBg}
+              py={0}
+              overflow="hidden"
+              w="calc(100vw - 48px)"
+            >
+              <NextLink href="/create" passHref>
                 <MenuOption
-                  icon={<IconCloudDownload size={20} />}
-                  label="Import from Quizlet"
+                  icon={<IconBooks size={20} />}
+                  label="Study set"
                   onClick={() => {
                     onClose();
-                    onImportClick();
                   }}
                 />
-                {onAnkiImportClick && (
-                  <MenuOption
-                    icon={<IconCloudDownload size={20} />}
-                    label="Import from Anki (.apkg)"
-                    onClick={() => {
-                      onClose();
-                      onAnkiImportClick();
-                    }}
-                  />
-                )}
-                <MenuDivider />
+              </NextLink>
+              <MenuOption
+                icon={<IconCloudDownload size={20} />}
+                label="Import from Quizlet"
+                onClick={() => {
+                  onClose();
+                  onImportClick();
+                }}
+              />
+              {onAnkiImportClick && (
                 <MenuOption
-                  icon={<IconFolder size={20} />}
-                  label="Folder"
-                  onClick={onFolderClick}
+                  icon={<IconCloudDownload size={20} />}
+                  label="Import from Anki (.apkg)"
+                  onClick={() => {
+                    onClose();
+                    onAnkiImportClick();
+                  }}
                 />
-                <TeacherOnly>
-                  <MenuOption
-                    icon={<IconSchool size={20} />}
-                    label="Class"
-                    onClick={onClassClick}
-                  />
-                </TeacherOnly>
-              </MenuList>
-            </Menu>
-          )}
-          {status !== "loading" && !session && (
-            <>
-              <Button
-                variant="ghost"
-                colorScheme="gray"
-                as={Link}
-                href={`${WEBSITE_URL}/features`}
-              >
-                Features
-              </Button>
-              <Button
-                variant="ghost"
-                colorScheme="gray"
-                as={Link}
-                href={`${WEBSITE_URL}/features`}
-              >
-                Solutions
-              </Button>
-              <Button
-                variant="ghost"
-                colorScheme="gray"
-                as={Link}
-                href={`${WEBSITE_URL}/pricing`}
-              >
-                Pricing
-              </Button>
-              <Button
-                mt="4"
-                colorScheme="gray"
-                variant="outline"
-                as={Link}
-                href="/auth/login"
-              >
-                Log in
-              </Button>{" "}
-              <Button as={Link} href="/auth/signup">
-                Sign up for free
-              </Button>
-            </>
-          )}
+              )}
+              <MenuDivider />
+              <MenuOption
+                icon={<IconFolder size={20} />}
+                label="Folder"
+                onClick={() => {
+                  onClose();
+                  onFolderClick();
+                }}
+              />
+            </MenuList>
+          </Menu>
         </Stack>
         {session?.user && <MobileUserOptions closeMenu={onClose} />}
       </Stack>
