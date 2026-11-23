@@ -54,9 +54,9 @@ export const BottomBar: FC<BottomBarProps> = ({
   const activeQuestions = (activePart?.questionGroups || []).flatMap(g => g.questions);
 
   return (
-    <footer className="h-11 bg-[#2a2b2e] text-white flex items-center justify-between px-3 select-none text-xs z-20 border-t border-black/40">
+    <footer className="min-h-[44px] sm:h-11 bg-[#2a2b2e] text-white flex items-center justify-between px-2 sm:px-3 py-1 sm:py-0 select-none text-xs z-20 border-t border-black/40 shrink-0">
       {/* Left: Parts list and Active part's question boxes */}
-      <div className="flex items-center space-x-2 overflow-x-auto py-1 scrollbar-none flex-1 mr-4">
+      <div className="flex items-center space-x-2 overflow-x-auto py-1 scrollbar-none flex-1 mr-2 sm:mr-4">
         {parts.map(part => {
           const isActive = part.partNumber === activePartNumber;
           const { answered, total } = getPartProgress(part);

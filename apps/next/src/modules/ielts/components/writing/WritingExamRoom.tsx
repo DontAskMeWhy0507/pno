@@ -31,8 +31,9 @@ export const WritingExamRoom: FC<WritingExamRoomProps> = ({ exam, onBackToHome }
   const [activeTaskNum, setActiveTaskNum] = useState<1 | 2>(savedWriting?.activeTaskNum ?? 1);
   const [task1Text, setTask1Text] = useState(savedWriting?.task1Text ?? '');
   const [task2Text, setTask2Text] = useState(savedWriting?.task2Text ?? '');
-  const [candidateName] = useState('IELTS Candidate');
+  const [candidateName] = useState('PNO Candidate');
   const [showAiCoachModal, setShowAiCoachModal] = useState(false);
+  const [mobilePane, setMobilePane] = useState<'prompt' | 'editor'>('prompt');
 
   // 60 minutes timer
   const [timeRemaining, setTimeRemaining] = useState(savedWriting?.timeRemaining ?? exam.durationMinutes * 60);
@@ -146,10 +147,10 @@ export const WritingExamRoom: FC<WritingExamRoomProps> = ({ exam, onBackToHome }
   };
 
   return (
-    <div className="h-screen w-screen flex flex-col bg-white text-gray-900 font-sans select-auto overflow-hidden">
-      {/* 1. TOP HEADER (Exact match with user's screenshot) */}
-      <header className="h-12 border-b border-gray-200 bg-white px-5 flex items-center justify-between shrink-0">
-        <div className="flex items-center gap-2.5">
+    <div className="h-[100dvh] w-full flex flex-col bg-white text-gray-900 font-sans select-auto overflow-hidden">
+      {/* 1. TOP HEADER (Responsive for PC & Mobile) */}
+      <header className="min-h-12 py-1.5 sm:py-0 sm:h-12 border-b border-gray-200 bg-white px-2.5 sm:px-5 flex items-center justify-between gap-2 shrink-0">
+        <div className="flex items-center gap-2 min-w-0">
           <button
             onClick={() => {
               saveWritingProgress(exam.id, {
@@ -164,21 +165,21 @@ export const WritingExamRoom: FC<WritingExamRoomProps> = ({ exam, onBackToHome }
                 onBackToHome();
               }
             }}
-            className="text-gray-500 hover:text-gray-800 p-1 rounded hover:bg-gray-100 transition mr-1"
+            className="text-gray-500 hover:text-gray-800 p-1.5 rounded hover:bg-gray-100 transition mr-1 shrink-0"
             title="Return to Home (Draft is auto-saved)"
           >
             <ArrowLeft className="w-4 h-4" />
           </button>
 
-          {/* Candidate avatar matching screenshot */}
-          <div className="w-5 h-5 rounded-full bg-red-600 flex items-center justify-center text-white text-[10px] font-bold">
-            <span className="leading-none">oo</span>
+          {/* PNO Badge */}
+          <div className="px-2 h-6 rounded bg-blue-600 flex items-center justify-center text-white text-[10px] font-extrabold tracking-wider shrink-0">
+            PNO
           </div>
-          <span className="text-sm font-semibold text-gray-800">{candidateName}</span>
+          <span className="text-xs sm:text-sm font-semibold text-gray-800 truncate max-w-[110px] sm:max-w-none">{candidateName}</span>
 
           {/* Live Autosave Indicator */}
           <span
-            className="hidden sm:inline-flex items-center gap-1 text-[10px] font-medium text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200 ml-2"
+            className="hidden md:inline-flex items-center gap-1 text-[10px] font-medium text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200 ml-2 shrink-0"
             title="Your essay draft is automatically saved in your browser"
           >
             <CheckCircle2 className="w-3 h-3 text-emerald-600" />
@@ -187,22 +188,23 @@ export const WritingExamRoom: FC<WritingExamRoomProps> = ({ exam, onBackToHome }
         </div>
 
         {/* Timer & Hide button & AI Prompt Button */}
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-1.5 sm:gap-3 shrink-0">
           <button
             onClick={() => setShowAiCoachModal(true)}
-            className="flex items-center gap-1.5 px-3 py-1 text-xs font-semibold text-slate-700 bg-white hover:bg-slate-50 border border-slate-200 rounded-lg shadow-2xs transition"
+            className="flex items-center gap-1 px-2 sm:px-3 py-1 text-xs font-semibold text-slate-700 bg-white hover:bg-slate-50 border border-slate-200 rounded-lg shadow-2xs transition"
             title="Generate personalized AI coaching prompt"
           >
-            <Sparkles className="w-3.5 h-3.5 text-blue-600" />
-            <span>AI Coaching Prompt</span>
+            <Sparkles className="w-3.5 h-3.5 text-blue-600 shrink-0" />
+            <span className="hidden sm:inline">AI Coaching Prompt</span>
+            <span className="sm:hidden">AI</span>
           </button>
 
           {!isTimeHidden ? (
-            <span className="font-mono text-base font-bold text-gray-900 tracking-wider">
+            <span className="font-mono text-sm sm:text-base font-bold text-gray-900 tracking-wider">
               {formatTime(timeRemaining)}
             </span>
           ) : (
-            <span className="text-xs text-gray-400 italic">Time hidden</span>
+            <span className="text-xs text-gray-400 italic">Hidden</span>
           )}
           <button
             onClick={() => setIsTimeHidden(!isTimeHidden)}
@@ -213,10 +215,40 @@ export const WritingExamRoom: FC<WritingExamRoomProps> = ({ exam, onBackToHome }
         </div>
       </header>
 
+      {/* Mobile Tab Switcher (< md) */}
+      <div className="flex md:hidden items-center bg-slate-100 border-b border-gray-200 px-2 py-1.5 gap-1.5 shrink-0">
+        <button
+          type="button"
+          onClick={() => setMobilePane('prompt')}
+          className={`flex-1 py-2 px-3 rounded-lg text-xs font-bold transition ${
+            mobilePane === 'prompt'
+              ? 'bg-white text-blue-700 shadow-xs border border-blue-200'
+              : 'text-slate-600 hover:text-slate-900'
+          }`}
+        >
+          Đề bài &amp; Biểu đồ
+        </button>
+        <button
+          type="button"
+          onClick={() => setMobilePane('editor')}
+          className={`flex-1 py-2 px-3 rounded-lg text-xs font-bold transition ${
+            mobilePane === 'editor'
+              ? 'bg-white text-blue-700 shadow-xs border border-blue-200'
+              : 'text-slate-600 hover:text-slate-900'
+          }`}
+        >
+          Bài viết ({currentWords} từ)
+        </button>
+      </div>
+
       {/* 2. MAIN SPLIT AREA */}
       <div className="flex-1 flex overflow-hidden">
         {/* LEFT PANE: Task prompt, instructions and Visual Chart */}
-        <div className="w-1/2 h-full border-r border-gray-300 overflow-y-auto p-6 bg-white space-y-4">
+        <div
+          className={`${
+            mobilePane === 'prompt' ? 'block w-full' : 'hidden'
+          } md:block md:w-1/2 h-full md:border-r border-gray-300 overflow-y-auto p-4 sm:p-6 bg-white space-y-4`}
+        >
           {/* Top warning instruction matching screenshot */}
           <div className="border-l-2 border-red-500 pl-2 text-xs italic text-gray-700">
             {activeTaskNum === 1
@@ -483,9 +515,13 @@ export const WritingExamRoom: FC<WritingExamRoomProps> = ({ exam, onBackToHome }
         </div>
 
         {/* RIGHT PANE: Toolbar, Textarea and Word count */}
-        <div className="w-1/2 h-full flex flex-col bg-white">
+        <div
+          className={`${
+            mobilePane === 'editor' ? 'flex w-full' : 'hidden'
+          } md:flex md:w-1/2 h-full flex-col bg-white`}
+        >
           {/* Mini Toolbar matching screenshot icons */}
-          <div className="h-10 border-b border-gray-200 px-4 flex items-center gap-3 text-gray-400 bg-white select-none">
+          <div className="h-10 border-b border-gray-200 px-4 flex items-center gap-3 text-gray-400 bg-white select-none shrink-0">
             <button
               onClick={handleCut}
               className="p-1 hover:text-gray-700 hover:bg-gray-100 rounded transition"
@@ -517,7 +553,7 @@ export const WritingExamRoom: FC<WritingExamRoomProps> = ({ exam, onBackToHome }
           </div>
 
           {/* Textarea */}
-          <div className="flex-1 p-4 relative">
+          <div className="flex-1 p-3 sm:p-4 relative">
             <textarea
               ref={textareaRef}
               value={currentText}
@@ -529,7 +565,7 @@ export const WritingExamRoom: FC<WritingExamRoomProps> = ({ exam, onBackToHome }
           </div>
 
           {/* Bottom Word Count indicator */}
-          <div className="h-8 border-t border-gray-200 px-4 flex items-center justify-end bg-white">
+          <div className="h-8 border-t border-gray-200 px-4 flex items-center justify-end bg-white shrink-0">
             <span
               className={`text-xs ${
                 currentWords >= minWords ? 'text-emerald-600 font-semibold' : 'text-amber-600'
@@ -541,56 +577,59 @@ export const WritingExamRoom: FC<WritingExamRoomProps> = ({ exam, onBackToHome }
         </div>
       </div>
 
-      {/* 3. BOTTOM BAR (Exact match with user's screenshot) */}
-      <footer className="h-12 border-t border-gray-200 bg-slate-50 px-5 flex items-center justify-between shrink-0">
+      {/* 3. BOTTOM BAR (Responsive for PC & Mobile) */}
+      <footer className="min-h-12 py-2 sm:py-0 sm:h-12 border-t border-gray-200 bg-slate-50 px-3 sm:px-5 flex flex-wrap items-center justify-between gap-2 shrink-0">
         {/* Left Task Tabs */}
         <div className="flex items-center gap-1.5">
           <button
             onClick={() => setActiveTaskNum(1)}
-            className={`px-4 py-1.5 rounded text-xs font-bold transition ${
+            className={`px-2.5 sm:px-4 py-1.5 rounded text-xs font-bold transition ${
               activeTaskNum === 1
                 ? 'bg-blue-600 text-white shadow-xs'
                 : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-100'
             }`}
           >
-            Task 1 {task1Words > 0 && `(${task1Words} từ)`}
+            Task 1 {task1Words > 0 && `(${task1Words})`}
           </button>
           <button
             onClick={() => setActiveTaskNum(2)}
-            className={`px-4 py-1.5 rounded text-xs font-bold transition ${
+            className={`px-2.5 sm:px-4 py-1.5 rounded text-xs font-bold transition ${
               activeTaskNum === 2
                 ? 'bg-blue-600 text-white shadow-xs'
                 : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-100'
             }`}
           >
-            Task 2 {task2Words > 0 && `(${task2Words} từ)`}
+            Task 2 {task2Words > 0 && `(${task2Words})`}
           </button>
         </div>
 
-        {/* Right Action Buttons matching screenshot */}
-        <div className="flex items-center gap-2.5">
+        {/* Right Action Buttons */}
+        <div className="flex items-center gap-1.5 sm:gap-2.5">
           <button
             onClick={() => setShowNotesModal(true)}
-            className="px-3 py-1 text-xs font-semibold text-gray-700 hover:text-gray-900 bg-white border border-gray-300 rounded hover:bg-gray-100 transition flex items-center gap-1"
+            className="px-2 sm:px-3 py-1.5 sm:py-1 text-xs font-semibold text-gray-700 hover:text-gray-900 bg-white border border-gray-300 rounded hover:bg-gray-100 transition flex items-center gap-1"
+            title="Ghi chú"
           >
             <FileText className="w-3.5 h-3.5" />
-            <span>Ghi chú</span>
+            <span className="hidden sm:inline">Ghi chú</span>
           </button>
 
           <button
             onClick={() => setShowReviewModal(true)}
-            className="px-3 py-1 text-xs font-semibold text-gray-700 hover:text-gray-900 bg-white border border-gray-300 rounded hover:bg-gray-100 transition flex items-center gap-1"
+            className="px-2 sm:px-3 py-1.5 sm:py-1 text-xs font-semibold text-gray-700 hover:text-gray-900 bg-white border border-gray-300 rounded hover:bg-gray-100 transition flex items-center gap-1"
+            title="Xem lại bài làm"
           >
             <Eye className="w-3.5 h-3.5" />
-            <span>Xem lại bài làm</span>
+            <span className="hidden md:inline">Xem lại bài làm</span>
           </button>
 
           <button
             onClick={() => setShowGuideModal(true)}
-            className="px-3 py-1 text-xs font-semibold text-gray-700 hover:text-gray-900 bg-white border border-gray-300 rounded hover:bg-gray-100 transition flex items-center gap-1"
+            className="px-2 sm:px-3 py-1.5 sm:py-1 text-xs font-semibold text-gray-700 hover:text-gray-900 bg-white border border-gray-300 rounded hover:bg-gray-100 transition flex items-center gap-1"
+            title="Hướng dẫn"
           >
             <HelpCircle className="w-3.5 h-3.5" />
-            <span>Hướng dẫn</span>
+            <span className="hidden md:inline">Hướng dẫn</span>
           </button>
 
           <button
@@ -598,7 +637,7 @@ export const WritingExamRoom: FC<WritingExamRoomProps> = ({ exam, onBackToHome }
               clearWritingProgress(exam.id);
               setIsSubmitted(true);
             }}
-            className="px-4 py-1.5 text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 rounded transition shadow-xs flex items-center gap-1.5"
+            className="px-3 sm:px-4 py-1.5 text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 rounded transition shadow-xs flex items-center gap-1.5"
           >
             <CheckCircle2 className="w-4 h-4" />
             <span>Nộp bài</span>

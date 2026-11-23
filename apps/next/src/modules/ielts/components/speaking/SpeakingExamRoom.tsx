@@ -24,6 +24,7 @@ export const SpeakingExamRoom: FC<SpeakingExamRoomProps> = ({ exam, onBackToHome
   const [activePart, setActivePart] = useState<1 | 2 | 3>(1);
   const [selectedQuestionIndex, setSelectedQuestionIndex] = useState<number>(0);
   const [showAiCoachModal, setShowAiCoachModal] = useState(false);
+  const [mobilePane, setMobilePane] = useState<'question' | 'recorder'>('question');
 
   // Voice Recording state
   const [isRecording, setIsRecording] = useState(false);
@@ -216,10 +217,10 @@ export const SpeakingExamRoom: FC<SpeakingExamRoomProps> = ({ exam, onBackToHome
   };
 
   return (
-    <div className="h-screen w-screen flex flex-col bg-white text-slate-900 font-sans select-auto overflow-hidden">
+    <div className="h-[100dvh] w-full flex flex-col bg-white text-slate-900 font-sans select-auto overflow-hidden">
       {/* 1. TOP HEADER */}
-      <header className="h-12 border-b border-slate-200 bg-white px-5 flex items-center justify-between shrink-0 shadow-2xs">
-        <div className="flex items-center gap-3">
+      <header className="min-h-12 py-2 sm:py-0 sm:h-12 border-b border-slate-200 bg-white px-3 sm:px-5 flex flex-wrap items-center justify-between gap-2 shrink-0 shadow-2xs">
+        <div className="flex items-center gap-2 sm:gap-3 min-w-0">
           <button
             onClick={() => {
               if (window.confirm('Are you sure you want to leave the speaking room? Your in-progress recordings will be discarded.')) {
@@ -227,36 +228,37 @@ export const SpeakingExamRoom: FC<SpeakingExamRoomProps> = ({ exam, onBackToHome
                 onBackToHome();
               }
             }}
-            className="text-slate-500 hover:text-slate-800 p-1.5 rounded-lg hover:bg-slate-100 transition"
+            className="text-slate-500 hover:text-slate-800 p-1.5 rounded-lg hover:bg-slate-100 transition shrink-0"
             title="Back to Home"
           >
             <ArrowLeft className="w-4 h-4" />
           </button>
 
-          <div className="flex items-center gap-2">
-            <span className="text-sm font-bold text-slate-900">{exam.title}</span>
-            <span className="text-[10px] font-semibold bg-slate-100 text-slate-700 border border-slate-200 px-2 py-0.5 rounded">
+          <div className="flex items-center gap-2 min-w-0">
+            <span className="text-xs sm:text-sm font-bold text-slate-900 truncate max-w-[160px] sm:max-w-none">{exam.title}</span>
+            <span className="hidden md:inline text-[10px] font-semibold bg-slate-100 text-slate-700 border border-slate-200 px-2 py-0.5 rounded shrink-0">
               Speaking Room
             </span>
           </div>
         </div>
 
         {/* Actions & Part Switcher */}
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2 sm:gap-3 shrink-0">
           <button
             onClick={() => setShowAiCoachModal(true)}
-            className="flex items-center gap-1.5 px-3 py-1 text-xs font-semibold text-slate-700 bg-white hover:bg-slate-50 border border-slate-200 rounded-lg shadow-2xs transition"
+            className="flex items-center gap-1 px-2 sm:px-3 py-1 text-xs font-semibold text-slate-700 bg-white hover:bg-slate-50 border border-slate-200 rounded-lg shadow-2xs transition"
             title="Generate personalized AI coaching prompt"
           >
-            <Sparkles className="w-3.5 h-3.5 text-blue-600" />
-            <span>AI Coaching Prompt</span>
+            <Sparkles className="w-3.5 h-3.5 text-blue-600 shrink-0" />
+            <span className="hidden sm:inline">AI Coaching Prompt</span>
+            <span className="sm:hidden">AI</span>
           </button>
 
           {/* Part Switcher (Segmented Control) */}
-          <div className="flex items-center gap-1 bg-slate-100 p-0.5 rounded-lg border border-slate-200">
+          <div className="flex items-center gap-0.5 sm:gap-1 bg-slate-100 p-0.5 rounded-lg border border-slate-200">
             <button
               onClick={() => handleSelectPart(1)}
-              className={`px-3 py-1 text-xs font-semibold rounded-md transition ${
+              className={`px-2 sm:px-3 py-1 text-xs font-semibold rounded-md transition ${
                 activePart === 1
                   ? 'bg-white text-slate-900 shadow-xs'
                   : 'text-slate-600 hover:text-slate-900'
@@ -266,7 +268,7 @@ export const SpeakingExamRoom: FC<SpeakingExamRoomProps> = ({ exam, onBackToHome
             </button>
             <button
               onClick={() => handleSelectPart(2)}
-              className={`px-3 py-1 text-xs font-semibold rounded-md transition ${
+              className={`px-2 sm:px-3 py-1 text-xs font-semibold rounded-md transition ${
                 activePart === 2
                   ? 'bg-white text-slate-900 shadow-xs'
                   : 'text-slate-600 hover:text-slate-900'
@@ -276,7 +278,7 @@ export const SpeakingExamRoom: FC<SpeakingExamRoomProps> = ({ exam, onBackToHome
             </button>
             <button
               onClick={() => handleSelectPart(3)}
-              className={`px-3 py-1 text-xs font-semibold rounded-md transition ${
+              className={`px-2 sm:px-3 py-1 text-xs font-semibold rounded-md transition ${
                 activePart === 3
                   ? 'bg-white text-slate-900 shadow-xs'
                   : 'text-slate-600 hover:text-slate-900'
@@ -288,10 +290,41 @@ export const SpeakingExamRoom: FC<SpeakingExamRoomProps> = ({ exam, onBackToHome
         </div>
       </header>
 
+      {/* Mobile Tab Switcher (< md) */}
+      <div className="flex md:hidden items-center bg-slate-100 border-b border-slate-200 px-2 py-1.5 gap-1.5 shrink-0">
+        <button
+          type="button"
+          onClick={() => setMobilePane('question')}
+          className={`flex-1 py-2 px-3 rounded-lg text-xs font-bold transition ${
+            mobilePane === 'question'
+              ? 'bg-white text-blue-700 shadow-xs border border-blue-200'
+              : 'text-slate-600 hover:text-slate-900'
+          }`}
+        >
+          Câu hỏi &amp; Bài mẫu
+        </button>
+        <button
+          type="button"
+          onClick={() => setMobilePane('recorder')}
+          className={`flex-1 py-2 px-3 rounded-lg text-xs font-bold transition flex items-center justify-center gap-1.5 ${
+            mobilePane === 'recorder'
+              ? 'bg-white text-blue-700 shadow-xs border border-blue-200'
+              : 'text-slate-600 hover:text-slate-900'
+          }`}
+        >
+          {isRecording && <span className="w-2 h-2 rounded-full bg-rose-600 animate-pulse" />}
+          <span>Thu âm &amp; Transcript</span>
+        </button>
+      </div>
+
       {/* 2. MAIN WORKSPACE */}
       <div className="flex-1 flex overflow-hidden">
         {/* LEFT COLUMN: Questions list & Prompt Details */}
-        <div className="w-1/2 h-full border-r border-slate-200 overflow-y-auto p-6 space-y-5 bg-white">
+        <div
+          className={`${
+            mobilePane === 'question' ? 'block w-full' : 'hidden'
+          } md:block md:w-1/2 h-full md:border-r border-slate-200 overflow-y-auto p-4 sm:p-6 space-y-5 bg-white`}
+        >
           {/* Question selection pills if multiple */}
           {currentQuestions.length > 1 && (
             <div className="flex items-center gap-2 pb-2 border-b border-slate-100 overflow-x-auto">
@@ -455,7 +488,11 @@ export const SpeakingExamRoom: FC<SpeakingExamRoomProps> = ({ exam, onBackToHome
         </div>
 
         {/* RIGHT COLUMN: Voice Recording & Speech-to-Text Transcript */}
-        <div className="w-1/2 h-full flex flex-col bg-slate-50/50 p-6 space-y-5 overflow-y-auto">
+        <div
+          className={`${
+            mobilePane === 'recorder' ? 'flex w-full' : 'hidden'
+          } md:flex md:w-1/2 h-full flex-col bg-slate-50/50 p-4 sm:p-6 space-y-5 overflow-y-auto`}
+        >
           {/* Recorder Control Card */}
           <div className="bg-white border border-slate-200 rounded-xl p-6 flex flex-col items-center justify-center space-y-4 shadow-2xs text-center">
             <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">

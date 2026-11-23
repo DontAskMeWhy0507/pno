@@ -94,7 +94,7 @@ export const ClassLayout: React.FC<
   const getTitle = () => {
     if (name) return `${name}${data?.name ? ` - ${data.name}` : ""}`;
     if (data?.name) return data.name;
-    return "Quenti";
+    return "PNO";
   };
 
   return (

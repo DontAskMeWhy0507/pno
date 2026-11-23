@@ -10,4 +10,4 @@ node_modules
 *.apkg
 apps/cdn
 apps/next/public/uploads
-tests
+/tests

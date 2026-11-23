@@ -26,10 +26,9 @@ const Pricing = () => {
               Pricing
             </Heading>
             <Text>
-              This website is a personal, self-hosted deployment of Quenti,
-              the open-source study platform. It is completely free to use:
-              there are no subscriptions and no paid plans are sold on this
-              site.
+              PNO is a personal study and IELTS practice platform operated by
+              Vu Tien Tuan Trung. It is completely free to use: there are no
+              subscriptions and no paid plans are sold on this site.
             </Text>
             <UnorderedList spacing={2} pl={4}>
               <ListItem>Study sets and all study modes — free</ListItem>

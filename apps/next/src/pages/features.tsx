@@ -26,8 +26,8 @@ const Features = () => {
               Features
             </Heading>
             <Text>
-              Quenti is an open-source study platform. This personal instance
-              includes:
+              PNO is a personal study and IELTS practice platform operated by
+              Vu Tien Tuan Trung, including:
             </Text>
             <UnorderedList spacing={2} pl={4}>
               <ListItem>

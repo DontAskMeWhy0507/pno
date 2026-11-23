@@ -1,7 +1,4 @@
 import { FrameLogo, Link } from "@quenti/components";
-import { GithubIcon, XIcon } from "@quenti/components/icons";
-import { SUPPORT_EMAIL } from "@quenti/lib/constants/email";
-import { WEBSITE_URL } from "@quenti/lib/constants/url";
 
 import {
   Box,
@@ -44,9 +41,14 @@ export const Footer = () => {
       borderTop="1px"
       borderTopColor={useColorModeValue("gray.200", "gray.750")}
     >
-      <Container maxW="7xl" py="10">
-        <Stack spacing="8">
-          <Flex justifyContent="space-between" alignItems="center">
+      <Container maxW="7xl" py={{ base: "8", md: "10" }}>
+        <Stack spacing="6">
+          <Flex
+            justifyContent="space-between"
+            alignItems="center"
+            flexWrap="wrap"
+            gap="4"
+          >
             <HStack spacing="3">
               <Link href="/">
                 <HStack>
@@ -64,7 +66,7 @@ export const Footer = () => {
                 }}
               >
                 <IconCopyright size={12} />
-                <Text fontSize="sm">2024</Text>
+                <Text fontSize="sm">2026 PNO</Text>
               </HStack>
               <Box
                 color="gray.300"
@@ -108,68 +110,25 @@ export const Footer = () => {
                   </HStack>
                 </Button>
               </Authed>
-              <Box display={{ base: "none", lg: "inherit" }}>
-                <ThemeSwitcher />
-              </Box>
+              <ThemeSwitcher />
             </HStack>
           </Flex>
-          <HStack
-            justifyContent="space-between"
-            w="full"
-            display={{
-              base: "grid",
-              lg: "flex",
-            }}
-            gridTemplateColumns={{ base: "1fr 1fr", md: "1fr 1fr 1fr" }}
-          >
-            <Box display={{ base: "none", lg: "inherit" }}>
-              <SocialLinksContainer />
-            </Box>
-            <FooterLink href={WEBSITE_URL} text="Home" />
-            <FooterLink href={`${WEBSITE_URL}/pricing`} text="Pricing" />
-            <FooterLink
-              href="https://github.com/quenti-io/quenti"
-              text="Open source"
-            />
-            <FooterLink href="https://status.quenti.io" text="Status" />
-            <FooterLink
-              href={`${WEBSITE_URL}/organizations`}
-              text="Organizations"
-            />
-            <FooterLink
-              href={`mailto:${SUPPORT_EMAIL}`}
-              text="Contact support"
-            />
-            <FooterLink href={`${WEBSITE_URL}/privacy`} text="Privacy Policy" />
-            <FooterLink href={`${WEBSITE_URL}/terms`} text="Terms of Service" />
-            <FooterLink
-              href="https://github.com/quenti-io/quenti/blob/main/LICENSE"
-              text="License"
-            />
-          </HStack>
           <Flex
-            display={{ base: "inherit", lg: "none" }}
-            justifyContent="space-between"
+            w="full"
+            gap={{ base: "4", md: "8" }}
+            flexWrap="wrap"
+            alignItems="center"
           >
-            <SocialLinksContainer />
-            <ThemeSwitcher />
+            <FooterLink href="/" text="Trang chủ" />
+            <FooterLink href="/home" text="Quiz" />
+            <FooterLink href="/ielts" text="Thi IELTS" />
+            <FooterLink href="/features" text="Tính năng" />
+            <FooterLink href="/privacy" text="Chính sách bảo mật" />
+            <FooterLink href="/terms" text="Điều khoản sử dụng" />
           </Flex>
         </Stack>
       </Container>
     </Container>
-  );
-};
-
-const SocialLinksContainer = () => {
-  return (
-    <HStack spacing="3">
-      <SocialLink href="https://github.com/quenti-io">
-        <GithubIcon w="4" h="4" />
-      </SocialLink>
-      <SocialLink href="https://twitter.com/quentiapp">
-        <XIcon w="4" h="4" />
-      </SocialLink>
-    </HStack>
   );
 };
 
@@ -217,29 +176,6 @@ interface FooterLinkProps {
   href: string;
   text: string;
 }
-
-const SocialLink: React.FC<React.PropsWithChildren<{ href: string }>> = ({
-  children,
-  href,
-}) => {
-  return (
-    <Link
-      color="gray.500"
-      _hover={{
-        color: "gray.900",
-      }}
-      _dark={{
-        _hover: {
-          color: "gray.50",
-        },
-      }}
-      transition="color 0.15s ease-in-out"
-      href={href}
-    >
-      {children}
-    </Link>
-  );
-};
 
 const FooterLink: React.FC<FooterLinkProps> = ({ href, text }) => {
   return (

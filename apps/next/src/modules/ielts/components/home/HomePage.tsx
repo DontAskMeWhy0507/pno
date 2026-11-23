@@ -548,15 +548,15 @@ export const HomePage: FC<HomePageProps> = ({
   return (
     <div className="flex-1 bg-transparent text-slate-800 dark:text-gray-100 flex flex-col font-sans select-auto">
       {/* 1. PNO IELTS SECTION HEADER (Unified with PNO Main Navbar) */}
-      <header className="px-6 py-5 border-b border-slate-200/80 dark:border-gray-800 bg-white/80 dark:bg-gray-900/80 backdrop-blur-md sticky top-0 z-20 shadow-2xs">
-        <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-4">
+      <header className="px-4 sm:px-6 py-4 sm:py-5 border-b border-slate-200/80 dark:border-gray-800 bg-white/80 dark:bg-gray-900/80 backdrop-blur-md sticky top-0 z-20 shadow-2xs">
+        <div className="max-w-7xl mx-auto flex flex-col lg:flex-row lg:items-center justify-between gap-3 sm:gap-4">
           {/* Brand Logo & Title */}
           <div className="flex items-center gap-3">
             <div className="flex items-center gap-2.5">
-              <span className="text-xl font-extrabold text-slate-900 dark:text-white tracking-tight font-display">
+              <span className="text-lg sm:text-xl font-extrabold text-slate-900 dark:text-white tracking-tight font-display">
                 PNO IELTS
               </span>
-              <span className="text-xs font-bold px-2.5 py-0.5 rounded-full bg-blue-600 text-white tracking-wide uppercase">
+              <span className="text-[11px] sm:text-xs font-bold px-2.5 py-0.5 rounded-full bg-blue-600 text-white tracking-wide uppercase">
                 4 Skills
               </span>
             </div>
@@ -567,8 +567,8 @@ export const HomePage: FC<HomePageProps> = ({
           </div>
 
           {/* Search bar & Action buttons in semantic navigation landmark */}
-          <nav aria-label="Quick Actions" className="flex items-center gap-2.5">
-            <div className="relative w-60">
+          <nav aria-label="Quick Actions" className="flex flex-wrap items-center gap-2 sm:gap-2.5 w-full lg:w-auto">
+            <div className="relative flex-1 min-w-[160px] sm:flex-none sm:w-56">
               <label htmlFor="test-search-input" className="sr-only">
                 Search practice tests
               </label>
@@ -587,19 +587,19 @@ export const HomePage: FC<HomePageProps> = ({
             <button
               type="button"
               onClick={() => setShowNewCollectionModal(true)}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-slate-700 bg-white hover:bg-slate-50 border border-slate-200 rounded-lg transition shadow-2xs focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-1"
+              className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 text-xs font-medium text-slate-700 bg-white hover:bg-slate-50 border border-slate-200 rounded-lg transition shadow-2xs focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-1 shrink-0"
               title="Create a new collection folder"
               aria-label="Create new collection folder"
             >
               <FolderPlus className="w-3.5 h-3.5 text-slate-500" aria-hidden="true" />
-              <span>+ Collection</span>
+              <span className="hidden xs:inline sm:inline">+ Collection</span>
             </button>
 
             {/* Test Manager Button (Secondary) */}
             <button
               type="button"
               onClick={onOpenTestManager}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-slate-700 bg-white hover:bg-slate-50 border border-slate-200 rounded-lg transition shadow-2xs focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-1"
+              className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 text-xs font-medium text-slate-700 bg-white hover:bg-slate-50 border border-slate-200 rounded-lg transition shadow-2xs focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-1 shrink-0"
               title="Manage all tests: Browse by collections, Edit, Delete, Export JSON"
               aria-label="Open Test Bank manager"
             >
@@ -611,7 +611,7 @@ export const HomePage: FC<HomePageProps> = ({
             <button
               type="button"
               onClick={() => onOpenSmartImport(undefined, activeTab)}
-              className="flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 active:bg-blue-800 rounded-lg transition shadow-xs focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-1"
+              className="flex items-center gap-1.5 px-3 sm:px-3.5 py-1.5 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 active:bg-blue-800 rounded-lg transition shadow-xs focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-1 shrink-0"
               title="Add a new practice test across any of the 4 IELTS skills"
               aria-label="Add a new practice test"
             >
@@ -623,7 +623,7 @@ export const HomePage: FC<HomePageProps> = ({
       </header>
 
       {/* 2. MAIN WORKSPACE CONTAINER */}
-      <main className="flex-1 max-w-7xl mx-auto w-full px-6 py-6 space-y-6">
+      <main className="flex-1 max-w-7xl mx-auto w-full px-4 sm:px-6 py-5 sm:py-6 space-y-5 sm:space-y-6">
 
         {/* In-Progress Banner: Prominently displays any test just exited / active */}
         <InProgressBanner
@@ -635,11 +635,11 @@ export const HomePage: FC<HomePageProps> = ({
         />
 
         {/* Unified Category Tabs (Accessible Segmented Control) */}
-        <nav aria-label="IELTS Skills Navigation">
+        <nav aria-label="IELTS Skills Navigation" className="w-full overflow-x-auto pb-1">
           <div
             role="tablist"
             aria-label="IELTS Skills"
-            className="flex items-center gap-1 p-1 bg-slate-200/70 rounded-xl w-fit border border-slate-200/80"
+            className="inline-flex items-center gap-1 p-1 bg-slate-200/70 dark:bg-gray-800 rounded-xl w-max min-w-full sm:min-w-0 sm:w-fit border border-slate-200/80 dark:border-gray-700"
           >
             <button
               id="tab-reading"
@@ -648,13 +648,13 @@ export const HomePage: FC<HomePageProps> = ({
               aria-controls="reading-panel"
               type="button"
               onClick={() => handleTabChange('reading')}
-              className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-semibold transition focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-1 ${
+              className={`flex-1 sm:flex-none flex items-center justify-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2 rounded-lg text-xs font-semibold transition whitespace-nowrap focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-1 ${
                 activeTab === 'reading'
                   ? 'bg-white text-slate-900 shadow-xs border border-slate-200/60'
-                  : 'text-slate-600 hover:text-slate-900'
+                  : 'text-slate-600 dark:text-gray-300 hover:text-slate-900 dark:hover:text-white'
               }`}
             >
-              <BookOpen className="w-4 h-4" aria-hidden="true" />
+              <BookOpen className="w-4 h-4 shrink-0" aria-hidden="true" />
               <span>Reading</span>
               {readingInProgressCount > 0 && (
                 <span className="ml-1 px-1.5 py-0.5 rounded-full text-[10px] bg-emerald-600 text-white font-bold leading-none animate-pulse">
@@ -670,13 +670,13 @@ export const HomePage: FC<HomePageProps> = ({
               aria-controls="listening-panel"
               type="button"
               onClick={() => handleTabChange('listening')}
-              className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-semibold transition focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-1 ${
+              className={`flex-1 sm:flex-none flex items-center justify-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2 rounded-lg text-xs font-semibold transition whitespace-nowrap focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-1 ${
                 activeTab === 'listening'
                   ? 'bg-white text-slate-900 shadow-xs border border-slate-200/60'
-                  : 'text-slate-600 hover:text-slate-900'
+                  : 'text-slate-600 dark:text-gray-300 hover:text-slate-900 dark:hover:text-white'
               }`}
             >
-              <Headphones className="w-4 h-4" aria-hidden="true" />
+              <Headphones className="w-4 h-4 shrink-0" aria-hidden="true" />
               <span>Listening</span>
               {listeningInProgressCount > 0 && (
                 <span className="ml-1 px-1.5 py-0.5 rounded-full text-[10px] bg-emerald-600 text-white font-bold leading-none animate-pulse">
@@ -692,13 +692,13 @@ export const HomePage: FC<HomePageProps> = ({
               aria-controls="writing-panel"
               type="button"
               onClick={() => handleTabChange('writing')}
-              className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-semibold transition focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-1 ${
+              className={`flex-1 sm:flex-none flex items-center justify-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2 rounded-lg text-xs font-semibold transition whitespace-nowrap focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-1 ${
                 activeTab === 'writing'
                   ? 'bg-white text-slate-900 shadow-xs border border-slate-200/60'
-                  : 'text-slate-600 hover:text-slate-900'
+                  : 'text-slate-600 dark:text-gray-300 hover:text-slate-900 dark:hover:text-white'
               }`}
             >
-              <PenTool className="w-4 h-4" aria-hidden="true" />
+              <PenTool className="w-4 h-4 shrink-0" aria-hidden="true" />
               <span>Writing</span>
               {writingInProgressCount > 0 && (
                 <span className="ml-1 px-1.5 py-0.5 rounded-full text-[10px] bg-emerald-600 text-white font-bold leading-none animate-pulse">
@@ -714,13 +714,13 @@ export const HomePage: FC<HomePageProps> = ({
               aria-controls="speaking-panel"
               type="button"
               onClick={() => handleTabChange('speaking')}
-              className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-semibold transition focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-1 ${
+              className={`flex-1 sm:flex-none flex items-center justify-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2 rounded-lg text-xs font-semibold transition whitespace-nowrap focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-1 ${
                 activeTab === 'speaking'
                   ? 'bg-white text-slate-900 shadow-xs border border-slate-200/60'
-                  : 'text-slate-600 hover:text-slate-900'
+                  : 'text-slate-600 dark:text-gray-300 hover:text-slate-900 dark:hover:text-white'
               }`}
             >
-              <Mic className="w-4 h-4" aria-hidden="true" />
+              <Mic className="w-4 h-4 shrink-0" aria-hidden="true" />
               <span>Speaking</span>
             </button>
           </div>
@@ -998,11 +998,11 @@ export const HomePage: FC<HomePageProps> = ({
         {/* TAB 3: WRITING SECTION */}
         {activeTab === 'writing' && (
           <section id="writing-panel" role="tabpanel" aria-labelledby="tab-writing" className="space-y-6">
-            <div className="bg-white border border-slate-200 rounded-xl p-6 space-y-4 shadow-2xs">
-              <div className="flex items-center justify-between border-b border-slate-100 pb-4">
+            <div className="bg-white border border-slate-200 rounded-xl p-4 sm:p-6 space-y-4 shadow-2xs">
+              <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 pb-4">
                 <div>
                   <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
-                    <PenTool className="w-4 h-4 text-blue-600" />
+                    <PenTool className="w-4 h-4 text-blue-600 shrink-0" />
                     <span>Computer-Delivered IELTS Writing Room</span>
                   </h3>
                   <p className="text-xs text-slate-500 mt-1">
@@ -1010,7 +1010,7 @@ export const HomePage: FC<HomePageProps> = ({
                   </p>
                 </div>
 
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2">
                   <button
                     onClick={() => {
                       setEditingWritingExam(null);
@@ -1068,11 +1068,11 @@ export const HomePage: FC<HomePageProps> = ({
         {/* TAB 4: SPEAKING SECTION */}
         {activeTab === 'speaking' && (
           <section id="speaking-panel" role="tabpanel" aria-labelledby="tab-speaking" className="space-y-6">
-            <div className="bg-white border border-slate-200 rounded-xl p-6 space-y-4 shadow-2xs">
-              <div className="flex items-center justify-between border-b border-slate-100 pb-4">
+            <div className="bg-white border border-slate-200 rounded-xl p-4 sm:p-6 space-y-4 shadow-2xs">
+              <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 pb-4">
                 <div>
                   <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
-                    <Mic className="w-4 h-4 text-blue-600" />
+                    <Mic className="w-4 h-4 text-blue-600 shrink-0" />
                     <span>IELTS Speaking Room (Live Audio Recording & Transcript)</span>
                   </h3>
                   <p className="text-xs text-slate-500 mt-1">
@@ -1080,7 +1080,7 @@ export const HomePage: FC<HomePageProps> = ({
                   </p>
                 </div>
 
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2">
                   <button
                     onClick={() => {
                       setEditingSpeakingExam(null);

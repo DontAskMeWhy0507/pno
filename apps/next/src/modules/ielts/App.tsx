@@ -389,7 +389,7 @@ export function App() {
       className={
         currentView === 'home'
           ? 'min-h-screen w-full flex flex-col bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100 font-sans'
-          : 'h-screen w-screen overflow-hidden bg-white text-gray-900 font-sans'
+          : 'h-[100dvh] w-full overflow-hidden bg-white text-gray-900 font-sans'
       }
     >
       {/* 1. HOMEPAGE VIEW (Unified with PNO Navbar & Footer) */}

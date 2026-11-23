@@ -27,9 +27,8 @@ const Terms = () => {
             </Heading>
             <Text color="gray.500">Effective November 2, 2026</Text>
             <Text>
-              This website is a personal, self-hosted instance of Quenti, the
-              open-source study platform, operated by Vu Tien Tuan Trung. By
-              using the site you agree to these terms.
+              PNO is a personal study and IELTS practice platform operated by
+              Vu Tien Tuan Trung. By using the site you agree to these terms.
             </Text>
 
             <Heading as="h2" size="md">
