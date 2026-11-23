@@ -8,6 +8,7 @@ import { theme } from "@quenti/lib/chakra-theme";
 import { ChakraProvider } from "@chakra-ui/provider";
 
 import { ErrorBoundary } from "../components/error-boundary";
+import { UnifiedWorkspaceTabs } from "../components/unified-workspace-tabs";
 import { ToastWrapper } from "./toast-wrapper";
 
 const HighlightInit = dynamic(
@@ -69,7 +70,7 @@ export const AppProviders = (props: AppPropsWithChildren) => {
             <SessionProvider session={props.pageProps.session ?? undefined}>
               <SessionListener />
               <EventListeners />
-              {props.children}
+              <UnifiedWorkspaceTabs>{props.children}</UnifiedWorkspaceTabs>
             </SessionProvider>
           </TelemetryProvider>
         </ErrorBoundary>
