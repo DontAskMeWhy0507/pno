@@ -163,8 +163,8 @@ const PnoPortalPage = () => {
                   <Stack spacing={5}>
                     <Flex justify="space-between" align="center">
                       <Flex
-                        w={13}
-                        h={13}
+                        w={14}
+                        h={14}
                         rounded="2xl"
                         bg="blue.500"
                         color="white"
@@ -235,7 +235,7 @@ const PnoPortalPage = () => {
 
                   <Flex
                     mt={6}
-                    h={11}
+                    h={12}
                     w="full"
                     bg="blue.400"
                     _groupHover={{ bg: "blue.300" }}
@@ -281,8 +281,8 @@ const PnoPortalPage = () => {
                   <Stack spacing={5}>
                     <Flex justify="space-between" align="center">
                       <Flex
-                        w={13}
-                        h={13}
+                        w={14}
+                        h={14}
                         rounded="2xl"
                         bgGradient="linear(to-br, purple.500, blue.600)"
                         color="white"
@@ -353,7 +353,7 @@ const PnoPortalPage = () => {
 
                   <Flex
                     mt={6}
-                    h={11}
+                    h={12}
                     w="full"
                     bgGradient="linear(to-r, purple.500, blue.600)"
                     _groupHover={{
