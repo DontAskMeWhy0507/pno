@@ -123,6 +123,20 @@
 }
 
 /* Unified PNO Typography & Dark/Light Mode Theme for IELTS Exam Rooms & Modals */
+:root {
+  color-scheme: light dark;
+}
+
+:root[data-theme="dark"],
+[data-theme="dark"] {
+  color-scheme: dark;
+}
+
+:root[data-theme="light"],
+[data-theme="light"] {
+  color-scheme: light;
+}
+
 .ielts-root h1,
 .ielts-root h2,
 .ielts-root h3,
@@ -144,7 +158,9 @@
 .ielts-root.ielts-dark .bg-gray-50,
 .ielts-root.ielts-dark .bg-slate-50,
 .ielts-root.ielts-dark .bg-slate-50\/50,
+.ielts-root.ielts-dark .bg-slate-50\/60,
 .ielts-root.ielts-dark .bg-slate-50\/70,
+.ielts-root.ielts-dark .bg-\[\#f8f9fa\],
 .ielts-root.ielts-dark .bg-\[\#f8fafc\],
 .ielts-root.ielts-dark .bg-\[\#eef1f5\] {
   background-color: #171923 !important;
@@ -152,10 +168,46 @@
 }
 
 .ielts-root.ielts-dark .bg-gray-100,
+.ielts-root.ielts-dark .bg-gray-200,
 .ielts-root.ielts-dark .bg-slate-100,
+.ielts-root.ielts-dark .bg-slate-200,
 .ielts-root.ielts-dark .bg-slate-200\/70 {
   background-color: #2d3748 !important;
   color: #edf2f7;
+}
+
+.ielts-root.ielts-dark .hover\:bg-gray-50:hover,
+.ielts-root.ielts-dark .hover\:bg-gray-100:hover,
+.ielts-root.ielts-dark .hover\:bg-gray-200:hover,
+.ielts-root.ielts-dark .hover\:bg-slate-100:hover,
+.ielts-root.ielts-dark .hover\:bg-slate-200:hover {
+  background-color: #3a475e !important;
+  color: #ffffff !important;
+}
+
+.ielts-root.ielts-dark .bg-blue-50 {
+  background-color: rgba(49, 130, 206, 0.16) !important;
+  color: #90cdf4 !important;
+}
+
+.ielts-root.ielts-dark .bg-emerald-50 {
+  background-color: rgba(56, 161, 105, 0.16) !important;
+  color: #9ae6b4 !important;
+}
+
+.ielts-root.ielts-dark .bg-amber-50 {
+  background-color: rgba(221, 107, 32, 0.16) !important;
+  color: #fbd38d !important;
+}
+
+.ielts-root.ielts-dark .bg-rose-50 {
+  background-color: rgba(229, 62, 62, 0.16) !important;
+  color: #feb2b2 !important;
+}
+
+.ielts-root.ielts-dark .bg-purple-50 {
+  background-color: rgba(128, 90, 213, 0.18) !important;
+  color: #d6bcfa !important;
 }
 
 .ielts-root.ielts-dark .text-gray-900,
@@ -183,7 +235,10 @@
 .ielts-root.ielts-dark .border-slate-200,
 .ielts-root.ielts-dark .border-slate-200\/80,
 .ielts-root.ielts-dark .border-gray-300,
-.ielts-root.ielts-dark .border-slate-300 {
+.ielts-root.ielts-dark .border-slate-300,
+.ielts-root.ielts-dark .border-blue-200,
+.ielts-root.ielts-dark .border-emerald-200,
+.ielts-root.ielts-dark .border-rose-200 {
   border-color: #2d3748 !important;
 }
 
@@ -197,4 +252,30 @@
 
 .ielts-root.ielts-dark .split-divider {
   background-color: #2d3748;
+}
+
+/* CommandMenu-inspired frosted-glass styling for all IELTS overlays & modals */
+.ielts-root .fixed.inset-0[class*="bg-black/"] {
+  background-color: rgba(247, 250, 252, 0.72) !important;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+.ielts-root.ielts-dark .fixed.inset-0[class*="bg-black/"] {
+  background-color: rgba(23, 25, 35, 0.58) !important;
+}
+
+.ielts-root .fixed.inset-0[class*="bg-black/"] > div[class*="bg-white"] {
+  background-color: rgba(255, 255, 255, 0.88) !important;
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 2px solid #e2e8f0 !important;
+  border-radius: 1rem;
+  box-shadow: 0 25px 50px -12px rgba(15, 23, 42, 0.18);
+}
+
+.ielts-root.ielts-dark .fixed.inset-0[class*="bg-black/"] > div[class*="bg-white"] {
+  background-color: rgba(23, 25, 35, 0.86) !important;
+  border-color: #242c3a !important;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.55);
 }

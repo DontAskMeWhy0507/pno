@@ -12,7 +12,6 @@ import {
   VStack,
 } from "@chakra-ui/react";
 
-import { LazyWrapper } from "../../common/lazy-wrapper";
 import { PageWrapper } from "../../common/page-wrapper";
 import { EnterWrapper } from "../../modules/auth/enter-wrapper";
 import { AuthGradient } from "../../modules/auth/gradient";
@@ -27,8 +26,7 @@ export default function Verify() {
           noindex: true,
         }}
       />
-      <LazyWrapper>
-        <Center h="100vh" w="full" position="relative">
+      <Center minH="100dvh" w="full" py={8} px={4} position="relative">
           <AuthGradient />
           <EnterWrapper>
             <Container maxW="xl" w="full" zIndex={10}>
@@ -140,7 +138,6 @@ export default function Verify() {
             </Container>
           </EnterWrapper>
         </Center>
-      </LazyWrapper>
     </>
   );
 }

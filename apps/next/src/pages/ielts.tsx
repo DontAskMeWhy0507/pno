@@ -4,6 +4,7 @@ import React from "react";
 import { HeadSeo } from "@quenti/components/head-seo";
 
 import { PageWrapper } from "../common/page-wrapper";
+import TopLoadingBar from "../common/top-loading-bar";
 import { Loading } from "../components/loading";
 
 const IeltsApp = dynamic(() => import("../modules/ielts/App"), {
@@ -15,6 +16,7 @@ export default function IeltsPage() {
   return (
     <>
       <HeadSeo title="IELTS 4-Skill Practice" />
+      <TopLoadingBar />
       <IeltsApp />
     </>
   );

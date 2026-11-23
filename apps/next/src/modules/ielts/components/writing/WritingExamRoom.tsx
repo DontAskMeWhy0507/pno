@@ -27,9 +27,24 @@ import {
 interface WritingExamRoomProps {
   exam: WritingExam;
   onBackToHome: () => void;
+  onProgressSync?: (examId: string, state: Record<string, unknown>) => void;
+  onSubmitAttempt?: (payload: {
+    examId: string;
+    examTitle: string;
+    timeSpentSeconds: number;
+    task1Text: string;
+    task2Text: string;
+    task1Words: number;
+    task2Words: number;
+  }) => void;
 }
 
-export const WritingExamRoom: FC<WritingExamRoomProps> = ({ exam, onBackToHome }) => {
+export const WritingExamRoom: FC<WritingExamRoomProps> = ({
+  exam,
+  onBackToHome,
+  onProgressSync,
+  onSubmitAttempt,
+}) => {
   const savedWriting = loadWritingProgress(exam.id);
   const [activeTaskNum, setActiveTaskNum] = useState<1 | 2>(savedWriting?.activeTaskNum ?? 1);
   const [task1Text, setTask1Text] = useState(savedWriting?.task1Text ?? '');
@@ -51,6 +66,22 @@ export const WritingExamRoom: FC<WritingExamRoomProps> = ({ exam, onBackToHome }
   const [showGuideModal, setShowGuideModal] = useState(false);
 
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const latestStateRef = useRef({
+    task1Text,
+    task2Text,
+    activeTaskNum,
+    notesText,
+    timeRemaining,
+    isSubmitted,
+  });
+  latestStateRef.current = {
+    task1Text,
+    task2Text,
+    activeTaskNum,
+    notesText,
+    timeRemaining,
+    isSubmitted,
+  };
 
   // Save immediately on mount so opening a test marks it as In Progress
   useEffect(() => {
@@ -67,39 +98,64 @@ export const WritingExamRoom: FC<WritingExamRoomProps> = ({ exam, onBackToHome }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [exam.id]);
 
-  // Autosave progress debounced
+  // Autosave progress debounced on text/task/note changes (never on 1s timer ticks)
   useEffect(() => {
     if (isSubmitted) return;
     const timer = setTimeout(() => {
-      saveWritingProgress(exam.id, {
+      const payload = {
         task1Text,
         task2Text,
         activeTaskNum,
         notesText,
-        timeRemaining,
+        timeRemaining: latestStateRef.current.timeRemaining,
         lastSavedAt: Date.now(),
-      });
-    }, 400);
+      };
+      saveWritingProgress(exam.id, payload);
+      onProgressSync?.(exam.id, payload);
+    }, 600);
     return () => clearTimeout(timer);
-  }, [activeTaskNum, exam.id, isSubmitted, notesText, task1Text, task2Text, timeRemaining]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTaskNum, exam.id, isSubmitted, notesText, task1Text, task2Text]);
 
-  // Synchronous flush on tab close/refresh
+  // Periodic 15s checkpoint for timer remaining + cloud sync
+  useEffect(() => {
+    if (isSubmitted) return;
+    const interval = setInterval(() => {
+      const s = latestStateRef.current;
+      if (s.isSubmitted) return;
+      const payload = {
+        task1Text: s.task1Text,
+        task2Text: s.task2Text,
+        activeTaskNum: s.activeTaskNum,
+        notesText: s.notesText,
+        timeRemaining: s.timeRemaining,
+        lastSavedAt: Date.now(),
+      };
+      saveWritingProgress(exam.id, payload);
+      onProgressSync?.(exam.id, payload);
+    }, 15_000);
+    return () => clearInterval(interval);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [exam.id, isSubmitted]);
+
+  // Synchronous flush on tab close/refresh (registered once per exam)
   useEffect(() => {
     const handleUnload = () => {
-      if (!isSubmitted) {
+      const s = latestStateRef.current;
+      if (!s.isSubmitted) {
         saveWritingProgress(exam.id, {
-          task1Text,
-          task2Text,
-          activeTaskNum,
-          notesText,
-          timeRemaining,
+          task1Text: s.task1Text,
+          task2Text: s.task2Text,
+          activeTaskNum: s.activeTaskNum,
+          notesText: s.notesText,
+          timeRemaining: s.timeRemaining,
           lastSavedAt: Date.now(),
         });
       }
     };
     window.addEventListener('beforeunload', handleUnload);
     return () => window.removeEventListener('beforeunload', handleUnload);
-  }, [activeTaskNum, exam.id, isSubmitted, notesText, task1Text, task2Text, timeRemaining]);
+  }, [exam.id]);
 
   // Timer tick
   useEffect(() => {
@@ -661,6 +717,18 @@ export const WritingExamRoom: FC<WritingExamRoomProps> = ({ exam, onBackToHome }
             onClick={() => {
               clearWritingProgress(exam.id);
               setIsSubmitted(true);
+              onSubmitAttempt?.({
+                examId: exam.id,
+                examTitle: exam.title,
+                timeSpentSeconds: Math.max(
+                  0,
+                  (exam.durationMinutes || 60) * 60 - latestStateRef.current.timeRemaining,
+                ),
+                task1Text,
+                task2Text,
+                task1Words,
+                task2Words,
+              });
             }}
             className="px-4 py-1.5 text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-xl transition shadow-xs flex items-center gap-1.5"
           >

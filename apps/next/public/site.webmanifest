@@ -1,6 +1,6 @@
 {
-  "name": "Quenti",
-  "short_name": "Quenti",
+  "name": "PNO",
+  "short_name": "PNO",
   "icons": [
     {
       "src": "/android-chrome-192x192.png",
@@ -13,7 +13,7 @@
       "type": "image/png"
     }
   ],
-  "theme_color": "#ffffff",
-  "background_color": "#ffffff",
+  "theme_color": "#0042da",
+  "background_color": "#171923",
   "display": "standalone"
 }

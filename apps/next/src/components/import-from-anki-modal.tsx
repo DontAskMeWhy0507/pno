@@ -412,9 +412,19 @@ export const ImportFromAnkiModal: React.FC<ImportFromAnkiModalProps> = ({
                       variant="outline"
                       leftIcon={<Icon as={IconBrandGoogleDrive} />}
                       onClick={() =>
-                        void signIn("google", {
-                          callbackUrl: window.location.pathname,
-                        })
+                        void signIn(
+                          "google",
+                          {
+                            callbackUrl: window.location.pathname,
+                          },
+                          {
+                            scope:
+                              "openid email profile https://www.googleapis.com/auth/drive.readonly",
+                            access_type: "offline",
+                            prompt: "consent",
+                            include_granted_scopes: "true",
+                          },
+                        )
                       }
                     >
                       Reconnect Google

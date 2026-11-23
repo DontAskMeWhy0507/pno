@@ -1,4 +1,3 @@
-import NextLink from "next/link";
 import { useRouter } from "next/router";
 import React from "react";
 
@@ -50,7 +49,6 @@ export const LeftNav: React.FC<LeftNavProps> = ({
   const router = useRouter();
   const [menuOpen, setMenuOpen] = React.useState(false);
   const [ieltsSearch, setIeltsSearch] = React.useState("");
-  const menuBg = useColorModeValue("white", "gray.800");
   const searchBg = useColorModeValue("white", "gray.800");
   const searchBorder = useColorModeValue("gray.200", "gray.700");
 
@@ -119,16 +117,15 @@ export const LeftNav: React.FC<LeftNavProps> = ({
               </Button>
             </MenuButton>
             <MenuList
-              bg={menuBg}
-              py={0}
               overflow="hidden"
               w="max"
               marginTop={2}
-              shadow="lg"
             >
-              <NextLink href="/create" passHref>
-                <MenuOption icon={<IconBooks size={20} />} label="Study set" />
-              </NextLink>
+              <MenuOption
+                href="/create"
+                icon={<IconBooks size={20} />}
+                label="Study set"
+              />
               <MenuOption
                 icon={<IconCloudDownload size={20} />}
                 label="Import from Quizlet"
@@ -176,12 +173,9 @@ export const LeftNav: React.FC<LeftNavProps> = ({
               </Button>
             </MenuButton>
             <MenuList
-              bg={menuBg}
-              py={0}
               overflow="hidden"
               w="max"
               marginTop={2}
-              shadow="lg"
             >
               <MenuOption
                 icon={<IconPlus size={20} />}

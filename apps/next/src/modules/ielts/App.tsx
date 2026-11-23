@@ -1,6 +1,7 @@
+import dynamic from 'next/dynamic';
 import { useState, useEffect, useCallback, useRef } from 'react';
 import type { Exam, Part, ScoreReport, UserAnswerRecord } from './types/exam';
-import { getAllExams, saveExam, isListeningExam } from './utils/storage';
+import { getAllExams, loadFullExam, saveExam, isListeningExam } from './utils/storage';
 import { gradeExam } from './utils/scoring';
 import { ExamHeader } from './components/exam/ExamHeader';
 import { PartTabs } from './components/exam/PartTabs';
@@ -9,26 +10,68 @@ import { ListeningAudioBar } from './components/exam/ListeningAudioBar';
 import { QuestionGroupRenderer } from './components/exam/QuestionGroupRenderer';
 import { SplitPane } from './components/exam/SplitPane';
 import { BottomBar } from './components/exam/BottomBar';
-import { SubmitConfirmModal } from './components/exam/SubmitConfirmModal';
-import { LeaveExamModal } from './components/exam/LeaveExamModal';
-import { ResultModal } from './components/exam/ResultModal';
-import { TestManager } from './components/admin/TestManager';
-import { TestEditor } from './components/admin/TestEditor';
-import { SmartImportModal } from './components/admin/SmartImportModal';
 import { HomePage } from './components/home/HomePage';
 import type { WritingExam } from './types/writing';
 import type { SpeakingExam } from './types/speaking';
 import { getAllWritingExams, sampleWritingExams, saveWritingExam } from './data/writingExams';
 import { getAllSpeakingExams, sampleSpeakingExams, saveSpeakingExam } from './data/speakingExams';
-import { WritingExamRoom } from './components/writing/WritingExamRoom';
-import { SpeakingExamRoom } from './components/speaking/SpeakingExamRoom';
-import { WritingEditorModal } from './components/admin/WritingEditorModal';
-import { SpeakingEditorModal } from './components/admin/SpeakingEditorModal';
 import { ChevronLeft, ChevronRight, FileText, Headphones } from 'lucide-react';
 import { clearExamProgress, loadExamProgress, saveExamProgress } from './utils/examProgress';
+import {
+  buildLocalSyncPayload,
+  CLOUD_MIGRATION_FLAG,
+  getExamSkillLabel,
+  hydrateFromCloudBootstrap,
+  type CloudAttemptRow,
+  type CloudBootstrapPayload,
+  type CloudIeltsSkill,
+} from './utils/cloudSync';
+import { api } from '@quenti/trpc';
 import { useColorMode, useToast } from '@chakra-ui/react';
 import Navbar from '../../components/navbar';
 import { Footer } from '../../components/footer';
+import { menuEventChannel } from '../../events/menu';
+
+const SubmitConfirmModal = dynamic(
+  () => import('./components/exam/SubmitConfirmModal').then((m) => m.SubmitConfirmModal),
+  { ssr: false }
+);
+const LeaveExamModal = dynamic(
+  () => import('./components/exam/LeaveExamModal').then((m) => m.LeaveExamModal),
+  { ssr: false }
+);
+const ResultModal = dynamic(
+  () => import('./components/exam/ResultModal').then((m) => m.ResultModal),
+  { ssr: false }
+);
+const TestManager = dynamic(
+  () => import('./components/admin/TestManager').then((m) => m.TestManager),
+  { ssr: false }
+);
+const TestEditor = dynamic(
+  () => import('./components/admin/TestEditor').then((m) => m.TestEditor),
+  { ssr: false }
+);
+const SmartImportModal = dynamic(
+  () => import('./components/admin/SmartImportModal').then((m) => m.SmartImportModal),
+  { ssr: false }
+);
+const WritingExamRoom = dynamic(
+  () => import('./components/writing/WritingExamRoom').then((m) => m.WritingExamRoom),
+  { ssr: false }
+);
+const SpeakingExamRoom = dynamic(
+  () => import('./components/speaking/SpeakingExamRoom').then((m) => m.SpeakingExamRoom),
+  { ssr: false }
+);
+const WritingEditorModal = dynamic(
+  () => import('./components/admin/WritingEditorModal').then((m) => m.WritingEditorModal),
+  { ssr: false }
+);
+const SpeakingEditorModal = dynamic(
+  () => import('./components/admin/SpeakingEditorModal').then((m) => m.SpeakingEditorModal),
+  { ssr: false }
+);
 
 type View = 'home' | 'exam' | 'writing' | 'speaking';
 
@@ -44,8 +87,14 @@ export function App() {
   // Navigation View: 'home' | 'exam' | 'writing' | 'speaking'
   const [currentView, setCurrentView] = useState<View>('home');
 
-  // List of all exams
+  // List of all exams (lightweight catalog initially)
   const [allExams, setAllExams] = useState<Exam[]>(() => getAllExams());
+  const [isLoadingExamData, setIsLoadingExamData] = useState(false);
+
+  // Cloud sync state
+  const [recentAttempts, setRecentAttempts] = useState<CloudAttemptRow[]>([]);
+  const [syncStatus, setSyncStatus] = useState<'synced' | 'saving' | 'offline'>('synced');
+  const cloudHydratedRef = useRef(false);
 
   // Current Active Exam in Test Mode
   const [currentExam, setCurrentExam] = useState<Exam>(() => (allExams[0] ?? getAllExams()[0])!);
@@ -91,6 +140,132 @@ export function App() {
   const [editingSpeakingExam, setEditingSpeakingExam] = useState<SpeakingExam | null>(null);
   const listeningContentRef = useRef<HTMLDivElement>(null);
 
+  // tRPC Cloud Sync queries & mutations
+  const bootstrapQuery = api.ielts.bootstrap.useQuery(undefined, {
+    staleTime: 60_000,
+    refetchOnWindowFocus: false,
+  });
+  const bulkSyncMutation = api.ielts.bulkSyncLocal.useMutation();
+  const upsertExamMutation = api.ielts.upsertExam.useMutation();
+  const deleteExamMutation = api.ielts.deleteExam.useMutation();
+  const upsertCollectionMutation = api.ielts.upsertCollection.useMutation();
+  const deleteCollectionMutation = api.ielts.deleteCollection.useMutation();
+  const saveProgressMutation = api.ielts.saveProgress.useMutation();
+  const clearProgressMutation = api.ielts.clearProgress.useMutation();
+  const recordAttemptMutation = api.ielts.recordAttempt.useMutation();
+  const deleteAttemptMutation = api.ielts.deleteAttempt.useMutation();
+
+  const handleRefreshExams = useCallback(() => {
+    const fresh = getAllExams();
+    setAllExams(fresh);
+    setCurrentExam((prev) => {
+      if (!fresh.some((exam) => exam.id === prev.id) && fresh[0]) {
+        return fresh[0];
+      }
+      return prev;
+    });
+  }, []);
+
+  // Hydrate IELTS state from cloud once bootstrap resolves
+  useEffect(() => {
+    if (!bootstrapQuery.data || cloudHydratedRef.current) return;
+    cloudHydratedRef.current = true;
+
+    const alreadyMigrated =
+      typeof localStorage !== 'undefined' &&
+      localStorage.getItem(CLOUD_MIGRATION_FLAG) === '1';
+
+    if (!alreadyMigrated) {
+      const localPayload = buildLocalSyncPayload();
+      const hasLocalData =
+        localPayload.customExams.length > 0 ||
+        localPayload.deletedExams.length > 0 ||
+        localPayload.collections.length > 0 ||
+        localPayload.deletedCollections.length > 0 ||
+        localPayload.progressList.length > 0;
+
+      if (hasLocalData) {
+        setSyncStatus('saving');
+        bulkSyncMutation.mutate(localPayload, {
+          onSuccess: (merged) => {
+            hydrateFromCloudBootstrap(merged as CloudBootstrapPayload);
+            setRecentAttempts((merged.recentAttempts || []) as CloudAttemptRow[]);
+            localStorage.setItem(CLOUD_MIGRATION_FLAG, '1');
+            handleRefreshExams();
+            setSyncStatus('synced');
+          },
+          onError: () => {
+            hydrateFromCloudBootstrap(bootstrapQuery.data as CloudBootstrapPayload);
+            setRecentAttempts((bootstrapQuery.data.recentAttempts || []) as CloudAttemptRow[]);
+            handleRefreshExams();
+            setSyncStatus('offline');
+          },
+        });
+        return;
+      }
+      localStorage.setItem(CLOUD_MIGRATION_FLAG, '1');
+    }
+
+    hydrateFromCloudBootstrap(bootstrapQuery.data as CloudBootstrapPayload);
+    setRecentAttempts((bootstrapQuery.data.recentAttempts || []) as CloudAttemptRow[]);
+    handleRefreshExams();
+    setSyncStatus('synced');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [bootstrapQuery.data]);
+
+  const cloudSyncExam = useCallback(
+    (
+      skill: CloudIeltsSkill,
+      examId: string,
+      title: string,
+      collection: string,
+      data: Record<string, unknown>
+    ) => {
+      setSyncStatus('saving');
+      upsertExamMutation.mutate(
+        { examId, skill, title, collection, data },
+        {
+          onSuccess: () => setSyncStatus('synced'),
+          onError: () => setSyncStatus('offline'),
+        }
+      );
+    },
+    [upsertExamMutation]
+  );
+
+  const cloudDeleteExam = useCallback(
+    (skill: CloudIeltsSkill, examId: string) => {
+      setSyncStatus('saving');
+      deleteExamMutation.mutate(
+        { examId, skill },
+        {
+          onSuccess: () => setSyncStatus('synced'),
+          onError: () => setSyncStatus('offline'),
+        }
+      );
+    },
+    [deleteExamMutation]
+  );
+
+  const cloudSaveProgress = useCallback(
+    (skill: CloudIeltsSkill, examId: string, state: Record<string, unknown>) => {
+      saveProgressMutation.mutate(
+        { examId, skill, state },
+        {
+          onError: () => setSyncStatus('offline'),
+        }
+      );
+    },
+    [saveProgressMutation]
+  );
+
+  const cloudClearProgress = useCallback(
+    (skill: CloudIeltsSkill, examId: string) => {
+      clearProgressMutation.mutate({ examId, skill });
+    },
+    [clearProgressMutation]
+  );
+
   // Display Settings with persistent localStorage
   const [fontSize, setFontSize] = useState<'sm' | 'base' | 'lg'>(() => {
     const saved = localStorage.getItem('ielts_font_size');
@@ -105,38 +280,68 @@ export function App() {
     } catch {}
   };
 
-  const handleRefreshExams = () => {
-    const fresh = getAllExams();
-    setAllExams(fresh);
-    if (!fresh.some((exam) => exam.id === currentExam.id) && fresh[0]) {
-      setCurrentExam(fresh[0]);
-    }
+  // Ref holding the latest Reading/Listening exam state so timer ticks don't rebind listeners
+  const latestExamStateRef = useRef({
+    currentView,
+    currentExam,
+    answers,
+    flaggedQuestions,
+    activePartNumber,
+    currentQuestionNumber,
+    timeRemaining,
+    isCompleted,
+    isReviewMode,
+  });
+  latestExamStateRef.current = {
+    currentView,
+    currentExam,
+    answers,
+    flaggedQuestions,
+    activePartNumber,
+    currentQuestionNumber,
+    timeRemaining,
+    isCompleted,
+    isReviewMode,
   };
 
-  const navigateHome = useCallback((replace = false) => {
-    const wasInExamRoom = currentView !== 'home';
-    if (currentView === 'exam' && !isCompleted && !isReviewMode && currentExam?.id) {
-      saveExamProgress(currentExam.id, {
-        answers,
-        flaggedQuestions,
-        activePartNumber,
-        currentQuestionNumber,
-        timeRemaining,
-      });
-    }
-    window.history[replace ? 'replaceState' : 'pushState']({}, '', '/ielts');
-    setCurrentView('home');
-    if (wasInExamRoom && !isCompleted && !isReviewMode) {
-      toast({
-        title: 'Progress auto-saved',
-        description: 'You can resume your test anytime from the In Progress section.',
-        status: 'success',
-        duration: 3000,
-        isClosable: true,
-        position: 'bottom-right',
-      });
-    }
-  }, [activePartNumber, answers, currentExam?.id, currentQuestionNumber, currentView, flaggedQuestions, isCompleted, isReviewMode, timeRemaining, toast]);
+  const navigateHome = useCallback(
+    (replace = false) => {
+      const s = latestExamStateRef.current;
+      const wasInExamRoom = s.currentView !== 'home';
+      if (
+        s.currentView === 'exam' &&
+        !s.isCompleted &&
+        !s.isReviewMode &&
+        s.currentExam?.id
+      ) {
+        const snapshot = {
+          answers: s.answers,
+          flaggedQuestions: s.flaggedQuestions,
+          activePartNumber: s.activePartNumber,
+          currentQuestionNumber: s.currentQuestionNumber,
+          timeRemaining: s.timeRemaining,
+        };
+        saveExamProgress(s.currentExam.id, snapshot);
+        cloudSaveProgress(getExamSkillLabel(s.currentExam), s.currentExam.id, {
+          ...snapshot,
+          lastSavedAt: Date.now(),
+        });
+      }
+      window.history[replace ? 'replaceState' : 'pushState']({}, '', '/ielts');
+      setCurrentView('home');
+      if (wasInExamRoom && !s.isCompleted && !s.isReviewMode) {
+        toast({
+          title: 'Progress auto-saved',
+          description: 'Synced locally & to cloud. Resume anytime from In Progress.',
+          status: 'success',
+          duration: 3000,
+          isClosable: true,
+          position: 'bottom-right',
+        });
+      }
+    },
+    [cloudSaveProgress, toast]
+  );
 
   const navigateExam = useCallback((exam: Exam, partNumber: number, replace = false) => {
     window.history[replace ? 'replaceState' : 'pushState']({}, '', getExamPath(exam, partNumber));
@@ -152,37 +357,56 @@ export function App() {
     setCurrentView(skill);
   }, []);
 
+  // Deep-link URL routing with async loadFullExam (mount + popstate only)
   useEffect(() => {
-    const applyRoute = () => {
+    let cancelled = false;
+    const applyRoute = async () => {
       const routePath = window.location.pathname.replace(/^\/ielts\/?/, '/');
       const parts = routePath.split('/').filter(Boolean);
       const skill = parts[0];
       const examId = parts[1] ? decodeURIComponent(parts[1]) : '';
 
       if ((skill === 'reading' || skill === 'listening') && examId) {
-        const exam = allExams.find((candidate) => candidate.id === examId);
-        if (exam && (skill === 'listening') === isListeningExam(exam)) {
-          const requestedPart = Number(parts[3]);
-          const partNumber = exam.parts.some((part) => part.partNumber === requestedPart) ? requestedPart : exam.parts[0]?.partNumber ?? 1;
-          const savedProgress = loadExamProgress(exam.id);
-          setCurrentExam(exam);
-          setAnswers(savedProgress?.answers ?? {});
-          setFlaggedQuestions(savedProgress?.flaggedQuestions ?? []);
-          setTimeRemaining(savedProgress?.timeRemaining ?? (exam.durationMinutes || 60) * 60);
-          setIsPaused(false);
-          setIsCompleted(false);
-          setIsReviewMode(false);
-          setScoreReport(null);
-          setActivePartNumber(partNumber);
-          setCurrentQuestionNumber(savedProgress?.currentQuestionNumber ?? exam.parts.find((part) => part.partNumber === partNumber)?.questionGroups.flatMap((group) => group.questions)[0]?.orderNumber ?? 1);
-          setCurrentView('exam');
+        const candidate = getAllExams().find((ex) => ex.id === examId);
+        if (candidate && (skill === 'listening') === isListeningExam(candidate)) {
+          setIsLoadingExamData(true);
+          try {
+            const fullExam = (await loadFullExam(candidate)) ?? candidate;
+            if (cancelled || !fullExam.parts?.length) return;
+            const requestedPart = Number(parts[3]);
+            const partNumber = fullExam.parts.some((p) => p.partNumber === requestedPart)
+              ? requestedPart
+              : fullExam.parts[0]?.partNumber ?? 1;
+            const savedProgress = loadExamProgress(fullExam.id);
+            setCurrentExam(fullExam);
+            setAnswers(savedProgress?.answers ?? {});
+            setFlaggedQuestions(savedProgress?.flaggedQuestions ?? []);
+            setTimeRemaining(savedProgress?.timeRemaining ?? (fullExam.durationMinutes || 60) * 60);
+            setIsPaused(false);
+            setIsCompleted(false);
+            setIsReviewMode(false);
+            setScoreReport(null);
+            setActivePartNumber(partNumber);
+            setCurrentQuestionNumber(
+              savedProgress?.currentQuestionNumber ??
+                fullExam.parts
+                  .find((p) => p.partNumber === partNumber)
+                  ?.questionGroups.flatMap((g) => g.questions)[0]?.orderNumber ??
+                1
+            );
+            setCurrentView('exam');
+          } finally {
+            if (!cancelled) setIsLoadingExamData(false);
+          }
           return;
         }
       }
 
       if (skill === 'writing' && examId) {
         const allWriting = getAllWritingExams();
-        const exam = allWriting.find((candidate) => candidate.id === examId) || sampleWritingExams.find((candidate) => candidate.id === examId);
+        const exam =
+          allWriting.find((c) => c.id === examId) ||
+          sampleWritingExams.find((c) => c.id === examId);
         if (exam) {
           setCurrentWritingExam(exam);
           setCurrentView('writing');
@@ -192,7 +416,9 @@ export function App() {
 
       if (skill === 'speaking' && examId) {
         const allSpeaking = getAllSpeakingExams();
-        const exam = allSpeaking.find((candidate) => candidate.id === examId) || sampleSpeakingExams.find((candidate) => candidate.id === examId);
+        const exam =
+          allSpeaking.find((c) => c.id === examId) ||
+          sampleSpeakingExams.find((c) => c.id === examId);
         if (exam) {
           setCurrentSpeakingExam(exam);
           setCurrentView('speaking');
@@ -203,60 +429,170 @@ export function App() {
       setCurrentView('home');
     };
 
-    applyRoute();
-    window.addEventListener('popstate', applyRoute);
-    return () => window.removeEventListener('popstate', applyRoute);
-  }, [allExams]);
+    void applyRoute();
+    const onPopState = () => void applyRoute();
+    const onIeltsNavigate = (path: string) => {
+      window.history.pushState({}, '', path);
+      void applyRoute();
+    };
+    window.addEventListener('popstate', onPopState);
+    menuEventChannel.on('ieltsNavigate', onIeltsNavigate);
+    return () => {
+      cancelled = true;
+      window.removeEventListener('popstate', onPopState);
+      menuEventChannel.off('ieltsNavigate', onIeltsNavigate);
+    };
+  }, []);
 
+  // Handle pending IELTS quick actions triggered from CommandMenu on other pages
   useEffect(() => {
-    if (currentView !== 'exam') return;
-    const timer = window.setTimeout(() => {
+    try {
+      const pending = sessionStorage.getItem('pno_pending_ielts_action');
+      if (!pending) return;
+      sessionStorage.removeItem('pno_pending_ielts_action');
+      if (pending === 'add_test') {
+        setIsSmartImportOpen(true);
+      } else if (pending === 'test_bank') {
+        setIsTestManagerOpen(true);
+      } else if (pending === 'new_collection') {
+        window.setTimeout(() => {
+          menuEventChannel.emit('openIeltsNewCollection');
+        }, 100);
+      }
+    } catch {}
+  }, []);
+
+  // Debounced save ONLY when answers, flags, part, or question changes (NOT on 1s timer ticks)
+  useEffect(() => {
+    if (currentView !== 'exam' || isCompleted || isReviewMode) return;
+    const localTimer = window.setTimeout(() => {
       saveExamProgress(currentExam.id, {
         answers,
         flaggedQuestions,
         activePartNumber,
         currentQuestionNumber,
-        timeRemaining,
+        timeRemaining: latestExamStateRef.current.timeRemaining,
       });
     }, 400);
-    return () => window.clearTimeout(timer);
-  }, [activePartNumber, answers, currentExam.id, currentQuestionNumber, currentView, flaggedQuestions, timeRemaining]);
 
-  // Guaranteed synchronous save on window/tab close or refresh
+    const cloudTimer = window.setTimeout(() => {
+      cloudSaveProgress(getExamSkillLabel(currentExam), currentExam.id, {
+        answers,
+        flaggedQuestions,
+        activePartNumber,
+        currentQuestionNumber,
+        timeRemaining: latestExamStateRef.current.timeRemaining,
+        lastSavedAt: Date.now(),
+      });
+    }, 2000);
+
+    return () => {
+      window.clearTimeout(localTimer);
+      window.clearTimeout(cloudTimer);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activePartNumber, answers, currentExam.id, currentQuestionNumber, currentView, flaggedQuestions, isCompleted, isReviewMode]);
+
+  // Periodic 15s checkpoint for timer remaining
+  useEffect(() => {
+    if (currentView !== 'exam' || isCompleted || isReviewMode) return;
+    const checkpoint = window.setInterval(() => {
+      const s = latestExamStateRef.current;
+      if (s.currentView !== 'exam' || s.isCompleted || s.isReviewMode || !s.currentExam?.id) return;
+      const snapshot = {
+        answers: s.answers,
+        flaggedQuestions: s.flaggedQuestions,
+        activePartNumber: s.activePartNumber,
+        currentQuestionNumber: s.currentQuestionNumber,
+        timeRemaining: s.timeRemaining,
+      };
+      saveExamProgress(s.currentExam.id, snapshot);
+      cloudSaveProgress(getExamSkillLabel(s.currentExam), s.currentExam.id, {
+        ...snapshot,
+        lastSavedAt: Date.now(),
+      });
+    }, 15_000);
+    return () => window.clearInterval(checkpoint);
+  }, [cloudSaveProgress, currentView, isCompleted, isReviewMode]);
+
+  // Guaranteed synchronous flush on window/tab close or refresh (registered once)
   useEffect(() => {
     const handleBeforeUnload = () => {
-      if (currentView === 'exam' && !isCompleted && currentExam?.id) {
-        saveExamProgress(currentExam.id, {
-          answers,
-          flaggedQuestions,
-          activePartNumber,
-          currentQuestionNumber,
-          timeRemaining,
+      const s = latestExamStateRef.current;
+      if (s.currentView === 'exam' && !s.isCompleted && !s.isReviewMode && s.currentExam?.id) {
+        saveExamProgress(s.currentExam.id, {
+          answers: s.answers,
+          flaggedQuestions: s.flaggedQuestions,
+          activePartNumber: s.activePartNumber,
+          currentQuestionNumber: s.currentQuestionNumber,
+          timeRemaining: s.timeRemaining,
         });
       }
     };
     window.addEventListener('beforeunload', handleBeforeUnload);
     return () => window.removeEventListener('beforeunload', handleBeforeUnload);
-  }, [activePartNumber, answers, currentExam?.id, currentQuestionNumber, currentView, flaggedQuestions, isCompleted, timeRemaining]);
+  }, []);
 
   const completeExam = useCallback(() => {
-    const report = gradeExam(currentExam, answers);
+    const s = latestExamStateRef.current;
+    const report = gradeExam(s.currentExam, s.answers);
+    const timeSpentSeconds = Math.max(
+      0,
+      (s.currentExam.durationMinutes || 60) * 60 - s.timeRemaining
+    );
     setScoreReport(report);
     setIsCompleted(true);
     setIsResultModalOpen(true);
-    clearExamProgress(currentExam.id);
-  }, [answers, currentExam]);
+    clearExamProgress(s.currentExam.id);
 
-  // Timer interval
+    recordAttemptMutation.mutate(
+      {
+        examId: s.currentExam.id,
+        examTitle: s.currentExam.title,
+        skill: getExamSkillLabel(s.currentExam),
+        bandScore: report.bandScore,
+        totalCorrect: report.totalCorrect,
+        totalQuestions: report.totalQuestions,
+        timeSpentSeconds,
+        details: { partScores: report.partScores },
+      },
+      {
+        onSuccess: (created) => {
+          setRecentAttempts((prev) => [
+            {
+              id: created.id,
+              examId: created.examId,
+              examTitle: created.examTitle,
+              skill: created.skill as CloudIeltsSkill,
+              bandScore: created.bandScore,
+              totalCorrect: created.totalCorrect,
+              totalQuestions: created.totalQuestions,
+              timeSpentSeconds: created.timeSpentSeconds,
+              completedAt: created.completedAt,
+            },
+            ...prev.slice(0, 49),
+          ]);
+        },
+      }
+    );
+  }, [recordAttemptMutation]);
+
+  // Timer interval — NEVER depends on timeRemaining so it isn't recreated every second!
   useEffect(() => {
-    if (currentView !== 'exam' || isCompleted || isPaused || timeRemaining <= 0) return;
+    if (currentView !== 'exam' || isCompleted || isPaused) return;
 
-    const timer = setInterval(() => {
-      setTimeRemaining((previous) => Math.max(0, previous - 1));
+    const timer = window.setInterval(() => {
+      setTimeRemaining((previous) => {
+        if (previous <= 1) {
+          window.clearInterval(timer);
+          return 0;
+        }
+        return previous - 1;
+      });
     }, 1000);
 
-    return () => clearInterval(timer);
-  }, [currentView, isCompleted, isPaused, timeRemaining]);
+    return () => window.clearInterval(timer);
+  }, [currentView, isCompleted, isPaused]);
 
   useEffect(() => {
     if (currentView === 'exam' && !isCompleted && timeRemaining === 0) {
@@ -264,16 +600,13 @@ export function App() {
     }
   }, [completeExam, currentView, isCompleted, timeRemaining]);
 
-  // Find active Part object
-  const activePart: Part =
-    (currentExam.parts.find((p) => p.partNumber === activePartNumber) || currentExam.parts[0])!;
+  const activePart: Part | undefined =
+    currentExam.parts.find((p) => p.partNumber === activePartNumber) || currentExam.parts[0];
 
-  // All questions in the exam flattened
   const allQuestions = currentExam.parts.flatMap((p) =>
     p.questionGroups.flatMap((g) => g.questions)
   );
 
-  // Update answer
   const handleAnswerChange = (orderNumber: number, answer: string | string[]) => {
     if (isReviewMode) return;
     setAnswers((prev) => ({
@@ -282,25 +615,21 @@ export function App() {
     }));
   };
 
-  // Toggle flag
   const handleToggleFlag = (orderNumber: number) => {
     setFlaggedQuestions((prev) =>
       prev.includes(orderNumber) ? prev.filter((n) => n !== orderNumber) : [...prev, orderNumber]
     );
   };
 
-  // Select exactly one part. Listening content is intentionally not a continuous page.
   const handleSelectPart = (partNumber: number) => {
     setActivePartNumber(partNumber);
     navigateExam(currentExam, partNumber);
     listeningContentRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  // Select question and scroll to it
   const handleSelectQuestion = (questionNumber: number) => {
     setCurrentQuestionNumber(questionNumber);
 
-    // If question belongs to another part, switch to that part
     const targetPart = currentExam.parts.find((p) =>
       p.questionGroups.some((g) => g.questions.some((q) => q.orderNumber === questionNumber))
     );
@@ -310,7 +639,6 @@ export function App() {
       navigateExam(currentExam, targetPart.partNumber);
     }
 
-    // Smooth scroll to card
     setTimeout(() => {
       const card = document.getElementById(`q-card-${questionNumber}`);
       if (card) {
@@ -319,7 +647,6 @@ export function App() {
     }, 50);
   };
 
-  // Next / Prev Question
   const handleNextQuestion = () => {
     const currentIndex = allQuestions.findIndex((q) => q.orderNumber === currentQuestionNumber);
     if (currentIndex >= 0 && currentIndex < allQuestions.length - 1) {
@@ -334,15 +661,14 @@ export function App() {
     }
   };
 
-  // Submit test
   const handleConfirmSubmit = () => {
     setIsSubmitConfirmOpen(false);
     completeExam();
   };
 
-  // Retake exam
   const handleRetakeExam = () => {
     clearExamProgress(currentExam.id);
+    cloudClearProgress(getExamSkillLabel(currentExam), currentExam.id);
     setAnswers({});
     setFlaggedQuestions([]);
     setTimeRemaining((currentExam.durationMinutes || 60) * 60);
@@ -355,39 +681,102 @@ export function App() {
     setCurrentQuestionNumber(1);
   };
 
-  // Start taking an exam from Home or Manager
-  const handleStartExam = (exam: Exam) => {
-    const savedProgress = loadExamProgress(exam.id);
-    const nextAnswers = savedProgress?.answers ?? {};
-    const nextFlags = savedProgress?.flaggedQuestions ?? [];
-    const nextTime = savedProgress?.timeRemaining ?? (exam.durationMinutes || 60) * 60;
-    const savedPart = savedProgress?.activePartNumber;
-    const partNumber = exam.parts.some((part) => part.partNumber === savedPart) ? savedPart! : exam.parts[0]?.partNumber ?? 1;
-    const nextQNum = savedProgress?.currentQuestionNumber ?? exam.parts[0]?.questionGroups.flatMap((group) => group.questions)[0]?.orderNumber ?? 1;
+  const handleStartExam = async (examOrSummary: Exam) => {
+    setIsLoadingExamData(true);
+    try {
+      const fullExam = (await loadFullExam(examOrSummary)) ?? examOrSummary;
+      if (!fullExam.parts?.length) {
+        toast({
+          title: 'Unable to load test content',
+          description: 'No passages or questions found for this test.',
+          status: 'error',
+          duration: 3000,
+          isClosable: true,
+        });
+        return;
+      }
 
-    setCurrentExam(exam);
-    setAnswers(nextAnswers);
-    setFlaggedQuestions(nextFlags);
-    setTimeRemaining(nextTime);
-    setIsPaused(false);
-    setIsCompleted(false);
-    setIsReviewMode(false);
-    setScoreReport(null);
-    setActivePartNumber(partNumber);
-    setCurrentQuestionNumber(nextQNum);
-    saveExamProgress(exam.id, {
-      answers: nextAnswers,
-      flaggedQuestions: nextFlags,
-      activePartNumber: partNumber,
-      currentQuestionNumber: nextQNum,
-      timeRemaining: nextTime,
-    });
-    navigateExam(exam, partNumber);
+      const savedProgress = loadExamProgress(fullExam.id);
+      const nextAnswers = savedProgress?.answers ?? {};
+      const nextFlags = savedProgress?.flaggedQuestions ?? [];
+      const nextTime = savedProgress?.timeRemaining ?? (fullExam.durationMinutes || 60) * 60;
+      const savedPart = savedProgress?.activePartNumber;
+      const partNumber = fullExam.parts.some((part) => part.partNumber === savedPart)
+        ? savedPart!
+        : fullExam.parts[0]?.partNumber ?? 1;
+      const nextQNum =
+        savedProgress?.currentQuestionNumber ??
+        fullExam.parts[0]?.questionGroups.flatMap((group) => group.questions)[0]?.orderNumber ??
+        1;
+
+      setCurrentExam(fullExam);
+      setAnswers(nextAnswers);
+      setFlaggedQuestions(nextFlags);
+      setTimeRemaining(nextTime);
+      setIsPaused(false);
+      setIsCompleted(false);
+      setIsReviewMode(false);
+      setScoreReport(null);
+      setActivePartNumber(partNumber);
+      setCurrentQuestionNumber(nextQNum);
+      const snapshot = {
+        answers: nextAnswers,
+        flaggedQuestions: nextFlags,
+        activePartNumber: partNumber,
+        currentQuestionNumber: nextQNum,
+        timeRemaining: nextTime,
+      };
+      saveExamProgress(fullExam.id, snapshot);
+      cloudSaveProgress(getExamSkillLabel(fullExam), fullExam.id, {
+        ...snapshot,
+        lastSavedAt: Date.now(),
+      });
+      navigateExam(fullExam, partNumber);
+    } catch (err) {
+      toast({
+        title: 'Failed to load test',
+        description: err instanceof Error ? err.message : 'Please try again.',
+        status: 'error',
+        duration: 3000,
+        isClosable: true,
+      });
+    } finally {
+      setIsLoadingExamData(false);
+    }
   };
 
-  // Save exam from editor
+  const handleOpenExamEditor = async (examToEdit?: Exam | null) => {
+    if (!examToEdit) {
+      setEditingExam(null);
+      setIsEditorOpen(true);
+      return;
+    }
+    setIsLoadingExamData(true);
+    try {
+      const fullExam = (await loadFullExam(examToEdit)) ?? examToEdit;
+      setEditingExam(fullExam);
+      setIsEditorOpen(true);
+    } catch {
+      toast({
+        title: 'Unable to load test for editing',
+        status: 'error',
+        duration: 2500,
+        isClosable: true,
+      });
+    } finally {
+      setIsLoadingExamData(false);
+    }
+  };
+
   const handleSaveExamFromEditor = (savedExam: Exam) => {
     saveExam(savedExam);
+    cloudSyncExam(
+      getExamSkillLabel(savedExam),
+      savedExam.id,
+      savedExam.title,
+      savedExam.collection || 'My Tests',
+      savedExam as unknown as Record<string, unknown>
+    );
     setIsEditorOpen(false);
     setEditingExam(null);
     handleRefreshExams();
@@ -406,30 +795,37 @@ export function App() {
     navigateSkill('speaking', exam.id);
   };
 
-  // Stats
   const answeredCount = Object.values(answers).filter(
     (a) => a !== undefined && a !== '' && (!Array.isArray(a) || a.length > 0)
   ).length;
 
   return (
     <div
+      data-theme={colorMode}
       className={`ielts-root ${colorMode === 'dark' ? 'dark ielts-dark' : 'ielts-light'} ${
         currentView === 'home'
           ? 'min-h-screen w-full flex flex-col bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100 font-sans'
-          : 'h-[100dvh] w-full overflow-hidden bg-white text-gray-900 font-sans'
+          : 'h-[100dvh] w-full overflow-hidden bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 font-sans'
       }`}
     >
-      {/* 1. HOMEPAGE VIEW (Unified with PNO Navbar & Footer) */}
+      {isLoadingExamData && (
+        <div className="fixed inset-0 z-50 bg-black/30 backdrop-blur-xs flex items-center justify-center">
+          <div className="bg-white dark:bg-gray-800 px-6 py-4 rounded-2xl shadow-xl border border-gray-200 dark:border-gray-700 text-sm font-bold">
+            Loading test data...
+          </div>
+        </div>
+      )}
+
+      {/* 1. HOMEPAGE VIEW */}
       {currentView === 'home' && (
         <>
           <Navbar />
           <HomePage
             exams={allExams}
-            onSelectExam={handleStartExam}
-            onOpenEditor={(examToEdit) => {
-              setEditingExam(examToEdit || null);
-              setIsEditorOpen(true);
-            }}
+            recentAttempts={recentAttempts}
+            syncStatus={syncStatus}
+            onSelectExam={(exam) => void handleStartExam(exam)}
+            onOpenEditor={(examToEdit) => void handleOpenExamEditor(examToEdit)}
             onOpenTestManager={() => setIsTestManagerOpen(true)}
             onOpenSmartImport={(collection, skill) => {
               setSmartImportCollection(collection);
@@ -439,6 +835,22 @@ export function App() {
             onRefreshExams={handleRefreshExams}
             onStartWritingExam={handleStartWritingExam}
             onStartSpeakingExam={handleStartSpeakingExam}
+            onDeleteAttempt={(attemptId) => {
+              setRecentAttempts((prev) => prev.filter((a) => a.id !== attemptId));
+              deleteAttemptMutation.mutate({ id: attemptId });
+            }}
+            onCloudSaveExam={cloudSyncExam}
+            onCloudDeleteExam={cloudDeleteExam}
+            onCloudCreateCollection={(col) => {
+              upsertCollectionMutation.mutate({
+                name: col.name,
+                description: col.description,
+              });
+            }}
+            onCloudDeleteCollection={(name, examsToTombstone) => {
+              deleteCollectionMutation.mutate({ name, examsToTombstone });
+            }}
+            onCloudClearProgress={cloudClearProgress}
           />
           <Footer />
         </>
@@ -450,6 +862,44 @@ export function App() {
           key={currentWritingExam.id}
           exam={currentWritingExam}
           onBackToHome={navigateHome}
+          onProgressSync={(examId, state) => cloudSaveProgress('Writing', examId, state)}
+          onSubmitAttempt={(payload) => {
+            recordAttemptMutation.mutate(
+              {
+                examId: payload.examId,
+                examTitle: payload.examTitle,
+                skill: 'Writing',
+                bandScore: null,
+                totalCorrect: payload.task1Words + payload.task2Words,
+                totalQuestions: 0,
+                timeSpentSeconds: payload.timeSpentSeconds,
+                details: {
+                  task1Words: payload.task1Words,
+                  task2Words: payload.task2Words,
+                  task1Text: payload.task1Text,
+                  task2Text: payload.task2Text,
+                },
+              },
+              {
+                onSuccess: (created) => {
+                  setRecentAttempts((prev) => [
+                    {
+                      id: created.id,
+                      examId: created.examId,
+                      examTitle: created.examTitle,
+                      skill: 'Writing',
+                      bandScore: created.bandScore,
+                      totalCorrect: created.totalCorrect,
+                      totalQuestions: created.totalQuestions,
+                      timeSpentSeconds: created.timeSpentSeconds,
+                      completedAt: created.completedAt,
+                    },
+                    ...prev.slice(0, 49),
+                  ]);
+                },
+              }
+            );
+          }}
         />
       )}
 
@@ -459,13 +909,13 @@ export function App() {
           key={currentSpeakingExam.id}
           exam={currentSpeakingExam}
           onBackToHome={navigateHome}
+          onProgressSync={(examId, state) => cloudSaveProgress('Speaking', examId, state)}
         />
       )}
 
-      {/* 4. EXAM VIEW (Standard Computer-Based IELTS Reading & Listening UI) */}
-      {currentView === 'exam' && (
+      {/* 4. EXAM VIEW (Reading & Listening) */}
+      {currentView === 'exam' && activePart && (
         <div className="flex flex-col h-full w-full overflow-hidden">
-          {/* Top Header */}
           <ExamHeader
             examTitle={currentExam.title}
             durationMinutes={currentExam.durationMinutes}
@@ -473,23 +923,11 @@ export function App() {
             isPaused={isPaused}
             onTogglePause={() => setIsPaused((prev) => !prev)}
             onOpenTestManager={() => setIsTestManagerOpen(true)}
-            onBackToHome={() => {
-              if (!isCompleted && !isReviewMode) {
-                saveExamProgress(currentExam.id, {
-                  answers,
-                  flaggedQuestions,
-                  activePartNumber,
-                  currentQuestionNumber,
-                  timeRemaining,
-                });
-              }
-              navigateHome();
-            }}
+            onBackToHome={navigateHome}
             fontSize={fontSize}
             onChangeFontSize={handleUpdateFontSize}
           />
 
-          {/* Sticky Review Mode Banner */}
           {isReviewMode && scoreReport && (
             <div className="bg-amber-500 text-white px-6 py-2 flex flex-wrap items-center justify-between gap-3 shadow-md z-20 border-b border-amber-600 animate-in fade-in select-none">
               <div className="flex items-center gap-2.5 flex-wrap">
@@ -500,17 +938,19 @@ export function App() {
                   IELTS Band: {scoreReport.bandScore.toFixed(1)}
                 </span>
                 <span className="text-xs text-amber-100 font-medium">
-                  ({scoreReport.totalCorrect}/{scoreReport.totalQuestions} Correct • {Math.round((scoreReport.totalCorrect / scoreReport.totalQuestions) * 100)}% Accuracy)
+                  ({scoreReport.totalCorrect}/{scoreReport.totalQuestions} Correct •{' '}
+                  {Math.round((scoreReport.totalCorrect / scoreReport.totalQuestions) * 100)}% Accuracy)
                 </span>
               </div>
 
               <div className="flex items-center gap-2">
-                {/* Jump to Next Incorrect Question */}
                 {scoreReport.details.some((d) => !d.isCorrect) && (
                   <button
                     onClick={() => {
                       const incorrect = scoreReport.details.filter((d) => !d.isCorrect);
-                      const currentIdx = incorrect.findIndex((d) => d.questionNumber === currentQuestionNumber);
+                      const currentIdx = incorrect.findIndex(
+                        (d) => d.questionNumber === currentQuestionNumber
+                      );
                       const nextInc = incorrect[(currentIdx + 1) % incorrect.length];
                       if (nextInc) handleSelectQuestion(nextInc.questionNumber);
                     }}
@@ -540,7 +980,6 @@ export function App() {
             </div>
           )}
 
-          {/* Part Navigation Tabs */}
           <PartTabs
             parts={currentExam.parts}
             activePartNumber={activePartNumber}
@@ -548,9 +987,11 @@ export function App() {
             answers={answers}
           />
 
-          {/* Main Area: Full-width for Listening, SplitPane for Reading */}
           {isListeningExam(currentExam) ? (
-            <div ref={listeningContentRef} className="flex-1 overflow-y-auto bg-[#f8f9fa] relative select-none">
+            <div
+              ref={listeningContentRef}
+              className="flex-1 overflow-y-auto bg-[#f8f9fa] dark:bg-gray-900 relative select-none"
+            >
               <div className="max-w-4xl mx-auto min-h-full bg-white px-6 md:px-12 py-8 shadow-xs border-x border-gray-200 pb-24">
                 <div key={activePart.id} className="pt-2">
                   <div className="flex items-center justify-between mb-4 pb-2 border-b border-gray-200">
@@ -564,12 +1005,15 @@ export function App() {
                         className="px-3 py-1 text-xs font-bold text-blue-700 bg-blue-50 hover:bg-blue-100 rounded border border-blue-200 transition flex items-center gap-1.5"
                       >
                         <FileText className="w-3.5 h-3.5" />
-                        <span>{showListeningTranscript ? 'Hide Audio Transcript' : 'View Audio Transcript / Script'}</span>
+                        <span>
+                          {showListeningTranscript
+                            ? 'Hide Audio Transcript'
+                            : 'View Audio Transcript / Script'}
+                        </span>
                       </button>
                     )}
                   </div>
 
-                  {/* Audio Transcript / Script Viewer for Listening Review Mode */}
                   {isReviewMode && showListeningTranscript && activePart.passage && (
                     <div className="mb-6 p-4 bg-slate-50 border border-slate-200 rounded-xl text-xs space-y-2 text-slate-800 leading-relaxed max-h-80 overflow-y-auto font-sans shadow-inner">
                       <div className="font-bold text-slate-900 flex items-center gap-1.5 border-b pb-1.5">
@@ -583,7 +1027,9 @@ export function App() {
                   )}
 
                   {activePart.questionGroups.length === 0 ? (
-                    <div className="text-center py-8 text-gray-400 text-sm">No questions for this section yet.</div>
+                    <div className="text-center py-8 text-gray-400 text-sm">
+                      No questions for this section yet.
+                    </div>
                   ) : (
                     activePart.questionGroups.map((group) => (
                       <QuestionGroupRenderer
@@ -602,7 +1048,6 @@ export function App() {
                 </div>
               </div>
 
-              {/* Corner Navigation Buttons */}
               <div className="fixed bottom-24 right-6 z-30 flex items-center gap-0.5">
                 <button
                   onClick={handlePrevQuestion}
@@ -638,7 +1083,7 @@ export function App() {
                   <div className="relative w-full min-h-full pb-20">
                     {activePart.questionGroups.length === 0 ? (
                       <div className="text-center py-16 text-gray-400 text-sm">
-                        No questions for this part yet. Click "+ Add Test" to import questions.
+                        No questions for this part yet. Click &quot;+ Add Test&quot; to import questions.
                       </div>
                     ) : (
                       activePart.questionGroups.map((group) => (
@@ -656,7 +1101,6 @@ export function App() {
                       ))
                     )}
 
-                    {/* Corner Navigation Buttons matching official IELTS on Computer */}
                     <div className="fixed bottom-13 right-4 z-30 flex items-center gap-0.5">
                       <button
                         onClick={handlePrevQuestion}
@@ -679,7 +1123,6 @@ export function App() {
             </div>
           )}
 
-          {/* Sleek Horizontal Audio Player Bar for Listening pinned above BottomBar */}
           {isListeningExam(currentExam) && (
             <ListeningAudioBar
               audioUrl={activePart.audioUrl || currentExam.parts[0]?.audioUrl}
@@ -693,11 +1136,17 @@ export function App() {
                 const updatedExam = { ...currentExam, parts: updatedParts };
                 setCurrentExam(updatedExam);
                 saveExam(updatedExam);
+                cloudSyncExam(
+                  'Listening',
+                  updatedExam.id,
+                  updatedExam.title,
+                  updatedExam.collection || 'My Tests',
+                  updatedExam as unknown as Record<string, unknown>
+                );
               }}
             />
           )}
 
-          {/* Bottom Bar with 1-40 Question Navigation */}
           <BottomBar
             parts={currentExam.parts}
             activePartNumber={activePartNumber}
@@ -721,44 +1170,40 @@ export function App() {
         </div>
       )}
 
-      {/* Submit Confirmation Modal */}
-      <SubmitConfirmModal
-        isOpen={isSubmitConfirmOpen}
-        onClose={() => setIsSubmitConfirmOpen(false)}
-        onConfirmSubmit={handleConfirmSubmit}
-        totalQuestions={allQuestions.length}
-        answeredCount={answeredCount}
-        flaggedCount={flaggedQuestions.length}
-      />
+      {/* Lazy-mounted Modals (only loaded/rendered when open) */}
+      {isSubmitConfirmOpen && (
+        <SubmitConfirmModal
+          isOpen={isSubmitConfirmOpen}
+          onClose={() => setIsSubmitConfirmOpen(false)}
+          onConfirmSubmit={handleConfirmSubmit}
+          totalQuestions={allQuestions.length}
+          answeredCount={answeredCount}
+          flaggedCount={flaggedQuestions.length}
+        />
+      )}
 
-      {/* Leave Exam & Autosave Modal */}
-      <LeaveExamModal
-        isOpen={isLeaveExamModalOpen}
-        onClose={() => setIsLeaveExamModalOpen(false)}
-        onSaveAndExit={() => {
-          saveExamProgress(currentExam.id, {
-            answers,
-            flaggedQuestions,
-            activePartNumber,
-            currentQuestionNumber,
-            timeRemaining,
-          });
-          setIsLeaveExamModalOpen(false);
-          navigateHome();
-        }}
-        onDiscardAndExit={() => {
-          clearExamProgress(currentExam.id);
-          setIsLeaveExamModalOpen(false);
-          navigateHome();
-        }}
-        examTitle={currentExam.title}
-        totalQuestions={allQuestions.length}
-        answeredCount={answeredCount}
-        timeRemaining={timeRemaining}
-      />
+      {isLeaveExamModalOpen && (
+        <LeaveExamModal
+          isOpen={isLeaveExamModalOpen}
+          onClose={() => setIsLeaveExamModalOpen(false)}
+          onSaveAndExit={() => {
+            setIsLeaveExamModalOpen(false);
+            navigateHome();
+          }}
+          onDiscardAndExit={() => {
+            clearExamProgress(currentExam.id);
+            cloudClearProgress(getExamSkillLabel(currentExam), currentExam.id);
+            setIsLeaveExamModalOpen(false);
+            navigateHome();
+          }}
+          examTitle={currentExam.title}
+          totalQuestions={allQuestions.length}
+          answeredCount={answeredCount}
+          timeRemaining={timeRemaining}
+        />
+      )}
 
-      {/* Result & Score Modal */}
-      {scoreReport && (
+      {isResultModalOpen && scoreReport && (
         <ResultModal
           isOpen={isResultModalOpen}
           onClose={() => setIsResultModalOpen(false)}
@@ -784,82 +1229,122 @@ export function App() {
         />
       )}
 
-      {/* Smart Import & Creation Modal */}
-      <SmartImportModal
-        isOpen={isSmartImportOpen}
-        initialCollection={smartImportCollection}
-        defaultSkill={smartImportSkill}
-        onClose={() => {
-          setIsSmartImportOpen(false);
-          setSmartImportCollection(undefined);
-          setSmartImportSkill(undefined);
-        }}
-        onImportSuccess={(savedExam: Exam, action: 'save_only' | 'take_test' | 'edit') => {
-          setIsSmartImportOpen(false);
-          setSmartImportCollection(undefined);
-          setSmartImportSkill(undefined);
-          handleRefreshExams();
-          if (action === 'take_test') {
-            handleStartExam(savedExam);
-          } else if (action === 'edit') {
-            setEditingExam(savedExam);
+      {isSmartImportOpen && (
+        <SmartImportModal
+          isOpen={isSmartImportOpen}
+          initialCollection={smartImportCollection}
+          defaultSkill={smartImportSkill}
+          onClose={() => {
+            setIsSmartImportOpen(false);
+            setSmartImportCollection(undefined);
+            setSmartImportSkill(undefined);
+          }}
+          onImportSuccess={(savedExam: Exam, action: 'save_only' | 'take_test' | 'edit') => {
+            cloudSyncExam(
+              getExamSkillLabel(savedExam),
+              savedExam.id,
+              savedExam.title,
+              savedExam.collection || 'My Tests',
+              savedExam as unknown as Record<string, unknown>
+            );
+            setIsSmartImportOpen(false);
+            setSmartImportCollection(undefined);
+            setSmartImportSkill(undefined);
+            handleRefreshExams();
+            if (action === 'take_test') {
+              void handleStartExam(savedExam);
+            } else if (action === 'edit') {
+              setEditingExam(savedExam);
+              setIsEditorOpen(true);
+            }
+          }}
+          onWritingImportSuccess={(saved) => {
+            if (saved) {
+              cloudSyncExam(
+                'Writing',
+                saved.id,
+                saved.title,
+                saved.collection || 'My Tests',
+                saved as unknown as Record<string, unknown>
+              );
+            }
+            setIsSmartImportOpen(false);
+            setSmartImportCollection(undefined);
+            setSmartImportSkill(undefined);
+            handleRefreshExams();
+          }}
+          onSpeakingImportSuccess={(saved) => {
+            if (saved) {
+              cloudSyncExam(
+                'Speaking',
+                saved.id,
+                saved.title,
+                saved.collection || 'My Tests',
+                saved as unknown as Record<string, unknown>
+              );
+            }
+            setIsSmartImportOpen(false);
+            setSmartImportCollection(undefined);
+            setSmartImportSkill(undefined);
+            handleRefreshExams();
+          }}
+          onOpenManualEditor={() => {
+            setIsSmartImportOpen(false);
+            setSmartImportCollection(undefined);
+            setSmartImportSkill(undefined);
+            setEditingExam(null);
             setIsEditorOpen(true);
+          }}
+          onOpenWritingEditor={(exam) => {
+            setIsSmartImportOpen(false);
+            setSmartImportCollection(undefined);
+            setSmartImportSkill(undefined);
+            setEditingWritingExam(exam || null);
+            setIsWritingEditorOpen(true);
+          }}
+          onOpenSpeakingEditor={(exam) => {
+            setIsSmartImportOpen(false);
+            setSmartImportCollection(undefined);
+            setSmartImportSkill(undefined);
+            setEditingSpeakingExam(exam || null);
+            setIsSpeakingEditorOpen(true);
+          }}
+        />
+      )}
+
+      {isTestManagerOpen && (
+        <TestManager
+          isOpen={isTestManagerOpen}
+          onClose={() => setIsTestManagerOpen(false)}
+          onSelectExam={(exam) => {
+            void handleStartExam(exam);
+            setIsTestManagerOpen(false);
+          }}
+          onOpenEditor={(examToEdit) => void handleOpenExamEditor(examToEdit)}
+          onOpenSmartImport={() => {
+            setIsTestManagerOpen(false);
+            setIsSmartImportOpen(true);
+          }}
+          onExamsMutated={handleRefreshExams}
+          onCloudSaveExam={(ex) =>
+            cloudSyncExam(
+              getExamSkillLabel(ex),
+              ex.id,
+              ex.title,
+              ex.collection || 'My Tests',
+              ex as unknown as Record<string, unknown>
+            )
           }
-        }}
-        onWritingImportSuccess={() => {
-          setIsSmartImportOpen(false);
-          setSmartImportCollection(undefined);
-          setSmartImportSkill(undefined);
-          handleRefreshExams();
-        }}
-        onSpeakingImportSuccess={() => {
-          setIsSmartImportOpen(false);
-          setSmartImportCollection(undefined);
-          setSmartImportSkill(undefined);
-          handleRefreshExams();
-        }}
-        onOpenManualEditor={() => {
-          setIsSmartImportOpen(false);
-          setSmartImportCollection(undefined);
-          setSmartImportSkill(undefined);
-          setEditingExam(null);
-          setIsEditorOpen(true);
-        }}
-        onOpenWritingEditor={(exam) => {
-          setIsSmartImportOpen(false);
-          setSmartImportCollection(undefined);
-          setSmartImportSkill(undefined);
-          setEditingWritingExam(exam || null);
-          setIsWritingEditorOpen(true);
-        }}
-        onOpenSpeakingEditor={(exam) => {
-          setIsSmartImportOpen(false);
-          setSmartImportCollection(undefined);
-          setSmartImportSkill(undefined);
-          setEditingSpeakingExam(exam || null);
-          setIsSpeakingEditorOpen(true);
-        }}
-      />
+          onCloudDeleteExam={(ex) => cloudDeleteExam(getExamSkillLabel(ex), ex.id)}
+          onCloudCreateCollection={(col) =>
+            upsertCollectionMutation.mutate({
+              name: col.name,
+              description: col.description,
+            })
+          }
+        />
+      )}
 
-      {/* Test Manager & Library Modal */}
-      <TestManager
-        isOpen={isTestManagerOpen}
-        onClose={() => setIsTestManagerOpen(false)}
-        onSelectExam={(exam) => {
-          handleStartExam(exam);
-          setIsTestManagerOpen(false);
-        }}
-        onOpenEditor={(examToEdit) => {
-          setEditingExam(examToEdit || null);
-          setIsEditorOpen(true);
-        }}
-        onOpenSmartImport={() => {
-          setIsTestManagerOpen(false);
-          setIsSmartImportOpen(true);
-        }}
-      />
-
-      {/* Test Editor Modal */}
       {isEditorOpen && (
         <TestEditor
           key={editingExam?.id || 'new-exam'}
@@ -872,7 +1357,6 @@ export function App() {
         />
       )}
 
-      {/* Writing Editor Modal */}
       {isWritingEditorOpen && (
         <WritingEditorModal
           key={editingWritingExam?.id || 'new-writing'}
@@ -884,6 +1368,13 @@ export function App() {
           }}
           onSave={(saved) => {
             saveWritingExam(saved);
+            cloudSyncExam(
+              'Writing',
+              saved.id,
+              saved.title,
+              saved.collection || 'My Tests',
+              saved as unknown as Record<string, unknown>
+            );
             setIsWritingEditorOpen(false);
             setEditingWritingExam(null);
             handleRefreshExams();
@@ -891,7 +1382,6 @@ export function App() {
         />
       )}
 
-      {/* Speaking Editor Modal */}
       {isSpeakingEditorOpen && (
         <SpeakingEditorModal
           key={editingSpeakingExam?.id || 'new-speaking'}
@@ -903,6 +1393,13 @@ export function App() {
           }}
           onSave={(saved) => {
             saveSpeakingExam(saved);
+            cloudSyncExam(
+              'Speaking',
+              saved.id,
+              saved.title,
+              saved.collection || 'My Tests',
+              saved as unknown as Record<string, unknown>
+            );
             setIsSpeakingEditorOpen(false);
             setEditingSpeakingExam(null);
             handleRefreshExams();

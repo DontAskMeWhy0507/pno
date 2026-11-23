@@ -46,7 +46,11 @@ const Set = ({ set, collab }: inferSSRProps<typeof getServerSideProps>) => {
 };
 
 export const getServerSideProps = async (ctx: GetServerSidePropsContext) => {
-  if (!db) return { props: { set: null } };
+  const hasSessionCookie = Boolean(
+    ctx.req.cookies["next-auth.session-token"] ||
+      ctx.req.cookies["__Secure-next-auth.session-token"],
+  );
+  if (!db || !hasSessionCookie) return { props: { set: null, collab: false } };
 
   const set = await db.query.studySet.findFirst({
     where: eq(studySet.id, ctx.query?.id as string),

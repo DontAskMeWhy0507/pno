@@ -60,6 +60,7 @@ export const getRecentStudySets = async (
     take: 16,
   });
   const containerIds = recentContainers.map((e) => e.entityId);
+  if (containerIds.length === 0) return [];
 
   return (
     await prisma.studySet.findMany({

@@ -1,4 +1,5 @@
 import { type NextAuthOptions } from "next-auth";
+import type { Provider } from "next-auth/providers";
 import GoogleProvider from "next-auth/providers/google";
 
 import { env } from "@quenti/env/server";
@@ -6,6 +7,7 @@ import { APP_URL } from "@quenti/lib/constants/url";
 import { prisma } from "@quenti/prisma";
 
 import pjson from "../../apps/next/package.json";
+import { isEmailAllowed, isMagicLinkConfigured } from "./allowlist";
 import { sendVerificationRequest } from "./magic-link";
 import { CustomPrismaAdapter } from "./prisma-adapter";
 
@@ -43,16 +45,9 @@ export const authOptions: NextAuthOptions = {
       return baseUrl;
     },
     async signIn({ user }) {
-      if (env.ENABLE_EMAIL_WHITELIST === "true") {
-        if (
-          !user.email ||
-          !(await prisma.whitelistedEmail.findUnique({
-            where: {
-              email: user.email,
-            },
-          }))
-        )
-          return "/unauthorized";
+      const allowed = await isEmailAllowed(user.email);
+      if (!allowed) {
+        return "/unauthorized";
       }
 
       return true;
@@ -105,29 +100,21 @@ export const authOptions: NextAuthOptions = {
       allowDangerousEmailAccountLinking: true,
       authorization: {
         params: {
-          // drive.readonly powers the "Import from Google Drive" feature:
-          // the server lists and downloads .apkg files with the user's token.
-          scope:
-            "openid email profile https://www.googleapis.com/auth/drive.readonly",
-          access_type: "offline",
-          prompt: "consent",
+          // Request minimal identity scopes on sign-in; Google Drive read-only
+          // access is requested incrementally only from the Anki Drive importer.
+          scope: "openid email profile",
+          prompt: "select_account",
         },
       },
     }),
-    // @ts-expect-error Type '"email"' is not assignable
-    {
-      id: "magic",
-      type: "email",
-      sendVerificationRequest,
-    },
-    /**
-     * ...add more providers here
-     *
-     * Most other providers require a bit more work than the Discord provider.
-     * For example, the GitHub provider requires you to add the
-     * `refresh_token_expires_in` field to the Account model. Refer to the
-     * NextAuth.js docs for the provider you want to use. Example:
-     * @see https://next-auth.js.org/providers/github
-     */
+    ...(isMagicLinkConfigured() || env.NODE_ENV === "development"
+      ? [
+          {
+            id: "magic",
+            type: "email",
+            sendVerificationRequest,
+          } as unknown as Provider,
+        ]
+      : []),
   ],
 };

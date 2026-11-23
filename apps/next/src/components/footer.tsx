@@ -7,6 +7,7 @@ import {
   Flex,
   HStack,
   Heading,
+  IconButton,
   Kbd,
   Stack,
   Text,
@@ -22,6 +23,7 @@ import {
 } from "@tabler/icons-react";
 
 import pjson from "../../package.json";
+import { menuEventChannel } from "../events/menu";
 import { MOD } from "../lib/tinykeys";
 import { Authed } from "./authed";
 
@@ -90,15 +92,7 @@ export const Footer = () => {
                   colorScheme="gray"
                   display={{ base: "none", md: "flex" }}
                   onClick={() => {
-                    window.dispatchEvent(
-                      new KeyboardEvent("keydown", {
-                        key: "k",
-                        code: "KeyK",
-                        ctrlKey: MOD == "Control",
-                        metaKey: MOD == "Meta",
-                        shiftKey: false,
-                      }),
-                    );
+                    menuEventChannel.emit("openCommandMenu");
                   }}
                 >
                   <HStack>
@@ -147,27 +141,30 @@ const ThemeButton = ({ mode }: { mode: "light" | "dark" }) => {
   const selected = colorMode == mode;
 
   return (
-    <Box
-      cursor="pointer"
+    <IconButton
+      aria-label={`Switch to ${mode} mode`}
+      aria-pressed={selected}
+      icon={<Icon size={18} />}
+      size="sm"
+      variant="ghost"
       color={selected ? "gray.900" : "gray.400"}
       bg={selected ? "gray.100" : "transparent"}
       _hover={{
         color: "gray.900",
+        bg: selected ? "gray.100" : "gray.50",
       }}
       _dark={{
         color: selected ? "gray.50" : "gray.500",
         bg: selected ? "gray.750" : "transparent",
         _hover: {
           color: "gray.50",
+          bg: selected ? "gray.750" : "gray.800",
         },
       }}
       transition="color 0.15s ease-in-out"
-      p="7px"
       rounded="full"
       onClick={() => setColorMode(mode)}
-    >
-      <Icon size={18} />
-    </Box>
+    />
   );
 };
 

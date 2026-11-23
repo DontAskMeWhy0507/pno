@@ -20,10 +20,22 @@ import {
 
 const Content = forwardRef<ModalContentProps, "div">(
   ({ children, ...props }) => {
-    const modalBg = useColorModeValue("white", "gray.800");
+    const modalBg = useColorModeValue(
+      "rgba(255, 255, 255, 0.88)",
+      "rgba(23, 25, 35, 0.86)",
+    );
+    const borderColor = useColorModeValue("gray.200", "gray.750");
 
     return (
-      <ChakraModalContent rounded="xl" bg={modalBg} shadow="xl" {...props}>
+      <ChakraModalContent
+        rounded="2xl"
+        bg={modalBg}
+        backdropFilter="blur(16px)"
+        borderWidth="2px"
+        borderColor={borderColor}
+        shadow="2xl"
+        {...props}
+      >
         {children}
       </ChakraModalContent>
     );
@@ -49,13 +61,13 @@ const Heading = forwardRef<HeadingProps, "h1">(({ children, ...props }) => {
 });
 
 const Divider = function ModalDivider() {
-  const dividerColor = useColorModeValue("gray.200", "gray.700");
+  const dividerColor = useColorModeValue("gray.200", "gray.750");
 
   return <ChakraDivider borderColor={dividerColor} borderBottomWidth="2px" />;
 };
 
 const BodySeparator = function ModalBodySeparator() {
-  const dividerColor = useColorModeValue("gray.200", "gray.700");
+  const dividerColor = useColorModeValue("gray.200", "gray.750");
 
   return (
     <ChakraDivider
@@ -109,11 +121,14 @@ export const Modal = forwardRef<ModalProps, "div">(
 };
 
 const Overlay = function ModalOverlay() {
-  const background = useColorModeValue("blackAlpha.400", "blackAlpha.600");
+  const background = useColorModeValue(
+    "rgba(247, 250, 252, 0.72)",
+    "rgba(23, 25, 35, 0.55)",
+  );
 
   return (
     <ChakraModalOverlay
-      backdropFilter="blur(6px)"
+      backdropFilter="blur(12px)"
       background={background}
       transform="translateZ(0px)"
     />

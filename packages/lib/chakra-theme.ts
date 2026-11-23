@@ -130,6 +130,29 @@ export const components = {
       }),
     },
   },
+  Modal: {
+    baseStyle: ({ colorMode }: StyleFunctionProps) => ({
+      overlay: {
+        backdropFilter: "blur(12px)",
+        bg:
+          colorMode === "light"
+            ? "rgba(247, 250, 252, 0.72)"
+            : "rgba(23, 25, 35, 0.55)",
+        transform: "translateZ(0px)",
+      },
+      dialog: {
+        bg:
+          colorMode === "light"
+            ? "rgba(255, 255, 255, 0.88)"
+            : "rgba(23, 25, 35, 0.86)",
+        backdropFilter: "blur(16px)",
+        borderWidth: "2px",
+        borderColor: colorMode === "light" ? "gray.200" : "gray.750",
+        borderRadius: "2xl",
+        shadow: "2xl",
+      },
+    }),
+  },
   Popover: {
     baseStyle: ({ colorMode }: StyleFunctionProps) => ({
       popper: {
@@ -137,13 +160,16 @@ export const components = {
         maxWidth: "fit-content",
       },
       content: {
-        background: colorMode == "light" ? "white" : "gray.750",
-        borderColor: colorMode == "light" ? "gray.100" : "gray.700",
-        shadow: "md",
+        background:
+          colorMode == "light"
+            ? "rgba(255, 255, 255, 0.88)"
+            : "rgba(23, 25, 35, 0.86)",
+        backdropFilter: "blur(16px)",
+        borderWidth: "2px",
+        borderColor: colorMode == "light" ? "gray.200" : "gray.750",
+        borderRadius: "xl",
+        shadow: "xl",
       },
-      // content: ({ colorMode }: StyleFunctionProps) => ({
-      //   background: "white",
-      // }),
     }),
   },
   Input: {
@@ -182,18 +208,37 @@ export const components = {
     },
   },
   Menu: {
-    baseStyle: {
+    baseStyle: ({ colorMode }: StyleFunctionProps) => ({
       list: {
-        shadow: "lg",
-        borderRadius: "lg",
+        bg:
+          colorMode === "light"
+            ? "rgba(255, 255, 255, 0.88)"
+            : "rgba(23, 25, 35, 0.86)",
+        backdropFilter: "blur(16px)",
+        borderWidth: "2px",
+        borderColor: colorMode === "light" ? "gray.200" : "gray.750",
+        shadow: "xl",
+        borderRadius: "xl",
+        p: "1.5",
       },
-    },
+      divider: {
+        borderColor: colorMode === "light" ? "gray.200" : "gray.750",
+        my: "1.5",
+      },
+    }),
   },
   Tooltip: {
     baseStyle: ({ colorMode }: StyleFunctionProps) => ({
-      borderRadius: "md",
-      bg: colorMode == "light" ? "white" : "gray.750",
+      borderRadius: "lg",
+      bg:
+        colorMode == "light"
+          ? "rgba(255, 255, 255, 0.9)"
+          : "rgba(23, 25, 35, 0.88)",
+      backdropFilter: "blur(12px)",
+      borderWidth: "1px",
+      borderColor: colorMode == "light" ? "gray.200" : "gray.750",
       textColor: colorMode == "light" ? "black" : "white",
+      shadow: "lg",
     }),
   },
   Container: {

@@ -66,10 +66,11 @@ const PrivacyPolicy = () => {
               Where it is stored
             </Heading>
             <Text>
-              Account and study data is stored in a cloud MySQL database
-              (Aiven). Uploaded files are stored in Cloudflare R2 object
-              storage. Sign-in is handled by Google, and transactional email,
-              when used, is sent through Resend.
+              Account, study, and IELTS practice data is stored in a cloud
+              MySQL-compatible database (TiDB Cloud). Uploaded files are stored
+              in Vercel Blob or GitHub-backed CDN media storage. Sign-in is
+              handled by Google, and transactional email, when enabled, is sent
+              through Resend.
             </Text>
 
             <Heading as="h2" size="md">

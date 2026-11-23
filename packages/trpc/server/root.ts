@@ -7,6 +7,7 @@ import { cortexRouter } from "./routers/cortex/_router";
 import { devRouter } from "./routers/dev";
 import { discoverableRouter } from "./routers/discoverable";
 import { foldersRouter } from "./routers/folders/_router";
+import { ieltsRouter } from "./routers/ielts/_router";
 import { imagesRouter } from "./routers/images/_router";
 import { importRouter } from "./routers/import/_router";
 import { leaderboardRouter } from "./routers/leaderboard/_router";
@@ -45,6 +46,7 @@ export const appRouter = createTRPCRouter({
   organizations: organizationsRouter,
   disoverable: discoverableRouter,
   shareResolver: shareResolverRouter,
+  ielts: ieltsRouter,
   dev: devRouter,
 });
 

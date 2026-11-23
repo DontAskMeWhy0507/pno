@@ -1,3 +1,4 @@
+import dynamic from "next/dynamic";
 import React, { useState, useEffect, type FC } from "react";
 import { outfit } from "@quenti/lib/chakra-theme";
 import {
@@ -27,6 +28,7 @@ import {
   Stack,
   Text,
   Textarea,
+  VStack,
   useColorModeValue,
   useToast,
 } from "@chakra-ui/react";
@@ -66,16 +68,17 @@ import {
   saveSpeakingExam,
   deleteSpeakingExam,
 } from "../../data/speakingExams";
-import { WritingEditorModal } from "../admin/WritingEditorModal";
-import { SpeakingEditorModal } from "../admin/SpeakingEditorModal";
 import {
   deleteExam,
   getAllCollections,
   getExamCollection,
+  getExamPartCount,
+  getExamQuestionCount,
   createCollection,
   deleteCollection,
   isListeningExam,
 } from "../../utils/storage";
+import type { CloudAttemptRow, CloudIeltsSkill } from "../../utils/cloudSync";
 import {
   getSavedExamSummary,
   clearExamProgress,
@@ -88,8 +91,23 @@ import {
 } from "../../utils/writingProgress";
 import { type InProgressItem } from "./InProgressBanner";
 
+const WritingEditorModal = dynamic(
+  () =>
+    import("../admin/WritingEditorModal").then((mod) => mod.WritingEditorModal),
+  { ssr: false },
+);
+const SpeakingEditorModal = dynamic(
+  () =>
+    import("../admin/SpeakingEditorModal").then(
+      (mod) => mod.SpeakingEditorModal,
+    ),
+  { ssr: false },
+);
+
 interface HomePageProps {
   exams: Exam[];
+  recentAttempts?: CloudAttemptRow[];
+  syncStatus?: "synced" | "saving" | "offline";
   onSelectExam: (exam: Exam) => void;
   onOpenEditor: (exam?: Exam | null) => void;
   onOpenTestManager: () => void;
@@ -100,6 +118,21 @@ interface HomePageProps {
   onRefreshExams: () => void;
   onStartWritingExam: (exam: WritingExam) => void;
   onStartSpeakingExam: (exam: SpeakingExam) => void;
+  onDeleteAttempt?: (id: string) => void;
+  onCloudSaveExam?: (
+    skill: CloudIeltsSkill,
+    examId: string,
+    title: string,
+    collection: string,
+    data: Record<string, unknown>,
+  ) => void;
+  onCloudDeleteExam?: (skill: CloudIeltsSkill, examId: string) => void;
+  onCloudCreateCollection?: (col: { name: string; description?: string }) => void;
+  onCloudDeleteCollection?: (
+    name: string,
+    examsToTombstone: Array<{ examId: string; skill: CloudIeltsSkill }>,
+  ) => void;
+  onCloudClearProgress?: (skill: CloudIeltsSkill, examId: string) => void;
 }
 
 interface UnifiedIeltsCardProps {
@@ -145,7 +178,6 @@ const UnifiedIeltsCard: FC<UnifiedIeltsCardProps> = ({
   const cardBorder = useColorModeValue("gray.200", "gray.700");
   const activeBorder = useColorModeValue("green.400", "green.500");
   const secondaryColor = useColorModeValue("gray.600", "gray.400");
-  const menuBg = useColorModeValue("white", "gray.800");
 
   return (
     <Box
@@ -264,12 +296,9 @@ const UnifiedIeltsCard: FC<UnifiedIeltsCardProps> = ({
                 icon={<IconDotsVertical size={16} />}
               />
               <MenuList
-                bg={menuBg}
-                py={0}
                 overflow="hidden"
                 minW="auto"
                 w="48"
-                shadow="lg"
                 zIndex={40}
               >
                 <MenuOption
@@ -313,6 +342,8 @@ const UnifiedIeltsCard: FC<UnifiedIeltsCardProps> = ({
 
 export const HomePage: FC<HomePageProps> = ({
   exams,
+  recentAttempts = [],
+  syncStatus = "synced",
   onSelectExam,
   onOpenEditor,
   onOpenTestManager,
@@ -320,6 +351,12 @@ export const HomePage: FC<HomePageProps> = ({
   onRefreshExams,
   onStartWritingExam,
   onStartSpeakingExam,
+  onDeleteAttempt,
+  onCloudSaveExam,
+  onCloudDeleteExam,
+  onCloudCreateCollection,
+  onCloudDeleteCollection,
+  onCloudClearProgress,
 }) => {
   const [activeTab, setActiveTab] = useState<
     "reading" | "listening" | "writing" | "speaking"
@@ -387,6 +424,13 @@ export const HomePage: FC<HomePageProps> = ({
 
   const handleSaveWriting = (examToSave: WritingExam) => {
     saveWritingExam(examToSave);
+    onCloudSaveExam?.(
+      "Writing",
+      examToSave.id,
+      examToSave.title,
+      examToSave.collection || "My Tests",
+      examToSave as unknown as Record<string, unknown>,
+    );
     setIsWritingEditorOpen(false);
     setEditingWritingExam(null);
     refreshWriting();
@@ -401,6 +445,13 @@ export const HomePage: FC<HomePageProps> = ({
 
   const handleSaveSpeaking = (examToSave: SpeakingExam) => {
     saveSpeakingExam(examToSave);
+    onCloudSaveExam?.(
+      "Speaking",
+      examToSave.id,
+      examToSave.title,
+      examToSave.collection || "My Tests",
+      examToSave as unknown as Record<string, unknown>,
+    );
     setIsSpeakingEditorOpen(false);
     setEditingSpeakingExam(null);
     refreshSpeaking();
@@ -413,12 +464,16 @@ export const HomePage: FC<HomePageProps> = ({
     });
   };
 
-  const handleDeleteExam = (id: string, title: string) => {
-    deleteExam(id);
+  const handleDeleteExam = (exam: Exam) => {
+    deleteExam(exam.id);
+    onCloudDeleteExam?.(
+      isListeningExam(exam) ? "Listening" : "Reading",
+      exam.id,
+    );
     onRefreshExams();
     toast({
       title: "Test deleted",
-      description: `Removed "${title}" from your Test Bank.`,
+      description: `Removed "${exam.title}" from your Test Bank.`,
       status: "info",
       duration: 2500,
       isClosable: true,
@@ -428,6 +483,7 @@ export const HomePage: FC<HomePageProps> = ({
 
   const handleDeleteWritingExam = (id: string, title: string) => {
     deleteWritingExam(id);
+    onCloudDeleteExam?.("Writing", id);
     refreshWriting();
     toast({
       title: "Writing test deleted",
@@ -441,6 +497,7 @@ export const HomePage: FC<HomePageProps> = ({
 
   const handleDeleteSpeakingExam = (id: string, title: string) => {
     deleteSpeakingExam(id);
+    onCloudDeleteExam?.("Speaking", id);
     refreshSpeaking();
     toast({
       title: "Speaking test deleted",
@@ -452,12 +509,16 @@ export const HomePage: FC<HomePageProps> = ({
     });
   };
 
-  const handleDiscardExam = (examId: string, title: string) => {
-    clearExamProgress(examId);
+  const handleDiscardExam = (exam: Exam) => {
+    clearExamProgress(exam.id);
+    onCloudClearProgress?.(
+      isListeningExam(exam) ? "Listening" : "Reading",
+      exam.id,
+    );
     setProgressVersion((v) => v + 1);
     toast({
       title: "Progress reset",
-      description: `"${title}" is ready to start from scratch.`,
+      description: `"${exam.title}" is ready to start from scratch.`,
       status: "info",
       duration: 2200,
       isClosable: true,
@@ -467,6 +528,7 @@ export const HomePage: FC<HomePageProps> = ({
 
   const handleDiscardWriting = (examId: string, title: string) => {
     clearWritingProgress(examId);
+    onCloudClearProgress?.("Writing", examId);
     setProgressVersion((v) => v + 1);
     toast({
       title: "Draft discarded",
@@ -480,6 +542,7 @@ export const HomePage: FC<HomePageProps> = ({
 
   const handleDiscardSpeaking = (examId: string, title: string) => {
     clearSpeakingProgress(examId);
+    onCloudClearProgress?.("Speaking", examId);
     setProgressVersion((v) => v + 1);
     toast({
       title: "Session reset",
@@ -494,7 +557,11 @@ export const HomePage: FC<HomePageProps> = ({
   const handleCreateCollection = (e: React.FormEvent) => {
     e.preventDefault();
     if (!newCollectionName.trim()) return;
-    createCollection(newCollectionName.trim(), newCollectionDesc.trim());
+    const created = createCollection(
+      newCollectionName.trim(),
+      newCollectionDesc.trim(),
+    );
+    onCloudCreateCollection?.(created);
     setNewCollectionName("");
     setNewCollectionDesc("");
     setShowNewCollectionModal(false);
@@ -510,7 +577,14 @@ export const HomePage: FC<HomePageProps> = ({
 
   const handleDeleteCollection = (e: React.MouseEvent, name: string) => {
     e.stopPropagation();
+    const examsToTombstone = exams
+      .filter((ex) => getExamCollection(ex).toLowerCase() === name.trim().toLowerCase())
+      .map((ex) => ({
+        examId: ex.id,
+        skill: (isListeningExam(ex) ? "Listening" : "Reading") as CloudIeltsSkill,
+      }));
     deleteCollection(name);
+    onCloudDeleteCollection?.(name, examsToTombstone);
     if (selectedCollectionName === name) setSelectedCollectionName(null);
     onRefreshExams();
     toast({
@@ -567,15 +641,7 @@ export const HomePage: FC<HomePageProps> = ({
   for (const exam of exams) {
     const summary = getSavedExamSummary(exam.id);
     if (summary) {
-      const totalQ = exam.parts.reduce(
-        (sum, p) =>
-          sum +
-          (p.questionGroups || []).reduce(
-            (gSum, g) => gSum + (g.questions || []).length,
-            0,
-          ),
-        0,
-      );
+      const totalQ = getExamQuestionCount(exam);
       inProgressItems.push({
         id: exam.id,
         title: exam.title,
@@ -645,15 +711,8 @@ export const HomePage: FC<HomePageProps> = ({
   ).length;
 
   const renderExamCardItem = (test: Exam) => {
-    const totalQ = test.parts.reduce(
-      (sum, p) =>
-        sum +
-        (p.questionGroups || []).reduce(
-          (gSum, g) => gSum + (g.questions || []).length,
-          0,
-        ),
-      0,
-    );
+    const totalQ = getExamQuestionCount(test);
+    const totalParts = getExamPartCount(test);
     const colName = getExamCollection(test);
     const savedProgress = getSavedExamSummary(test.id);
     const isListen = isListeningExam(test);
@@ -666,7 +725,7 @@ export const HomePage: FC<HomePageProps> = ({
         <UnifiedIeltsCard
           title={test.title}
           collectionName={colName}
-          metaText={`${mins} • ${test.parts.length} ${
+          metaText={`${mins} • ${totalParts} ${
             isListen ? "Sections" : "Parts"
           } • ${totalQ} Questions`}
           skillColor={isListen ? "purple.400" : "blue.400"}
@@ -680,11 +739,9 @@ export const HomePage: FC<HomePageProps> = ({
           isCustom={test.isBuiltin === false || colName === "My Tests"}
           onStart={() => onSelectExam(test)}
           onEdit={() => onOpenEditor(test)}
-          onDelete={() => handleDeleteExam(test.id, test.title)}
+          onDelete={() => handleDeleteExam(test)}
           onDiscardProgress={
-            savedProgress
-              ? () => handleDiscardExam(test.id, test.title)
-              : undefined
+            savedProgress ? () => handleDiscardExam(test) : undefined
           }
         />
       </GridItem>
@@ -710,7 +767,7 @@ export const HomePage: FC<HomePageProps> = ({
                   py={0.5}
                   rounded="md"
                 >
-                  Auto-saved
+                  {syncStatus === "saving" ? "Syncing..." : "Cloud Synced"}
                 </Badge>
               </HStack>
               <Text fontSize="sm" color={secondaryColor}>
@@ -789,6 +846,111 @@ export const HomePage: FC<HomePageProps> = ({
                 return null;
               })}
             </Grid>
+          </Stack>
+        )}
+
+        {/* Recent Band Score & Attempt History (Cloud Synced) */}
+        {recentAttempts.length > 0 && (
+          <Stack spacing={4}>
+            <HStack justify="space-between" align="center" flexWrap="wrap">
+              <HStack spacing={2.5}>
+                <Icon as={IconSparkles} boxSize={6} color="blue.400" />
+                <Heading size="lg" fontFamily={outfit.style.fontFamily}>
+                  Recent Band History ({recentAttempts.length})
+                </Heading>
+                <Badge
+                  colorScheme="blue"
+                  fontSize="sm"
+                  px={2}
+                  py={0.5}
+                  rounded="md"
+                >
+                  Cloud History
+                </Badge>
+              </HStack>
+              <Text fontSize="sm" color={secondaryColor}>
+                Saved automatically across devices
+              </Text>
+            </HStack>
+
+            <SimpleGrid columns={{ base: 1, md: 2, lg: 3 }} gap={4}>
+              {recentAttempts.slice(0, 6).map((attempt) => {
+                const skillColor =
+                  attempt.skill === "Listening"
+                    ? "purple"
+                    : attempt.skill === "Writing"
+                      ? "orange"
+                      : attempt.skill === "Speaking"
+                        ? "pink"
+                        : "blue";
+                const minsSpent = Math.max(
+                  1,
+                  Math.round(attempt.timeSpentSeconds / 60),
+                );
+                const dateLabel = new Date(attempt.completedAt).toLocaleDateString(
+                  undefined,
+                  { month: "short", day: "numeric" },
+                );
+
+                return (
+                  <Box
+                    key={attempt.id}
+                    bg={cardBg}
+                    borderWidth="2px"
+                    borderColor={cardBorder}
+                    rounded="xl"
+                    p={4}
+                    shadow="sm"
+                  >
+                    <Flex justify="space-between" align="start" gap={3}>
+                      <Stack spacing={1.5} minW={0} flex={1}>
+                        <HStack spacing={2}>
+                          <Badge colorScheme={skillColor} rounded="md" fontSize="xs">
+                            {attempt.skill}
+                          </Badge>
+                          <Text fontSize="xs" color={secondaryColor}>
+                            {dateLabel} • {minsSpent}m
+                          </Text>
+                        </HStack>
+                        <Text fontWeight={700} fontSize="sm" noOfLines={1}>
+                          {attempt.examTitle}
+                        </Text>
+                        <Text fontSize="xs" color={secondaryColor}>
+                          {attempt.totalQuestions > 0
+                            ? `${attempt.totalCorrect}/${attempt.totalQuestions} correct`
+                            : "Completed submission"}
+                        </Text>
+                      </Stack>
+                      <VStack spacing={1} align="end" flexShrink={0}>
+                        {attempt.bandScore !== null &&
+                          attempt.bandScore !== undefined && (
+                            <Badge
+                              colorScheme="green"
+                              fontSize="sm"
+                              px={2.5}
+                              py={1}
+                              rounded="lg"
+                              fontWeight={800}
+                            >
+                              Band {attempt.bandScore.toFixed(1)}
+                            </Badge>
+                          )}
+                        {onDeleteAttempt && (
+                          <IconButton
+                            aria-label="Delete attempt"
+                            icon={<IconTrash size={14} />}
+                            size="xs"
+                            variant="ghost"
+                            colorScheme="gray"
+                            onClick={() => onDeleteAttempt(attempt.id)}
+                          />
+                        )}
+                      </VStack>
+                    </Flex>
+                  </Box>
+                );
+              })}
+            </SimpleGrid>
           </Stack>
         )}
 
@@ -1320,13 +1482,8 @@ export const HomePage: FC<HomePageProps> = ({
         onClose={() => setShowNewCollectionModal(false)}
         isCentered
       >
-        <ModalOverlay backdropFilter="blur(6px)" />
-        <ModalContent
-          bg={cardBg}
-          borderWidth="2px"
-          borderColor={cardBorder}
-          rounded="2xl"
-        >
+        <ModalOverlay />
+        <ModalContent>
           <form onSubmit={handleCreateCollection}>
             <ModalHeader fontFamily={outfit.style.fontFamily}>
               Create New Collection
@@ -1375,28 +1532,32 @@ export const HomePage: FC<HomePageProps> = ({
         </ModalContent>
       </Modal>
 
-      {/* Writing & Speaking Editor Modals */}
-      <WritingEditorModal
-        key={editingWritingExam?.id || "new-writing"}
-        isOpen={isWritingEditorOpen}
-        onClose={() => {
-          setIsWritingEditorOpen(false);
-          setEditingWritingExam(null);
-        }}
-        initialExam={editingWritingExam}
-        onSave={handleSaveWriting}
-      />
+      {/* Writing & Speaking Editor Modals (Lazy-mounted only when open) */}
+      {isWritingEditorOpen && (
+        <WritingEditorModal
+          key={editingWritingExam?.id || "new-writing"}
+          isOpen={isWritingEditorOpen}
+          onClose={() => {
+            setIsWritingEditorOpen(false);
+            setEditingWritingExam(null);
+          }}
+          initialExam={editingWritingExam}
+          onSave={handleSaveWriting}
+        />
+      )}
 
-      <SpeakingEditorModal
-        key={editingSpeakingExam?.id || "new-speaking"}
-        isOpen={isSpeakingEditorOpen}
-        onClose={() => {
-          setIsSpeakingEditorOpen(false);
-          setEditingSpeakingExam(null);
-        }}
-        initialExam={editingSpeakingExam}
-        onSave={handleSaveSpeaking}
-      />
+      {isSpeakingEditorOpen && (
+        <SpeakingEditorModal
+          key={editingSpeakingExam?.id || "new-speaking"}
+          isOpen={isSpeakingEditorOpen}
+          onClose={() => {
+            setIsSpeakingEditorOpen(false);
+            setEditingSpeakingExam(null);
+          }}
+          initialExam={editingSpeakingExam}
+          onSave={handleSaveSpeaking}
+        />
+      )}
     </Container>
   );
 };

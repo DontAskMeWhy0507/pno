@@ -4,6 +4,9 @@ import { outfit } from '@quenti/lib/chakra-theme';
 import type { Exam } from '../../types/exam';
 import {
   getAllExams,
+  getExamPartCount,
+  getExamQuestionCount,
+  loadFullExam,
   saveExam,
   deleteExam,
   exportExamAsJSON,
@@ -38,6 +41,10 @@ interface TestManagerProps {
   onSelectExam: (exam: Exam) => void;
   onOpenEditor: (exam?: Exam | null) => void;
   onOpenSmartImport?: () => void;
+  onExamsMutated?: () => void;
+  onCloudSaveExam?: (exam: Exam) => void;
+  onCloudDeleteExam?: (exam: Exam) => void;
+  onCloudCreateCollection?: (col: { name: string; description?: string }) => void;
 }
 
 export const TestManager: FC<TestManagerProps> = ({
@@ -46,6 +53,10 @@ export const TestManager: FC<TestManagerProps> = ({
   onSelectExam,
   onOpenEditor,
   onOpenSmartImport,
+  onExamsMutated,
+  onCloudSaveExam,
+  onCloudDeleteExam,
+  onCloudCreateCollection,
 }) => {
   const toast = useToast();
   const [exams, setExams] = useState<Exam[]>(() => getAllExams());
@@ -65,35 +76,65 @@ export const TestManager: FC<TestManagerProps> = ({
 
   const refreshExams = () => {
     setExams(getAllExams());
+    onExamsMutated?.();
   };
 
-  const handleClone = (exam: Exam) => {
-    const cloned: Exam = {
-      ...JSON.parse(JSON.stringify(exam)),
-      id: 'exam_' + Date.now(),
-      title: `${exam.title} (Copy)`,
-      isBuiltin: false,
-      createdAt: Date.now(),
-      updatedAt: Date.now(),
-    };
-    saveExam(cloned);
-    refreshExams();
-    toast({
-      title: 'Test duplicated',
-      description: `Created "${cloned.title}".`,
-      status: 'success',
-      duration: 2200,
-      isClosable: true,
-      position: 'bottom-right',
-    });
+  const handleClone = async (exam: Exam) => {
+    try {
+      const full = (await loadFullExam(exam)) ?? exam;
+      const cloned: Exam = {
+        ...JSON.parse(JSON.stringify(full)),
+        id: 'exam_' + Date.now(),
+        title: `${full.title} (Copy)`,
+        isBuiltin: false,
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+      };
+      delete cloned.dataFile;
+      saveExam(cloned);
+      onCloudSaveExam?.(cloned);
+      refreshExams();
+      toast({
+        title: 'Test duplicated',
+        description: `Created "${cloned.title}".`,
+        status: 'success',
+        duration: 2200,
+        isClosable: true,
+        position: 'bottom-right',
+      });
+    } catch {
+      toast({
+        title: 'Unable to duplicate test',
+        status: 'error',
+        duration: 2500,
+        isClosable: true,
+        position: 'bottom-right',
+      });
+    }
   };
 
-  const handleDelete = (id: string, title: string) => {
-    deleteExam(id);
+  const handleExport = async (exam: Exam) => {
+    try {
+      const full = (await loadFullExam(exam)) ?? exam;
+      exportExamAsJSON(full);
+    } catch {
+      toast({
+        title: 'Unable to export test',
+        status: 'error',
+        duration: 2500,
+        isClosable: true,
+        position: 'bottom-right',
+      });
+    }
+  };
+
+  const handleDelete = (exam: Exam) => {
+    deleteExam(exam.id);
+    onCloudDeleteExam?.(exam);
     refreshExams();
     toast({
       title: 'Test deleted',
-      description: `Removed "${title}" from Test Bank.`,
+      description: `Removed "${exam.title}" from Test Bank.`,
       status: 'info',
       duration: 2200,
       isClosable: true,
@@ -109,7 +150,8 @@ export const TestManager: FC<TestManagerProps> = ({
     reader.onload = (evt) => {
       try {
         const text = evt.target?.result as string;
-        importExamFromJSON(text);
+        const imported = importExamFromJSON(text);
+        onCloudSaveExam?.(imported);
         refreshExams();
         toast({
           title: 'Test imported successfully',
@@ -140,7 +182,8 @@ export const TestManager: FC<TestManagerProps> = ({
         setImportError('Please paste JSON content here.');
         return;
       }
-      importExamFromJSON(importJsonText);
+      const imported = importExamFromJSON(importJsonText);
+      onCloudSaveExam?.(imported);
       refreshExams();
       setImportModalOpen(false);
       setImportJsonText('');
@@ -173,7 +216,8 @@ export const TestManager: FC<TestManagerProps> = ({
     e.preventDefault();
     if (!newCollectionName.trim()) return;
     try {
-      createCollection(newCollectionName.trim(), newCollectionDesc.trim());
+      const created = createCollection(newCollectionName.trim(), newCollectionDesc.trim());
+      onCloudCreateCollection?.(created);
       setSelectedCollection(newCollectionName.trim());
       setNewCollectionName('');
       setNewCollectionDesc('');
@@ -334,11 +378,8 @@ export const TestManager: FC<TestManagerProps> = ({
           ) : (
             filteredExams.map((exam) => {
               const isListening = isListeningExam(exam);
-              const totalQuestions = exam.parts.reduce(
-                (sum, p) =>
-                  sum + p.questionGroups.reduce((gSum, g) => gSum + g.questions.length, 0),
-                0
-              );
+              const totalQuestions = getExamQuestionCount(exam);
+              const totalParts = getExamPartCount(exam);
               const currentExamCol = getExamCollection(exam);
 
               return (
@@ -373,12 +414,16 @@ export const TestManager: FC<TestManagerProps> = ({
                         </span>
                         <select
                           value={currentExamCol}
-                          onChange={(e) => {
-                            setExamCollection(exam.id, e.target.value);
+                          onChange={async (e) => {
+                            const nextCol = e.target.value;
+                            const full = (await loadFullExam(exam)) ?? exam;
+                            const moved = { ...full, collection: nextCol };
+                            saveExam(moved);
+                            onCloudSaveExam?.(moved);
                             refreshExams();
                             toast({
                               title: 'Moved test to collection',
-                              description: `${exam.title} → ${e.target.value}`,
+                              description: `${exam.title} → ${nextCol}`,
                               status: 'info',
                               duration: 2000,
                               isClosable: true,
@@ -415,7 +460,7 @@ export const TestManager: FC<TestManagerProps> = ({
                         {exam.durationMinutes} mins
                       </span>
                       <span>•</span>
-                      <span>{exam.parts.length} {isListening ? 'Sections' : 'Passages'}</span>
+                      <span>{totalParts} {isListening ? 'Sections' : 'Passages'}</span>
                       <span>•</span>
                       <span className="font-bold text-gray-700">
                         {totalQuestions} Questions
@@ -449,7 +494,7 @@ export const TestManager: FC<TestManagerProps> = ({
 
                     {/* Clone */}
                     <button
-                      onClick={() => handleClone(exam)}
+                      onClick={() => void handleClone(exam)}
                       className="p-2 text-gray-600 hover:text-emerald-600 bg-gray-100 hover:bg-emerald-50 border border-gray-200 rounded-xl transition"
                       title="Duplicate test"
                     >
@@ -458,7 +503,7 @@ export const TestManager: FC<TestManagerProps> = ({
 
                     {/* Export */}
                     <button
-                      onClick={() => exportExamAsJSON(exam)}
+                      onClick={() => void handleExport(exam)}
                       className="p-2 text-gray-600 hover:text-indigo-600 bg-gray-100 hover:bg-indigo-50 border border-gray-200 rounded-xl transition"
                       title="Export as JSON backup"
                     >
@@ -467,7 +512,7 @@ export const TestManager: FC<TestManagerProps> = ({
 
                     {/* Delete */}
                     <button
-                      onClick={() => handleDelete(exam.id, exam.title)}
+                      onClick={() => handleDelete(exam)}
                       className="p-2 text-gray-500 hover:text-rose-600 bg-gray-100 hover:bg-rose-50 border border-gray-200 rounded-xl transition"
                       title="Delete test"
                     >

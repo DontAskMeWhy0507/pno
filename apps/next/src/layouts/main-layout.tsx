@@ -7,10 +7,6 @@ const OnboardingRedirect = dynamic(
   () => import("../common/onboarding-redirect"),
   { ssr: false },
 );
-const GlobalShortcutLayer = dynamic(
-  () => import("../components/global-shortcut-layer"),
-  { ssr: false },
-);
 const SignupModal = dynamic(() => import("../components/signup-modal"), {
   ssr: false,
 });
@@ -36,7 +32,6 @@ export const MainLayout: React.FC<React.PropsWithChildren> = ({ children }) => {
         <Navbar />
       </div>
       <OnboardingRedirect />
-      <GlobalShortcutLayer />
       <SignupModal />
       <CreateClassNotice />
       <ConfettiLayer />

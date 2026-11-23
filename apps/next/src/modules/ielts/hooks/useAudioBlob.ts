@@ -1,18 +1,37 @@
 import { useState, useEffect } from 'react';
 
+const MAX_AUDIO_CACHE_ENTRIES = 5;
+const audioBlobCache = new Map<string, string>();
+
+function getCachedAudioBlob(key: string): string | undefined {
+  const existing = audioBlobCache.get(key);
+  if (!existing) return undefined;
+  // Refresh LRU order
+  audioBlobCache.delete(key);
+  audioBlobCache.set(key, existing);
+  return existing;
+}
+
+function setCachedAudioBlob(key: string, objectUrl: string) {
+  if (audioBlobCache.has(key)) {
+    audioBlobCache.delete(key);
+  } else if (audioBlobCache.size >= MAX_AUDIO_CACHE_ENTRIES) {
+    const oldestKey = audioBlobCache.keys().next().value;
+    if (oldestKey) {
+      const oldestUrl = audioBlobCache.get(oldestKey);
+      audioBlobCache.delete(oldestKey);
+      if (oldestUrl && oldestUrl.startsWith('blob:')) {
+        URL.revokeObjectURL(oldestUrl);
+      }
+    }
+  }
+  audioBlobCache.set(key, objectUrl);
+}
+
 /**
  * useAudioBlob
- * Fetches audio via XMLHttpRequest / fetch with anti-IDM headers,
- * and creates an in-memory blob: URL.
- * 
- * WHY:
- * Internet Download Manager (IDM) on Windows intercepts direct HTTP requests
- * for files ending in .mp3 or .mp4, popping up a download modal and breaking
- * in-browser audio playback.
- * 
- * By fetching the audio as a Blob with `X-Requested-With: XMLHttpRequest`,
- * IDM ignores the request, and the resulting `blob:http://...` URL is played
- * from browser memory where IDM cannot intercept it.
+ * Fetches audio via fetch with anti-IDM headers and creates an in-memory blob: URL
+ * backed by a small LRU cache so switching IELTS Listening parts plays instantly.
  */
 export function useAudioBlob(audioUrl?: string) {
   const [blobUrl, setBlobUrl] = useState<string>('');
@@ -23,6 +42,7 @@ export function useAudioBlob(audioUrl?: string) {
     if (!audioUrl) {
       setBlobUrl('');
       setError(null);
+      setIsLoading(false);
       return;
     }
 
@@ -36,23 +56,29 @@ export function useAudioBlob(audioUrl?: string) {
         ? trimmed
         : '/' + trimmed;
 
-    // If already blob or data URL, no fetch needed
     if (normalized.startsWith('blob:') || normalized.startsWith('data:')) {
       setBlobUrl(normalized);
       setError(null);
+      setIsLoading(false);
+      return;
+    }
+
+    const cached = getCachedAudioBlob(normalized);
+    if (cached) {
+      setBlobUrl(cached);
+      setError(null);
+      setIsLoading(false);
       return;
     }
 
     let active = true;
-    let objectUrl = '';
     const controller = new AbortController();
 
     const fetchBlob = async () => {
       setIsLoading(true);
       setError(null);
 
-      // Candidates: try .mp3 first if mp4 (faster, pure audio), then original
-      const candidates = [];
+      const candidates: string[] = [];
       if (normalized.endsWith('.mp4')) {
         candidates.push(normalized.replace(/\.mp4$/, '.mp3'));
       }
@@ -65,14 +91,15 @@ export function useAudioBlob(audioUrl?: string) {
             signal: controller.signal,
             headers: {
               'X-Requested-With': 'XMLHttpRequest',
-              'Accept': 'audio/*, video/mp4;q=0.9, */*;q=0.8',
+              Accept: 'audio/*, video/mp4;q=0.9, */*;q=0.8',
             },
           });
 
           if (res.ok) {
             const blob = await res.blob();
             if (active) {
-              objectUrl = URL.createObjectURL(blob);
+              const objectUrl = URL.createObjectURL(blob);
+              setCachedAudioBlob(normalized, objectUrl);
               setBlobUrl(objectUrl);
               success = true;
               break;
@@ -87,7 +114,6 @@ export function useAudioBlob(audioUrl?: string) {
       }
 
       if (!success && active) {
-        // Fallback to direct URL if fetch failed (e.g. CORS on external URL)
         setBlobUrl(normalized);
         setError('Audio could not be preloaded. Trying the original source instead.');
       }
@@ -97,14 +123,11 @@ export function useAudioBlob(audioUrl?: string) {
       }
     };
 
-    fetchBlob();
+    void fetchBlob();
 
     return () => {
       active = false;
       controller.abort();
-      if (objectUrl) {
-        URL.revokeObjectURL(objectUrl);
-      }
     };
   }, [audioUrl]);
 

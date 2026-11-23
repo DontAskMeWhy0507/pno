@@ -63,6 +63,9 @@ export interface Exam {
   createdAt: number;
   updatedAt: number;
   isBuiltin?: boolean;
+  partCount?: number;
+  questionCount?: number;
+  dataFile?: string;
 }
 
 export interface UserAnswerRecord {

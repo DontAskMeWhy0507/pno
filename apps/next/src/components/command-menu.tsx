@@ -17,6 +17,7 @@ import {
   Flex,
   HStack,
   Input,
+  Kbd,
   Modal,
   ModalBody,
   ModalContent,
@@ -29,26 +30,51 @@ import {
 } from "@chakra-ui/react";
 
 import {
+  IconBook,
   IconBooks,
+  IconBrain,
+  IconCards,
   IconCloudDownload,
+  IconCube,
+  IconDatabase,
+  IconDeviceGamepad2,
+  IconEdit,
   IconFolder,
   IconFolderPlus,
   IconGhost3,
+  IconHeadphones,
   IconHome,
   IconLink,
+  IconMicrophone,
   IconMoon,
+  IconPencil,
+  IconPlanet,
   IconPlus,
   IconProgress,
+  IconPuzzle,
   IconSchool,
+  IconSearch,
   IconSettings,
   IconSun,
+  IconTestPipe,
   IconUser,
 } from "@tabler/icons-react";
 
 import { menuEventChannel } from "../events/menu";
 import { useDevActions } from "../hooks/use-dev-actions";
 import { useIsTeacher } from "../hooks/use-is-teacher";
-import { useMe } from "../hooks/use-me";
+import { getAllSpeakingExams } from "../modules/ielts/data/speakingExams";
+import { getAllWritingExams } from "../modules/ielts/data/writingExams";
+import { getSavedExamSummary } from "../modules/ielts/utils/examProgress";
+import {
+  getAllExams,
+  getExamCollection,
+  isListeningExam,
+} from "../modules/ielts/utils/storage";
+import {
+  getSavedWritingSummary,
+  loadSpeakingProgress,
+} from "../modules/ielts/utils/writingProgress";
 import { plural } from "../utils/string";
 
 export interface CommandMenuProps {
@@ -69,6 +95,7 @@ interface Entity {
 }
 
 export interface MenuOption {
+  id?: string;
   icon: React.ReactNode;
   name: string;
   searchableName?: string;
@@ -78,8 +105,13 @@ export interface MenuOption {
   entity?: Entity;
   shouldShow?: () => boolean;
   loadable?: boolean;
-  isLoading?: boolean;
 }
+
+const normalizeSearch = (text: string) =>
+  text
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
 
 export const CommandMenu: React.FC<CommandMenuProps> = ({
   isOpen,
@@ -87,20 +119,29 @@ export const CommandMenu: React.FC<CommandMenuProps> = ({
 }) => {
   const router = useRouter();
   const session = useSession();
-  const { data: me } = useMe();
   const devActions = useDevActions();
   const isTeacher = useIsTeacher();
   const { colorMode, toggleColorMode } = useColorMode();
 
   const dismiss = router.pathname == "/onboarding/command-menu";
   const onSet = router.pathname == "/sets/[id]";
+  const onSetSubpage = router.pathname.startsWith("/sets/[id]");
   const onFolder = router.pathname == "/profile/[username]/folders/[slug]";
+  const currentSetId =
+    onSetSubpage && typeof router.query.id === "string"
+      ? router.query.id
+      : undefined;
+
+  const [loadingOptionId, setLoadingOptionId] = React.useState<string | null>(
+    null,
+  );
 
   const url = (id: string) => `${APP_URL}/_${id}`;
-  const onSuccess = (id: string) => {
+  const onShareSuccess = (id: string) => {
     void (async () => {
       await navigator.clipboard.writeText(url(id));
     })();
+    setLoadingOptionId(null);
     onClose();
   };
 
@@ -109,7 +150,8 @@ export const CommandMenu: React.FC<CommandMenuProps> = ({
     {
       enabled: false,
       refetchOnWindowFocus: false,
-      onSuccess,
+      onSuccess: onShareSuccess,
+      onError: () => setLoadingOptionId(null),
     },
   );
 
@@ -121,25 +163,75 @@ export const CommandMenu: React.FC<CommandMenuProps> = ({
     {
       enabled: false,
       refetchOnWindowFocus: false,
-      onSuccess,
+      onSuccess: onShareSuccess,
+      onError: () => setLoadingOptionId(null),
     },
   );
-
-  const [options, setOptions] = React.useState<MenuOption[]>([]);
 
   const recentQuery = api.recent.get.useQuery(undefined, {
     enabled: isOpen,
     refetchOnWindowFocus: false,
-    onSuccess: (data) => {
-      let total: MenuOption[] = [];
+  });
 
+  const openLink = React.useCallback(
+    (link: string, ctrl: boolean) => {
+      void (async () => {
+        if (ctrl) {
+          window.open(link, "_blank");
+        } else {
+          await router.push(link);
+        }
+      })();
+    },
+    [router],
+  );
+
+  const openIeltsPath = React.useCallback(
+    (path: string, ctrl: boolean) => {
+      void (async () => {
+        if (ctrl) {
+          window.open(path, "_blank");
+        } else if (router.pathname.startsWith("/ielts")) {
+          menuEventChannel.emit("ieltsNavigate", path);
+        } else {
+          await router.push(path);
+        }
+      })();
+    },
+    [router],
+  );
+
+  const triggerIeltsAction = React.useCallback(
+    (
+      actionName: "add_test" | "test_bank" | "new_collection",
+      eventName:
+        | "openIeltsAddTest"
+        | "openIeltsTestBank"
+        | "openIeltsNewCollection",
+    ) => {
+      if (router.pathname.startsWith("/ielts")) {
+        menuEventChannel.emit(eventName);
+      } else {
+        try {
+          sessionStorage.setItem("pno_pending_ielts_action", actionName);
+        } catch {}
+        void router.push("/ielts");
+      }
+    },
+    [router],
+  );
+
+  const options = React.useMemo<MenuOption[]>(() => {
+    const data = recentQuery.data;
+    let entityOptions: MenuOption[] = [];
+
+    if (data) {
       for (const set of data.sets) {
-        total.push({
+        entityOptions.push({
+          id: `set:${set.id}`,
           icon: <IconBooks />,
           name: set.title,
-          searchableName: set.title
-            .normalize("NFD")
-            .replace(/[\u0300-\u036f]/g, ""),
+          searchableName: `${set.title} ${normalizeSearch(set.title)} quiz study set`,
           action: (ctrl) => openLink(`/${set.id}`, ctrl),
           sortableDate: set.viewedAt,
           entity: {
@@ -151,21 +243,23 @@ export const CommandMenu: React.FC<CommandMenuProps> = ({
             viewedAt: set.viewedAt,
             collaborators: set.collaborators?.avatars,
           },
-          shouldShow: () => !window.location.pathname.startsWith(`/${set.id}`),
+          shouldShow: () =>
+            typeof window !== "undefined"
+              ? window.location.pathname !== `/${set.id}`
+              : true,
         });
       }
       for (const folder of data.folders) {
-        const url = `/@${folder.user.username}/folders/${
+        const folderUrl = `/@${folder.user.username}/folders/${
           folder.slug ?? folder.id
         }`;
 
-        total.push({
+        entityOptions.push({
+          id: `folder:${folder.id}`,
           icon: <IconFolder />,
           name: folder.title,
-          searchableName: folder.title
-            .normalize("NFD")
-            .replace(/[\u0300-\u036f]/g, ""),
-          action: (ctrl) => openLink(url, ctrl),
+          searchableName: `${folder.title} ${normalizeSearch(folder.title)} folder`,
+          action: (ctrl) => openLink(folderUrl, ctrl),
           sortableDate: folder.viewedAt,
           entity: {
             id: folder.id,
@@ -174,16 +268,18 @@ export const CommandMenu: React.FC<CommandMenuProps> = ({
             author: folder.user,
             viewedAt: folder.viewedAt,
           },
-          shouldShow: () => !window.location.pathname.startsWith(url),
+          shouldShow: () =>
+            typeof window !== "undefined"
+              ? !window.location.pathname.startsWith(folderUrl)
+              : true,
         });
       }
       for (const draft of data.drafts) {
-        total.push({
+        entityOptions.push({
+          id: `draft:${draft.id}`,
           icon: <IconProgress />,
-          name: draft.title,
-          searchableName: draft.title
-            .normalize("NFD")
-            .replace(/[\u0300-\u036f]/g, ""),
+          name: draft.title || "Untitled draft",
+          searchableName: `${draft.title} ${normalizeSearch(draft.title || "")} draft`,
           action: (ctrl) => openLink(`/${draft.id}/create`, ctrl),
           sortableDate: draft.savedAt,
           entity: {
@@ -194,6 +290,7 @@ export const CommandMenu: React.FC<CommandMenuProps> = ({
             viewedAt: draft.savedAt,
           },
           shouldShow: () => {
+            if (typeof window === "undefined") return true;
             const path = window.location.pathname;
             if (path == `/${draft.id}/create`) return false;
             if (path == "/create") {
@@ -203,15 +300,15 @@ export const CommandMenu: React.FC<CommandMenuProps> = ({
               )[0];
               if (latest?.id == draft.id) return false;
             }
-
             return true;
           },
         });
       }
       for (const class_ of data.classes) {
-        const url = `/classes/${class_.id}`;
+        const classUrl = `/classes/${class_.id}`;
 
-        total.push({
+        entityOptions.push({
+          id: `class:${class_.id}`,
           icon: <IconSchool />,
           name: class_.name,
           label:
@@ -225,139 +322,384 @@ export const CommandMenu: React.FC<CommandMenuProps> = ({
                   "folder",
                 )}`,
           sortableDate: class_.viewedAt || undefined,
-          searchableName: class_.name
-            .normalize("NFD")
-            .replace(/[\u0300-\u036f]/g, ""),
-          action: (ctrl) => openLink(url, ctrl),
-          shouldShow: () => !window.location.pathname.startsWith(url),
+          searchableName: `${class_.name} ${normalizeSearch(class_.name)} class`,
+          action: (ctrl) => openLink(classUrl, ctrl),
+          shouldShow: () =>
+            typeof window !== "undefined"
+              ? !window.location.pathname.startsWith(classUrl)
+              : true,
         });
       }
 
-      total = total.sort(
+      entityOptions = entityOptions.sort(
         (a, b) =>
-          (b.sortableDate?.getTime() || 0) - (a.sortableDate?.getTime() || 0),
+          (b.sortableDate ? new Date(b.sortableDate).getTime() : 0) -
+          (a.sortableDate ? new Date(a.sortableDate).getTime() : 0),
       );
+    }
 
-      if (onSet || onFolder) {
+    const total: MenuOption[] = [];
+
+    // Context-aware Study Set mode switching when inside /sets/[id]/*
+    if (currentSetId) {
+      const setModes: Array<{
+        path: string;
+        name: string;
+        label: string;
+        icon: React.ReactNode;
+      }> = [
+        {
+          path: `/${currentSetId}`,
+          name: "Set Overview",
+          label: "View terms & study options",
+          icon: <IconBooks />,
+        },
+        {
+          path: `/${currentSetId}/flashcards`,
+          name: "Study Flashcards",
+          label: "Open Flashcards mode for this set",
+          icon: <IconCards />,
+        },
+        {
+          path: `/${currentSetId}/learn`,
+          name: "Adaptive Learn",
+          label: "Open Learn mode for this set",
+          icon: <IconBrain />,
+        },
+        {
+          path: `/${currentSetId}/test`,
+          name: "Practice Test",
+          label: "Open Test mode for this set",
+          icon: <IconTestPipe />,
+        },
+        {
+          path: `/${currentSetId}/match`,
+          name: "Match Game",
+          label: "Open Match mode for this set",
+          icon: <IconDeviceGamepad2 />,
+        },
+        {
+          path: `/${currentSetId}/blocks`,
+          name: "Blocks Puzzle",
+          label: "Open Blocks puzzle game for this set",
+          icon: <IconCube />,
+        },
+        {
+          path: `/${currentSetId}/crossword`,
+          name: "Crossword",
+          label: "Open Crossword mode for this set",
+          icon: <IconPuzzle />,
+        },
+        {
+          path: `/${currentSetId}/gravity`,
+          name: "Gravity",
+          label: "Open Gravity mode for this set",
+          icon: <IconPlanet />,
+        },
+        {
+          path: `/${currentSetId}/anki`,
+          name: "Anki SRS Review",
+          label: "Open Spaced Repetition mode for this set",
+          icon: <IconBrain />,
+        },
+        {
+          path: `/${currentSetId}/edit`,
+          name: "Edit Study Set",
+          label: "Add or modify terms in this set",
+          icon: <IconEdit />,
+        },
+      ];
+
+      for (const m of setModes) {
         total.push({
-          icon: <IconLink />,
-          name: "Copy Link",
-          label: `Copy the URL for this ${onSet ? "set" : "folder"}`,
-          action: async () => {
-            if (onSet) await getSetShareId.refetch();
-            if (onFolder) await getFolderShareId.refetch();
-          },
-          loadable: true,
+          id: `mode:${m.path}`,
+          icon: m.icon,
+          name: m.name,
+          label: m.label,
+          searchableName: `${m.name} ${m.label} mode`,
+          action: (ctrl) => openLink(m.path, ctrl),
+          shouldShow: () =>
+            typeof window !== "undefined"
+              ? window.location.pathname !== m.path
+              : true,
         });
       }
+    }
 
-      total.push({
-        icon: <IconHome />,
-        name: "Home",
-        label: "Navigate home",
-        action: (ctrl) => openLink(`/home`, ctrl),
-        shouldShow: () => window.location.pathname !== "/home",
-      });
+    total.push(...entityOptions);
 
+    if (onSet || onFolder) {
       total.push({
-        icon: <IconUser />,
-        name: "Profile",
-        label: "Navigate to your profile",
-        action: (ctrl) =>
-          openLink(`/@${session.data?.user?.username || ""}`, ctrl),
-        shouldShow: () =>
-          window.location.pathname !==
-          `/@${session.data?.user?.username || ""}`,
+        id: "action:copy-link",
+        icon: <IconLink />,
+        name: "Copy Link",
+        label: `Copy the URL for this ${onSet ? "set" : "folder"}`,
+        action: async () => {
+          setLoadingOptionId("action:copy-link");
+          if (onSet) await getSetShareId.refetch();
+          if (onFolder) await getFolderShareId.refetch();
+        },
+        loadable: true,
       });
-      total.push({
-        icon: <IconSettings />,
-        name: "Settings",
-        label: "Navigate to settings",
-        action: (ctrl) => openLink(`/settings`, ctrl),
-        shouldShow: () => window.location.pathname !== "/settings",
-      });
+    }
 
+    // Core navigation
+    total.push({
+      id: "nav:home",
+      icon: <IconHome />,
+      name: "Quiz Dashboard",
+      label: "View your Quiz sets, Anki decks & folders",
+      searchableName: "Quiz Dashboard Home Sets Anki",
+      action: (ctrl) => openLink(`/home`, ctrl),
+      shouldShow: () =>
+        typeof window !== "undefined"
+          ? window.location.pathname !== "/home"
+          : true,
+    });
+    total.push({
+      id: "nav:ielts",
+      icon: <IconSchool />,
+      name: "IELTS Practice",
+      label: "Open 4-skill IELTS exam suite",
+      searchableName: "IELTS Practice Reading Listening Writing Speaking",
+      action: (ctrl) => openIeltsPath(`/ielts`, ctrl),
+      shouldShow: () =>
+        typeof window !== "undefined"
+          ? window.location.pathname !== "/ielts"
+          : true,
+    });
+    total.push({
+      id: "nav:portal",
+      icon: <IconHome />,
+      name: "PNO Portal",
+      label: "Switch between Quiz and IELTS",
+      searchableName: "PNO Portal Home Switch Workspace",
+      action: (ctrl) => openLink(`/`, ctrl),
+      shouldShow: () =>
+        typeof window !== "undefined" ? window.location.pathname !== "/" : true,
+    });
+
+    total.push({
+      id: "nav:profile",
+      icon: <IconUser />,
+      name: "Profile",
+      label: "Navigate to your profile",
+      action: (ctrl) =>
+        openLink(`/@${session.data?.user?.username || ""}`, ctrl),
+      shouldShow: () =>
+        typeof window !== "undefined"
+          ? window.location.pathname !==
+            `/@${session.data?.user?.username || ""}`
+          : true,
+    });
+    total.push({
+      id: "nav:settings",
+      icon: <IconSettings />,
+      name: "Settings",
+      label: "Navigate to settings",
+      action: (ctrl) => openLink(`/settings`, ctrl),
+      shouldShow: () =>
+        typeof window !== "undefined"
+          ? window.location.pathname !== "/settings"
+          : true,
+    });
+
+    // Global Create & Import Actions (Quiz + IELTS)
+    total.push({
+      id: "action:create-set",
+      icon: <IconPlus />,
+      name: "Create Study Set",
+      label: "Create a new vocabulary study set",
+      action: (ctrl) => openLink(`/create`, ctrl),
+      shouldShow: () =>
+        typeof window !== "undefined"
+          ? window.location.pathname !== "/create"
+          : true,
+    });
+    total.push({
+      id: "action:import-quizlet",
+      icon: <IconCloudDownload />,
+      name: "Import From Quizlet",
+      label: "Import a study set from Quizlet.com",
+      action: () => menuEventChannel.emit("openImportDialog"),
+    });
+    total.push({
+      id: "action:import-anki",
+      icon: <IconCloudDownload />,
+      name: "Import From Anki (.apkg)",
+      label: "Import an Anki deck with media & SRS",
+      action: () => menuEventChannel.emit("openAnkiImportDialog"),
+    });
+    total.push({
+      id: "action:create-folder",
+      icon: <IconFolderPlus />,
+      name: "Create Folder",
+      label: "Create a new study folder",
+      action: () => menuEventChannel.emit("createFolder"),
+    });
+    if (isTeacher) {
       total.push({
+        id: "action:create-class",
         icon: <IconPlus />,
-        name: "Create Study Set",
-        label: "Create a new study set",
-        action: (ctrl) => openLink(`/create`, ctrl),
-        shouldShow: () => window.location.pathname !== "/create",
+        name: "Create Class",
+        label: "Create a new class",
+        action: () => menuEventChannel.emit("createClass"),
       });
-      total.push({
-        icon: <IconCloudDownload />,
-        name: "Import From Quizlet",
-        label: "Import a study set from Quizlet.com",
-        action: () => menuEventChannel.emit("openImportDialog"),
-      });
-      total.push({
-        icon: <IconFolderPlus />,
-        name: "Create Folder",
-        label: "Create a new folder",
-        action: () => menuEventChannel.emit("createFolder"),
-      });
-      if (isTeacher) {
-        total.push({
-          icon: <IconPlus />,
-          name: "Create Class",
-          label: "Create a new class",
-          action: () => menuEventChannel.emit("createClass"),
-        });
+    }
+
+    total.push({
+      id: "action:ielts-add",
+      icon: <IconPlus />,
+      name: "Add IELTS Test (4 Skills)",
+      label: "Import or create a new Reading, Listening, Writing or Speaking test",
+      action: () => triggerIeltsAction("add_test", "openIeltsAddTest"),
+    });
+    total.push({
+      id: "action:ielts-bank",
+      icon: <IconDatabase />,
+      name: "IELTS Test Bank",
+      label: "Browse, export, clone & organize IELTS tests",
+      action: () => triggerIeltsAction("test_bank", "openIeltsTestBank"),
+    });
+    total.push({
+      id: "action:ielts-col",
+      icon: <IconFolderPlus />,
+      name: "New IELTS Collection",
+      label: "Create a collection folder in IELTS",
+      action: () =>
+        triggerIeltsAction("new_collection", "openIeltsNewCollection"),
+    });
+
+    total.push({
+      id: "action:toggle-theme",
+      icon: colorMode == "dark" ? <IconSun /> : <IconMoon />,
+      name: "Toggle Theme",
+      label: `Switch to ${colorMode == "dark" ? "light" : "dark"} mode`,
+      action: toggleColorMode,
+    });
+
+    // Searchable IELTS 4-Skill Catalog (client-side only)
+    if (typeof window !== "undefined") {
+      try {
+        const rlExams = getAllExams();
+        for (const exam of rlExams) {
+          const isListen = isListeningExam(exam);
+          const skill = isListen ? "listening" : "reading";
+          const col = getExamCollection(exam);
+          const saved = getSavedExamSummary(exam.id);
+          const path = `/ielts/${skill}/${encodeURIComponent(exam.id)}/part/${
+            saved?.activePartNumber ?? 1
+          }`;
+
+          total.push({
+            id: `ielts:${skill}:${exam.id}`,
+            icon: isListen ? <IconHeadphones /> : <IconBook />,
+            name: exam.title,
+            label: `IELTS ${isListen ? "Listening" : "Reading"} · ${col}${
+              saved ? " · In Progress" : ""
+            }`,
+            searchableName: `${exam.title} ${col} ielts ${skill}`,
+            action: (ctrl) => openIeltsPath(path, ctrl),
+          });
+        }
+
+        const writingExams = getAllWritingExams();
+        for (const w of writingExams) {
+          const saved = getSavedWritingSummary(w.id);
+          const path = `/ielts/writing/${encodeURIComponent(w.id)}`;
+          total.push({
+            id: `ielts:writing:${w.id}`,
+            icon: <IconPencil />,
+            name: w.title,
+            label: `IELTS Writing · ${w.collection || "Writing"}${
+              saved ? " · In Progress" : ""
+            }`,
+            searchableName: `${w.title} ${w.collection || ""} ielts writing`,
+            action: (ctrl) => openIeltsPath(path, ctrl),
+          });
+        }
+
+        const speakingExams = getAllSpeakingExams();
+        for (const s of speakingExams) {
+          const saved = loadSpeakingProgress(s.id);
+          const path = `/ielts/speaking/${encodeURIComponent(s.id)}`;
+          total.push({
+            id: `ielts:speaking:${s.id}`,
+            icon: <IconMicrophone />,
+            name: s.title,
+            label: `IELTS Speaking · ${s.collection || "Speaking"}${
+              saved ? " · In Progress" : ""
+            }`,
+            searchableName: `${s.title} ${s.collection || ""} ielts speaking`,
+            action: (ctrl) => openIeltsPath(path, ctrl),
+          });
+        }
+      } catch {
+        // Ignore storage read errors
       }
+    }
 
-      total.push({
-        icon: colorMode == "dark" ? <IconSun /> : <IconMoon />,
-        name: "Toggle Theme",
-        label: `Switch to ${colorMode == "dark" ? "light" : "dark"} mode`,
-        action: toggleColorMode,
-      });
+    if (env.NEXT_PUBLIC_DEPLOYMENT === undefined) total.push(...devActions);
 
-      if (env.NEXT_PUBLIC_DEPLOYMENT === undefined) total.push(...devActions);
-
-      setOptions(total);
-    },
-  });
+    return total;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    isOpen,
+    recentQuery.data,
+    currentSetId,
+    onSet,
+    onFolder,
+    colorMode,
+    isTeacher,
+    session.data?.user?.username,
+    devActions,
+    openLink,
+    openIeltsPath,
+    triggerIeltsAction,
+    toggleColorMode,
+  ]);
 
   const [query, setQuery] = React.useState("");
   const [selectionIndex, setSelectionIndex] = React.useState(0);
   const [ignoreMouse, setIgnoreMouse] = React.useState(false);
 
-  const filteredOptions: MenuOption[] = options
-    .filter((o) => (!!o.shouldShow ? o.shouldShow() : true))
-    .filter((e) =>
-      (e.searchableName ?? e.name).toLowerCase().includes(query.toLowerCase()),
-    );
-
-  const openLink = (link: string, ctrl: boolean) => {
-    void (async () => {
-      if (ctrl) {
-        window.open(link, "_blank");
-      } else {
-        await router.push(link);
-      }
-    })();
-  };
+  const normalizedQuery = normalizeSearch(query.trim());
+  const filteredOptions: MenuOption[] = React.useMemo(
+    () =>
+      options
+        .filter((o) => (o.shouldShow ? o.shouldShow() : true))
+        .filter((e) => {
+          if (!normalizedQuery) return true;
+          const haystack = normalizeSearch(
+            `${e.searchableName ?? e.name} ${e.label ?? ""}`,
+          );
+          return haystack.includes(normalizedQuery);
+        }),
+    [options, normalizedQuery],
+  );
 
   const scrollRef = React.useRef<HTMLDivElement | null>(null);
   const resultsRef = React.useRef<(HTMLDivElement | null)[]>([]);
 
   React.useEffect(() => {
-    resultsRef.current = resultsRef.current.slice(0, filteredOptions?.length);
-  }, [filteredOptions]);
+    resultsRef.current = resultsRef.current.slice(0, filteredOptions.length);
+  }, [filteredOptions.length]);
 
   React.useEffect(() => {
     setSelectionIndex(0);
-  }, [filteredOptions?.length]);
+  }, [filteredOptions.length]);
 
   React.useEffect(() => {
     if (isOpen) {
       setQuery("");
+      setLoadingOptionId(null);
     }
     setSelectionIndex(0);
   }, [isOpen]);
 
   const onSubmit = (i: number, ctrl: boolean) => {
-    const option = filteredOptions[i]!;
+    const option = filteredOptions[i];
+    if (!option) return;
 
     if (!dismiss || option.name == "Toggle Theme") {
       void (async () => {
@@ -366,8 +708,6 @@ export const CommandMenu: React.FC<CommandMenuProps> = ({
     }
 
     if (option.loadable) {
-      option.isLoading = true;
-      setOptions([...options]);
       return;
     }
     onClose();
@@ -375,9 +715,14 @@ export const CommandMenu: React.FC<CommandMenuProps> = ({
 
   const borderColor = useColorModeValue("gray.200", "gray.750");
   const cursorBg = useColorModeValue(
-    "rgba(226, 232, 240, 50%)",
-    "rgba(45, 55, 72, 50%)",
+    "rgba(226, 232, 240, 0.65)",
+    "rgba(45, 55, 72, 0.65)",
   );
+  const hintBg = useColorModeValue(
+    "rgba(237, 242, 247, 0.55)",
+    "rgba(26, 32, 44, 0.55)",
+  );
+  const hintColor = useColorModeValue("gray.600", "gray.400");
 
   return (
     <Modal isOpen={isOpen} onClose={onClose} isCentered size="xl">
@@ -385,20 +730,21 @@ export const CommandMenu: React.FC<CommandMenuProps> = ({
         backdropFilter="blur(12px)"
         transform="translateZ(0px)"
         backgroundColor={useColorModeValue(
-          "rgba(247, 250, 252, 75%)",
-          "rgba(23, 25, 35, 40%)",
+          "rgba(247, 250, 252, 0.72)",
+          "rgba(23, 25, 35, 0.55)",
         )}
       />
       <ModalContent
         background={useColorModeValue(
-          "rgba(247, 250, 252, 40%)",
-          "rgba(23, 25, 35, 60%)",
+          "rgba(247, 250, 252, 0.85)",
+          "rgba(23, 25, 35, 0.84)",
         )}
-        backdropFilter="blur(12px)"
+        backdropFilter="blur(16px)"
         borderWidth="2px"
-        rounded="xl"
+        rounded="2xl"
         borderColor={borderColor}
-        shadow="xl"
+        shadow="2xl"
+        overflow="hidden"
       >
         <ModalBody p="0">
           {isOpen && (
@@ -412,37 +758,46 @@ export const CommandMenu: React.FC<CommandMenuProps> = ({
               onSubmit={(ctrl) => onSubmit(selectionIndex, ctrl)}
             />
           )}
-          <Box
-            py="5"
-            px="7"
+          <HStack
+            py="4"
+            px="6"
+            spacing="3.5"
             borderBottomWidth="2px"
             borderBottomColor={borderColor}
           >
+            <Box color="gray.400" flexShrink={0}>
+              <IconSearch size={22} />
+            </Box>
             <Input
-              placeholder="Where would you like to go?"
+              aria-label="Search commands, study sets, and IELTS tests"
+              placeholder="Search study sets, IELTS tests, or commands..."
               size="lg"
               variant="unstyled"
-              fontSize="2xl"
+              fontSize="xl"
+              fontWeight={600}
               px="0"
               _placeholder={{
                 color: "gray.500",
+                fontWeight: 500,
               }}
               color={useColorModeValue("gray.900", "whiteAlpha.900")}
               value={query}
               onChange={(e) => setQuery(e.target.value)}
             />
-          </Box>
+          </HStack>
           <Box
             overflow={filteredOptions.length > 6 ? "auto" : "hidden"}
             px="4"
-            my="4"
+            my="3"
             pos="relative"
-            transition="height cubic-bezier(.4,0,.2,1) 300ms"
+            transition="height cubic-bezier(.4,0,.2,1) 250ms"
             style={{
               height:
                 recentQuery.isLoading && !filteredOptions.length
-                  ? 64
-                  : 72 * (filteredOptions || []).slice(0, 6).length,
+                  ? 72
+                  : filteredOptions.length === 0
+                    ? 88
+                    : 72 * Math.min(filteredOptions.length, 6),
             }}
             ref={scrollRef}
           >
@@ -454,6 +809,7 @@ export const CommandMenu: React.FC<CommandMenuProps> = ({
                 top="0"
                 left="0"
                 px="4"
+                pointerEvents="none"
                 transition="transform cubic-bezier(.4,0,.2,1) 200ms"
                 style={{
                   transform: `translateY(${selectionIndex * 72}px)`,
@@ -467,9 +823,20 @@ export const CommandMenu: React.FC<CommandMenuProps> = ({
                 <Spinner color="blue.300" />
               </Center>
             )}
+            {!recentQuery.isLoading && filteredOptions.length === 0 && (
+              <Center w="full" h="full" flexDir="column" gap={1}>
+                <Text fontSize="sm" fontWeight={700} color={hintColor}>
+                  No results found for &ldquo;{query}&rdquo;
+                </Text>
+                <Text fontSize="xs" color="gray.500">
+                  Try searching a study set, Reading/Listening/Writing/Speaking
+                  test, or action.
+                </Text>
+              </Center>
+            )}
             {filteredOptions.map((o, i) => (
               <OptionComp
-                key={i}
+                key={o.id ?? `${o.name}-${i}`}
                 index={i}
                 icon={o.icon}
                 name={o.name}
@@ -480,13 +847,46 @@ export const CommandMenu: React.FC<CommandMenuProps> = ({
                 resultsRef={resultsRef}
                 selectionIndex={selectionIndex}
                 setSelectionIndex={setSelectionIndex}
-                isLoading={o.isLoading}
+                isLoading={Boolean(o.id && loadingOptionId === o.id)}
                 ignoreMouse={ignoreMouse}
                 setIgnoreMouse={setIgnoreMouse}
-                onClick={(e) => onSubmit(i, e.ctrlKey)}
+                onClick={(e) => onSubmit(i, e.ctrlKey || e.metaKey)}
               />
             ))}
           </Box>
+          <Flex
+            px="6"
+            py="2.5"
+            bg={hintBg}
+            borderTopWidth="1px"
+            borderTopColor={borderColor}
+            justify="space-between"
+            align="center"
+            fontSize="xs"
+            color={hintColor}
+            display={{ base: "none", sm: "flex" }}
+          >
+            <HStack spacing={4}>
+              <HStack spacing={1.5}>
+                <Kbd>↑</Kbd>
+                <Kbd>↓</Kbd>
+                <Text>Navigate</Text>
+              </HStack>
+              <HStack spacing={1.5}>
+                <Kbd>↵</Kbd>
+                <Text>Open</Text>
+              </HStack>
+              <HStack spacing={1.5}>
+                <Kbd>Ctrl</Kbd>
+                <Kbd>↵</Kbd>
+                <Text>New tab</Text>
+              </HStack>
+            </HStack>
+            <HStack spacing={1.5}>
+              <Kbd>Esc</Kbd>
+              <Text>Close</Text>
+            </HStack>
+          </Flex>
         </ModalBody>
       </ModalContent>
     </Modal>
@@ -611,7 +1011,6 @@ const OptionComp: React.FC<OptionCompProps> = ({
                 </defs>
               </svg>
               {collaborators.map((c, i) => (
-                // eslint-disable-next-line @next/next/no-img-element, jsx-a11y/alt-text
                 <Avatar
                   key={i}
                   src={c}
@@ -645,7 +1044,7 @@ const OptionComp: React.FC<OptionCompProps> = ({
           ""
         )}
         {label && (
-          <Text fontSize="xs" color={baseText}>
+          <Text fontSize="xs" color={baseText} noOfLines={1}>
             {label}
           </Text>
         )}
@@ -673,8 +1072,9 @@ const ShortcutsManager: React.FC<ShortcutsManagerProps> = ({
   scrollRef,
   onSubmit,
 }) => {
-  const isScrolledIntoView = (el: HTMLDivElement) => {
-    const container = scrollRef.current!;
+  const isScrolledIntoView = (el: HTMLDivElement | null) => {
+    const container = scrollRef.current;
+    if (!el || !container) return true;
 
     const rect = el.getBoundingClientRect();
     const { bottom, top } = rect;
@@ -683,12 +1083,9 @@ const ShortcutsManager: React.FC<ShortcutsManagerProps> = ({
     const containerRect = container.getBoundingClientRect();
     height = height - 72;
 
-    const visible =
-      top <= containerRect.top
-        ? containerRect.top - top <= height
-        : bottom - containerRect.bottom <= height;
-
-    return visible;
+    return top <= containerRect.top
+      ? containerRect.top - top <= height
+      : bottom - containerRect.bottom <= height;
   };
 
   useShortcut(
@@ -699,10 +1096,10 @@ const ShortcutsManager: React.FC<ShortcutsManagerProps> = ({
       setIgnoreMouse(true);
       setSelectionIndex((i) => {
         const next = i < filteredEvents.length - 1 ? i + 1 : 0;
-        const scrollTo = next;
-        if (!isScrolledIntoView(resultsRef.current[scrollTo]!))
-          resultsRef.current[scrollTo]!.scrollIntoView(false);
-
+        const targetEl = resultsRef.current[next] ?? null;
+        if (targetEl && !isScrolledIntoView(targetEl)) {
+          targetEl.scrollIntoView(false);
+        }
         return next;
       });
     },
@@ -723,9 +1120,10 @@ const ShortcutsManager: React.FC<ShortcutsManagerProps> = ({
           ? next
           : Math.max(selectionIndex - 1, 0);
 
-      if (!isScrolledIntoView(resultsRef.current[scrollTo]!))
-        resultsRef.current[scrollTo]!.scrollIntoView();
-
+      const targetEl = resultsRef.current[scrollTo] ?? null;
+      if (targetEl && !isScrolledIntoView(targetEl)) {
+        targetEl.scrollIntoView();
+      }
       return next;
     });
   };
@@ -741,7 +1139,7 @@ const ShortcutsManager: React.FC<ShortcutsManagerProps> = ({
   useShortcut(
     ["Enter"],
     () => {
-      if (!!filteredEvents.length) onSubmit(false);
+      if (filteredEvents.length) onSubmit(false);
     },
     {
       ctrlKey: false,
@@ -750,12 +1148,12 @@ const ShortcutsManager: React.FC<ShortcutsManagerProps> = ({
   useShortcut(
     ["Enter"],
     () => {
-      if (!!filteredEvents.length) onSubmit(true);
+      if (filteredEvents.length) onSubmit(true);
     },
     {
       ctrlKey: true,
     },
   );
 
-  return <></>;
+  return null;
 };

@@ -27,9 +27,14 @@ import {
 interface SpeakingExamRoomProps {
   exam: SpeakingExam;
   onBackToHome: () => void;
+  onProgressSync?: (examId: string, state: Record<string, unknown>) => void;
 }
 
-export const SpeakingExamRoom: FC<SpeakingExamRoomProps> = ({ exam, onBackToHome }) => {
+export const SpeakingExamRoom: FC<SpeakingExamRoomProps> = ({
+  exam,
+  onBackToHome,
+  onProgressSync,
+}) => {
   const savedSpeaking = loadSpeakingProgress(exam.id);
   const [activePart, setActivePart] = useState<1 | 2 | 3>(savedSpeaking?.activePart ?? 1);
   const [selectedQuestionIndex, setSelectedQuestionIndex] = useState<number>(
@@ -54,15 +59,21 @@ export const SpeakingExamRoom: FC<SpeakingExamRoomProps> = ({ exam, onBackToHome
   const [prepSecondsLeft, setPrepSecondsLeft] = useState(defaultPrepSeconds);
   const [prepNotes, setPrepNotes] = useState(savedSpeaking?.prepNotes ?? '');
 
-  // Auto-save Speaking progress immediately on mount and whenever state changes
+  // Auto-save Speaking progress immediately on mount and debounced cloud sync
   useEffect(() => {
-    saveSpeakingProgress(exam.id, {
+    const payload = {
       activePart,
       selectedQuestionIndex,
       prepNotes,
       transcriptsMap,
       lastSavedAt: Date.now(),
-    });
+    };
+    saveSpeakingProgress(exam.id, payload);
+    const timer = setTimeout(() => {
+      onProgressSync?.(exam.id, payload);
+    }, 800);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [exam.id, activePart, selectedQuestionIndex, prepNotes, transcriptsMap]);
 
   // Sample answer visibility

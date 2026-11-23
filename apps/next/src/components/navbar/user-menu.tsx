@@ -1,5 +1,4 @@
 import { signOut, useSession } from "next-auth/react";
-import Link from "next/link";
 import React from "react";
 
 import { avatarUrl } from "@quenti/lib/avatar";
@@ -37,7 +36,6 @@ export const UserMenu = () => {
   const user = session.user!;
   const { data: me } = useMe();
 
-  const menuBg = useColorModeValue("white", "gray.800");
   const color = useColorModeValue("black", "white");
 
   const { colorMode, toggleColorMode } = useColorMode();
@@ -80,19 +78,20 @@ export const UserMenu = () => {
         </Wrap>
       </MenuButton>
       <MenuList
-        bg={menuBg}
-        py={0}
         overflow="hidden"
         w="max"
         marginTop={2}
-        shadow="lg"
       >
-        <Link href={`/@${user.username}`} passHref>
-          <MenuOption icon={<IconUser size={18} />} label="Profile" />
-        </Link>
-        <Link href="/settings" passHref>
-          <MenuOption icon={<IconSettings size={18} />} label="Settings" />
-        </Link>
+        <MenuOption
+          href={`/@${user.username}`}
+          icon={<IconUser size={18} />}
+          label="Profile"
+        />
+        <MenuOption
+          href="/settings"
+          icon={<IconSettings size={18} />}
+          label="Settings"
+        />
         <MenuDivider />
         <MenuOption
           icon={
@@ -100,6 +99,12 @@ export const UserMenu = () => {
           }
           label={colorMode == "dark" ? "Light mode" : "Dark mode"}
           onClick={toggleColorMode}
+        />
+        <MenuDivider />
+        <MenuOption
+          icon={<IconLogout size={18} />}
+          label="Sign out"
+          onClick={() => void signOut({ callbackUrl: "/auth/login" })}
         />
       </MenuList>
     </Menu>

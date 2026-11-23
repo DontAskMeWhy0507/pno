@@ -106,21 +106,6 @@ const t = initTRPC
  */
 export const createTRPCRouter = t.router;
 
-/**
- * Public (unauthed) procedure
- *
- * This is the base piece you use to build new queries and mutations on your
- * tRPC API. It does not guarantee that a user querying is authorized, but you
- * can still access user session data if they are logged in
- */
-export const publicProcedure = t.procedure;
-
-// Process batches every minute to avoid row locking issues, although slightly less accurate
-const lastSeenUpdateInterval = 60 * 1000;
-// store all users active for the session in memory, along with a timestamp
-// ...approximately 31,038 active users would have to use the serverless function for the memory usage to increase by just 1 MB
-const userMap = new Map<string, number>();
-
 export const enforceBasicAuth = t.middleware(({ ctx, next }) => {
   if (!ctx.session || !ctx.session.user)
     throw new TRPCError({ code: "UNAUTHORIZED" });
@@ -141,9 +126,16 @@ export const enforceBasicAuth = t.middleware(({ ctx, next }) => {
 });
 
 /**
- * Reusable middleware that enforces users are logged in before running the
- * procedure
+ * Private workspace guard: all tRPC endpoints require a valid allowlisted session.
  */
+export const publicProcedure = t.procedure.use(enforceBasicAuth);
+
+// Process batches every minute to avoid row locking issues, although slightly less accurate
+const lastSeenUpdateInterval = 60 * 1000;
+// store all users active for the session in memory, along with a timestamp
+// ...approximately 31,038 active users would have to use the serverless function for the memory usage to increase by just 1 MB
+const userMap = new Map<string, number>();
+
 export const enforceUserIsAuthed = t.middleware(({ ctx, next }) => {
   if (!ctx.session || !ctx.session.user)
     throw new TRPCError({ code: "UNAUTHORIZED" });

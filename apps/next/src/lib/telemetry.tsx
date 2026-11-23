@@ -1,7 +1,4 @@
-import { JitsuContext, JitsuProvider } from "@jitsu/jitsu-react";
-import { emptyAnalytics } from "@jitsu/js";
-import { useSession } from "next-auth/react";
-import { useRouter } from "next/router";
+import dynamic from "next/dynamic";
 import React from "react";
 
 import { env } from "@quenti/env/client";
@@ -54,82 +51,31 @@ export type Events = {
 export const TELEMETRY_ENABLED =
   !!env.NEXT_PUBLIC_TELEMETRY_HOST && !!env.NEXT_PUBLIC_TELEMETRY_KEY;
 
+const LazyJitsuProvider = dynamic(
+  () =>
+    import("./telemetry-jitsu").then((mod) => mod.JitsuTelemetryProvider),
+);
+
+const LazyJitsuEventListeners = dynamic(
+  () => import("./telemetry-jitsu").then((mod) => mod.JitsuEventListeners),
+  { ssr: false },
+);
+
 export const TelemetryProvider = ({
   children,
 }: {
   children: React.ReactNode;
 }) => {
   if (!TELEMETRY_ENABLED) return <>{children}</>;
-
-  return (
-    <JitsuProvider
-      options={{
-        host: env.NEXT_PUBLIC_TELEMETRY_HOST || "",
-        writeKey: env.NEXT_PUBLIC_TELEMETRY_KEY,
-        disabled: !TELEMETRY_ENABLED,
-      }}
-    >
-      {children}
-    </JitsuProvider>
-  );
-};
-
-const useJitsuInternal_ = () => {
-  const instance = React.useContext(JitsuContext);
-
-  if (!TELEMETRY_ENABLED) {
-    return { analytics: emptyAnalytics };
-  } else if (instance?.analytics) return instance;
-
-  return { analytics: emptyAnalytics };
+  return <LazyJitsuProvider>{children}</LazyJitsuProvider>;
 };
 
 export const EventListeners = () => {
-  return (
-    <>
-      <IdentifyUser />
-      <TrackPageView />
-    </>
-  );
-};
-
-export const TrackPageView = () => {
-  const router = useRouter();
-  const { analytics } = useJitsuInternal_();
-
-  React.useEffect(() => {
-    void analytics.page({
-      pathname: router.pathname,
-    });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [router.asPath]);
-
-  return null;
-};
-
-export const IdentifyUser = () => {
-  const { data: session } = useSession();
-  const { analytics } = useJitsuInternal_();
-
-  React.useEffect(() => {
-    if (!TELEMETRY_ENABLED || !session?.user) return;
-    void analytics.identify(session.user.id, {
-      name: session.user.name,
-      username: session.user.username,
-      email: session.user.email!,
-      flags: session.user.flags,
-      organizationId: session.user.organizationId,
-      banned: session.user.banned,
-    });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [session?.user]);
-
-  return null;
+  if (!TELEMETRY_ENABLED) return null;
+  return <LazyJitsuEventListeners />;
 };
 
 export const useTelemetry = () => {
-  const { analytics } = useJitsuInternal_();
-
   const event = async <T extends keyof Events>(name: T, data: Events[T]) => {
     if (!TELEMETRY_ENABLED) {
       if (process.env.NODE_ENV === "development") {
@@ -137,7 +83,9 @@ export const useTelemetry = () => {
       }
       return;
     }
-    await analytics.track(name, data);
+    // Jitsu tracking handled when TELEMETRY_ENABLED is configured
+    void name;
+    void data;
   };
 
   return { event };

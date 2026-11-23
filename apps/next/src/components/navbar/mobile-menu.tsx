@@ -1,7 +1,8 @@
 import { useSession } from "next-auth/react";
-import NextLink from "next/link";
 import { useRouter } from "next/router";
 import React from "react";
+
+import { Link } from "@quenti/components";
 
 import {
   Box,
@@ -55,7 +56,6 @@ export const MobileMenu: React.FC<MobileMenuProps> = ({
   }, [router.pathname]);
 
   const { data: session } = useSession()!;
-  const menuBg = useColorModeValue("white", "gray.800");
   const searchBg = useColorModeValue("white", "gray.800");
   const searchBorder = useColorModeValue("gray.200", "gray.700");
 
@@ -77,8 +77,11 @@ export const MobileMenu: React.FC<MobileMenuProps> = ({
     if (isOpen) {
       document.body.style.overflow = "hidden";
     } else {
-      document.body.style.overflow = "auto";
+      document.body.style.overflow = "";
     }
+    return () => {
+      document.body.style.overflow = "";
+    };
   }, [isOpen]);
 
   const [menuOpen, setMenuOpen] = React.useState(false);
@@ -156,20 +159,17 @@ export const MobileMenu: React.FC<MobileMenuProps> = ({
                 </Button>
               </MenuButton>
               <MenuList
-                bg={menuBg}
-                py={0}
                 overflow="hidden"
                 w="calc(100vw - 48px)"
               >
-                <NextLink href="/create" passHref>
-                  <MenuOption
-                    icon={<IconBooks size={20} />}
-                    label="Study set"
-                    onClick={() => {
-                      onClose();
-                    }}
-                  />
-                </NextLink>
+                <MenuOption
+                  href="/create"
+                  icon={<IconBooks size={20} />}
+                  label="Study set"
+                  onClick={() => {
+                    onClose();
+                  }}
+                />
                 <MenuOption
                   icon={<IconCloudDownload size={20} />}
                   label="Import from Quizlet"
@@ -247,8 +247,6 @@ export const MobileMenu: React.FC<MobileMenuProps> = ({
                   </Button>
                 </MenuButton>
                 <MenuList
-                  bg={menuBg}
-                  py={0}
                   overflow="hidden"
                   w="calc(100vw - 48px)"
                 >
@@ -282,7 +280,19 @@ export const MobileMenu: React.FC<MobileMenuProps> = ({
             </>
           )}
         </Stack>
-        {session?.user && <MobileUserOptions closeMenu={onClose} />}
+        {session?.user ? (
+          <MobileUserOptions closeMenu={onClose} />
+        ) : (
+          <Button
+            as={Link}
+            href="/auth/login"
+            colorScheme="blue"
+            fontWeight={700}
+            onClick={onClose}
+          >
+            Sign in
+          </Button>
+        )}
       </Stack>
     </>
   );

@@ -50,7 +50,8 @@ let config = {
       "@quenti/components",
       "@tabler/icons-react",
       "@chakra-ui/react",
-      "@tremor/react",
+      "lucide-react",
+      "framer-motion",
     ],
     instrumentationHook: true,
     // sql.js (used by the Anki extractor) is an Emscripten bundle that
@@ -68,14 +69,17 @@ let config = {
       "*": [
         "./public/audio/**/*",
         "./public/ielts-app/**/*",
+        "./public/ielts-data/**/*",
         "./public/tests/**/*",
         "./public/uploads/**/*",
         "public/audio/**/*",
         "public/ielts-app/**/*",
+        "public/ielts-data/**/*",
         "public/tests/**/*",
         "public/uploads/**/*",
         "../../apps/next/public/audio/**/*",
         "../../apps/next/public/ielts-app/**/*",
+        "../../apps/next/public/ielts-data/**/*",
         "../../apps/next/public/tests/**/*",
         "../../apps/next/public/uploads/**/*",
       ],
@@ -109,6 +113,7 @@ let config = {
   },
   images: {
     domains,
+    formats: ["image/avif", "image/webp"],
   },
   transpilePackages: [
     "@quenti/auth",
@@ -133,11 +138,63 @@ let config = {
   ],
   headers: async () => [
     {
+      source: "/(.*)",
+      headers: [
+        {
+          key: "X-Content-Type-Options",
+          value: "nosniff",
+        },
+        {
+          key: "Referrer-Policy",
+          value: "strict-origin-when-cross-origin",
+        },
+        {
+          key: "X-Frame-Options",
+          value: "SAMEORIGIN",
+        },
+        {
+          key: "Permissions-Policy",
+          value: "camera=(), geolocation=(), microphone=(self)",
+        },
+        {
+          key: "Strict-Transport-Security",
+          value: "max-age=63072000; includeSubDomains; preload",
+        },
+      ],
+    },
+    {
       source: "/auth/:path*",
       headers: [
         {
           key: "X-Frame-Options",
           value: "DENY",
+        },
+      ],
+    },
+    {
+      source: "/audio/:path*",
+      headers: [
+        {
+          key: "Cache-Control",
+          value: "public, max-age=31536000, immutable",
+        },
+      ],
+    },
+    {
+      source: "/ielts-data/:path*",
+      headers: [
+        {
+          key: "Cache-Control",
+          value: "public, max-age=31536000, immutable",
+        },
+      ],
+    },
+    {
+      source: "/assets/:path*",
+      headers: [
+        {
+          key: "Cache-Control",
+          value: "public, max-age=31536000, immutable",
         },
       ],
     },
@@ -277,9 +334,12 @@ let config = {
   productionBrowserSourceMaps: false,
 };
 
-config = withHighlightConfig(withAxiom(config), {
-  appVersion,
-});
+config = withAxiom(config);
+if (process.env.NEXT_PUBLIC_HIGHLIGHT_PROJECT_ID) {
+  config = withHighlightConfig(config, {
+    appVersion,
+  });
+}
 if (shouldAnalyzeBundles) {
   config = withBundleAnalyzer(config);
 }

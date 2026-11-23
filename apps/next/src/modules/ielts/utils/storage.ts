@@ -1,15 +1,83 @@
+import rawCatalog from '../data/builtinCatalog.json';
 import type { Exam } from '../types/exam';
-import { sampleExam } from '../data/sampleExam';
-import rawImportedExams from '../data/imported_exams.json';
-import rawImportedListeningExams from '../data/imported_listening_exams.json';
-import { sampleListeningExams } from '../data/listeningExams';
 
-const importedExamsList: Exam[] = (rawImportedExams as unknown as Exam[]) || [];
-const importedListeningExamsList: Exam[] = (rawImportedListeningExams as unknown as Exam[]) || [];
+interface BuiltinCatalogItem {
+  id: string;
+  title: string;
+  description?: string;
+  durationMinutes: number;
+  category?: string;
+  collection?: string;
+  isBuiltin: true;
+  partCount: number;
+  questionCount: number;
+  partTitles?: string[];
+  createdAt: number;
+  updatedAt: number;
+  dataFile: string;
+}
+
+const builtinCatalog: BuiltinCatalogItem[] =
+  (rawCatalog as unknown as BuiltinCatalogItem[]) || [];
+
 const STORAGE_KEY_EXAMS = 'ielts_exams_list_v3';
 const STORAGE_KEY_DELETED = 'ielts_deleted_exam_ids_v3';
+const STORAGE_KEY_COLLECTIONS = 'ielts_collections_list_v1';
+const STORAGE_KEY_DELETED_COLLECTIONS = 'ielts_deleted_collections_v2';
 
-function getDeletedExamIds(): Set<string> {
+const fullExamCache = new Map<string, Exam>();
+
+function catalogToSummaryExam(item: BuiltinCatalogItem): Exam {
+  const cached = fullExamCache.get(item.id);
+  if (cached) return cached;
+  return {
+    id: item.id,
+    title: item.title,
+    description: item.description,
+    durationMinutes: item.durationMinutes,
+    category: item.category,
+    collection: item.collection,
+    parts: [],
+    createdAt: item.createdAt,
+    updatedAt: item.updatedAt,
+    isBuiltin: true,
+    partCount: item.partCount,
+    questionCount: item.questionCount,
+    dataFile: item.dataFile,
+  };
+}
+
+export function getExamPartCount(exam: Exam): number {
+  if (exam.parts && exam.parts.length > 0) return exam.parts.length;
+  return exam.partCount ?? 0;
+}
+
+export function getExamQuestionCount(exam: Exam): number {
+  if (exam.parts && exam.parts.length > 0) {
+    return exam.parts.reduce(
+      (sum, p) =>
+        sum +
+        (p.questionGroups || []).reduce(
+          (gSum, g) => gSum + (g.questions || []).length,
+          0
+        ),
+      0
+    );
+  }
+  return exam.questionCount ?? 0;
+}
+
+export function getCustomExams(): Exam[] {
+  try {
+    if (typeof localStorage === 'undefined') return [];
+    const raw = localStorage.getItem(STORAGE_KEY_EXAMS);
+    return raw ? (JSON.parse(raw) as Exam[]) : [];
+  } catch {
+    return [];
+  }
+}
+
+export function getDeletedExamIds(): Set<string> {
   try {
     if (typeof localStorage === 'undefined') return new Set();
     const raw = localStorage.getItem(STORAGE_KEY_DELETED);
@@ -19,7 +87,7 @@ function getDeletedExamIds(): Set<string> {
   }
 }
 
-function saveDeletedExamIds(deletedSet: Set<string>): void {
+export function saveDeletedExamIds(deletedSet: Set<string>): void {
   try {
     if (typeof localStorage === 'undefined') return;
     localStorage.setItem(STORAGE_KEY_DELETED, JSON.stringify(Array.from(deletedSet)));
@@ -30,49 +98,67 @@ function saveDeletedExamIds(deletedSet: Set<string>): void {
 
 export function getAllExams(): Exam[] {
   try {
-    const raw = typeof localStorage !== 'undefined' ? localStorage.getItem(STORAGE_KEY_EXAMS) : null;
-    const customList: Exam[] = raw ? JSON.parse(raw) : [];
+    const customList = getCustomExams();
     const deletedIds = getDeletedExamIds();
 
-    // Combine builtins (importedExamsList + sampleExam if not duplicate + sampleListeningExams + importedListeningExamsList) + custom user exams
     const allMap = new Map<string, Exam>();
     const importedTitles = new Set(
-      importedExamsList.map((e) => (e.title || '').trim().toUpperCase())
+      builtinCatalog.map((e) => (e.title || '').trim().toUpperCase())
     );
 
-    // Only add sampleExam if it is not already present in importedExamsList by title
-    if (!importedTitles.has((sampleExam.title || '').trim().toUpperCase())) {
-      allMap.set(sampleExam.id, sampleExam);
+    for (const item of builtinCatalog) {
+      allMap.set(item.id, catalogToSummaryExam(item));
     }
 
-    // Add all imported reading exams from static library
-    for (const ex of importedExamsList) {
-      allMap.set(ex.id, ex);
-    }
-
-    // Add sample listening exams
-    for (const ex of sampleListeningExams) {
-      allMap.set(ex.id, ex);
-    }
-
-    // Add all imported Vol 9 listening exams
-    for (const ex of importedListeningExamsList) {
-      allMap.set(ex.id, ex);
-    }
-
-    // Add/overwrite with custom exams from localStorage (skip duplicate vol-9-test-1-reading if imported_vol9_test_1 exists)
     for (const ex of customList) {
-      if (ex.id === sampleExam.id && importedTitles.has((sampleExam.title || '').trim().toUpperCase())) {
+      if (
+        ex.id === 'vol-9-test-1-reading' &&
+        importedTitles.has((ex.title || '').trim().toUpperCase())
+      ) {
         continue;
       }
       allMap.set(ex.id, ex);
     }
 
-    return Array.from(allMap.values()).filter(e => !deletedIds.has(e.id));
+    return Array.from(allMap.values()).filter((e) => !deletedIds.has(e.id));
   } catch (err) {
     console.error('Failed to load exams from localStorage', err);
-    return [sampleExam, ...importedExamsList, ...sampleListeningExams, ...importedListeningExamsList];
+    return builtinCatalog.map(catalogToSummaryExam);
   }
+}
+
+export async function loadFullExam(examOrId: string | Exam): Promise<Exam | undefined> {
+  const id = typeof examOrId === 'string' ? examOrId : examOrId.id;
+  const customList = getCustomExams();
+  const customMatch = customList.find((e) => e.id === id);
+  if (customMatch && customMatch.parts && customMatch.parts.length > 0) {
+    return customMatch;
+  }
+
+  const cached = fullExamCache.get(id);
+  if (cached && cached.parts && cached.parts.length > 0) {
+    return cached;
+  }
+
+  if (typeof examOrId !== 'string' && examOrId.parts && examOrId.parts.length > 0) {
+    fullExamCache.set(id, examOrId);
+    return examOrId;
+  }
+
+  const catalogItem = builtinCatalog.find((e) => e.id === id);
+  const dataFile =
+    (typeof examOrId !== 'string' ? examOrId.dataFile : undefined) ||
+    catalogItem?.dataFile;
+
+  if (!dataFile) return undefined;
+
+  const res = await fetch(`/ielts-data/${encodeURIComponent(dataFile)}`);
+  if (!res.ok) {
+    throw new Error(`Unable to load exam data (${res.status})`);
+  }
+  const fullExam = (await res.json()) as Exam;
+  fullExamCache.set(id, fullExam);
+  return fullExam;
 }
 
 /** Returns true if the exam is an IELTS Listening test */
@@ -87,7 +173,7 @@ export function isReadingExam(exam: Exam): boolean {
 
 export function getExamById(id: string): Exam | undefined {
   const all = getAllExams();
-  return all.find(e => e.id === id);
+  return all.find((e) => e.id === id);
 }
 
 export function saveExam(exam: Exam): void {
@@ -98,9 +184,8 @@ export function saveExam(exam: Exam): void {
       saveDeletedExamIds(deletedIds);
     }
 
-    const raw = localStorage.getItem(STORAGE_KEY_EXAMS);
-    const customList: Exam[] = raw ? JSON.parse(raw) : [];
-    const index = customList.findIndex(e => e.id === exam.id);
+    const customList = getCustomExams();
+    const index = customList.findIndex((e) => e.id === exam.id);
     const updatedExam = { ...exam, updatedAt: Date.now() };
 
     if (index >= 0) {
@@ -110,6 +195,9 @@ export function saveExam(exam: Exam): void {
     }
 
     localStorage.setItem(STORAGE_KEY_EXAMS, JSON.stringify(customList));
+    if (updatedExam.parts && updatedExam.parts.length > 0) {
+      fullExamCache.set(updatedExam.id, updatedExam);
+    }
   } catch (error) {
     console.error('Failed to save exam', error);
     throw new Error('Unable to save this test. Check available browser storage and try again.');
@@ -122,10 +210,9 @@ export function deleteExam(id: string): boolean {
     deletedIds.add(id);
     saveDeletedExamIds(deletedIds);
 
-    const raw = localStorage.getItem(STORAGE_KEY_EXAMS);
-    if (raw) {
-      const customList: Exam[] = JSON.parse(raw);
-      const filtered = customList.filter(e => e.id !== id);
+    const customList = getCustomExams();
+    if (customList.length > 0) {
+      const filtered = customList.filter((e) => e.id !== id);
       localStorage.setItem(STORAGE_KEY_EXAMS, JSON.stringify(filtered));
     }
     return true;
@@ -164,8 +251,6 @@ export function importExamFromJSON(jsonString: string): Exam {
   return newExam;
 }
 
-const STORAGE_KEY_COLLECTIONS = 'ielts_collections_list_v1';
-
 export function getExamCollection(exam: Exam): string {
   if (exam.collection && exam.collection.trim()) {
     const c = exam.collection.trim();
@@ -188,9 +273,7 @@ export function getExamCollection(exam: Exam): string {
   return exam.isBuiltin ? 'Official IELTS Library' : 'My Tests';
 }
 
-const STORAGE_KEY_DELETED_COLLECTIONS = 'ielts_deleted_collections_v2';
-
-function getDeletedCollections(): Set<string> {
+export function getDeletedCollections(): Set<string> {
   try {
     const raw = localStorage.getItem(STORAGE_KEY_DELETED_COLLECTIONS);
     return raw ? new Set(JSON.parse(raw)) : new Set();
@@ -199,11 +282,20 @@ function getDeletedCollections(): Set<string> {
   }
 }
 
-function saveDeletedCollections(set: Set<string>): void {
+export function saveDeletedCollections(set: Set<string>): void {
   try {
     localStorage.setItem(STORAGE_KEY_DELETED_COLLECTIONS, JSON.stringify(Array.from(set)));
   } catch {
     // ignore
+  }
+}
+
+export function getCustomCollections(): { id: string; name: string; description?: string }[] {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY_COLLECTIONS);
+    return raw ? (JSON.parse(raw) as { id: string; name: string; description?: string }[]) : [];
+  } catch {
+    return [];
   }
 }
 
@@ -228,22 +320,12 @@ export function getAllCollections(): { id: string; name: string; description?: s
     colMap.set(c.name.toLowerCase(), c);
   }
 
-  // Load custom collections
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY_COLLECTIONS);
-    if (raw) {
-      const customCols: { id: string; name: string; description?: string }[] = JSON.parse(raw);
-      for (const c of customCols) {
-        let name = c.name;
-        if (name === 'Bộ đề của tôi') name = 'My Tests';
-        colMap.set(name.toLowerCase(), { ...c, name, isBuiltin: false });
-      }
-    }
-  } catch {
-    // ignore
+  for (const c of getCustomCollections()) {
+    let name = c.name;
+    if (name === 'Bộ đề của tôi') name = 'My Tests';
+    colMap.set(name.toLowerCase(), { ...c, name, isBuiltin: false });
   }
 
-  // Also discover collections from current exams
   const exams = getAllExams();
   for (const ex of exams) {
     const colName = getExamCollection(ex);
@@ -258,7 +340,7 @@ export function getAllCollections(): { id: string; name: string; description?: s
   }
 
   const deletedSet = getDeletedCollections();
-  return Array.from(colMap.values()).filter(c => !deletedSet.has(c.name.toLowerCase()));
+  return Array.from(colMap.values()).filter((c) => !deletedSet.has(c.name.toLowerCase()));
 }
 
 export function createCollection(name: string, description?: string): { id: string; name: string; description?: string } {
@@ -275,9 +357,8 @@ export function createCollection(name: string, description?: string): { id: stri
   const newCol = { id, name: trimmed, description: description?.trim() || `${trimmed} Collection` };
 
   try {
-    const raw = localStorage.getItem(STORAGE_KEY_COLLECTIONS);
-    const list: { id: string; name: string; description?: string }[] = raw ? JSON.parse(raw) : [];
-    if (!list.some(c => c.name.toLowerCase() === trimmed.toLowerCase())) {
+    const list = getCustomCollections();
+    if (!list.some((c) => c.name.toLowerCase() === trimmed.toLowerCase())) {
       list.push(newCol);
       localStorage.setItem(STORAGE_KEY_COLLECTIONS, JSON.stringify(list));
     }
@@ -300,12 +381,10 @@ export function deleteCollection(collectionName: string, deleteContainedExams = 
   const colTrim = collectionName.trim();
   if (!colTrim) return;
 
-  // 1. Mark as deleted in persistent set
   const deletedSet = getDeletedCollections();
   deletedSet.add(colTrim.toLowerCase());
   saveDeletedCollections(deletedSet);
 
-  // 2. If requested, delete all exams in this collection
   if (deleteContainedExams) {
     const exams = getAllExams();
     for (const ex of exams) {
@@ -315,13 +394,35 @@ export function deleteCollection(collectionName: string, deleteContainedExams = 
     }
   }
 
-  // 3. Remove collection from custom collections list
   try {
-    const raw = localStorage.getItem(STORAGE_KEY_COLLECTIONS);
-    const list: { id: string; name: string; description?: string }[] = raw ? JSON.parse(raw) : [];
-    const filtered = list.filter(c => c.name.toLowerCase() !== colTrim.toLowerCase());
+    const list = getCustomCollections();
+    const filtered = list.filter((c) => c.name.toLowerCase() !== colTrim.toLowerCase());
     localStorage.setItem(STORAGE_KEY_COLLECTIONS, JSON.stringify(filtered));
   } catch (err) {
     console.error('Failed to delete collection', err);
+  }
+}
+
+export function replaceLocalExamsAndCollections(params: {
+  customExams: Exam[];
+  deletedExamIds: string[];
+  collections: { id: string; name: string; description?: string }[];
+  deletedCollections: string[];
+}) {
+  try {
+    localStorage.setItem(STORAGE_KEY_EXAMS, JSON.stringify(params.customExams));
+    localStorage.setItem(STORAGE_KEY_DELETED, JSON.stringify(params.deletedExamIds));
+    localStorage.setItem(STORAGE_KEY_COLLECTIONS, JSON.stringify(params.collections));
+    localStorage.setItem(
+      STORAGE_KEY_DELETED_COLLECTIONS,
+      JSON.stringify(params.deletedCollections.map((c) => c.toLowerCase())),
+    );
+    for (const ex of params.customExams) {
+      if (ex.parts && ex.parts.length > 0) {
+        fullExamCache.set(ex.id, ex);
+      }
+    }
+  } catch (e) {
+    console.warn('Failed hydrating IELTS local cache from cloud', e);
   }
 }

@@ -23,7 +23,7 @@ import ProfileImportCompleteEmail, {
   type ProfileImportCompleteEmailProps,
 } from "./templates/profile-import-complete";
 
-const NOTIFICATIONS_SENDER = `Quenti <notifications@${env.EMAIL_SENDER || ""}>`;
+const NOTIFICATIONS_SENDER = `PNO <notifications@${env.EMAIL_SENDER || ""}>`;
 
 const to = (email: string | string[]) => {
   if (env.USE_RESEND_PREVIEWS) return "delivered@resend.dev";
@@ -52,7 +52,7 @@ export const sendMagicLinkEmail = async (
   await sendEmail({
     from: NOTIFICATIONS_SENDER,
     to: email,
-    subject: `Sign in to Quenti`,
+    subject: `Sign in to PNO`,
     react: MagicLinkEmail(opts),
   });
 };
@@ -66,7 +66,7 @@ export const sendClassInviteEmail = async (
     to: email,
     subject: `${opts.inviter.name ?? opts.inviter.email} invited you to teach ${
       opts.className
-    } on Quenti`,
+    } on PNO`,
     react: ClasssInviteEmail(opts),
   });
 };
@@ -80,7 +80,7 @@ export const sendOrganizationInviteEmail = async (
     to: email,
     subject: `${opts.inviter.name ?? opts.inviter.email} invited you to join ${
       opts.orgName
-    } on Quenti`,
+    } on PNO`,
     react: OrganizationInviteEmail(opts),
   });
 };
@@ -94,7 +94,7 @@ export const sendOrganizationTeacherInviteEmail = async (
     to: email,
     subject: `${opts.inviter.name ?? opts.inviter.email} invited you to join ${
       opts.orgName
-    } on Quenti`,
+    } on PNO`,
     react: OrganizationTeacherInviteEmail(opts),
   });
 };
@@ -130,7 +130,7 @@ export const sendProfileImportCompleteEmail = async (
   await sendEmail({
     from: NOTIFICATIONS_SENDER,
     to: email,
-    subject: `Your Quenti profile is ready!`,
+    subject: `Your PNO profile is ready!`,
     react: ProfileImportCompleteEmail(opts),
   });
 };

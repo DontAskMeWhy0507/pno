@@ -64,6 +64,8 @@ export const api = createTRPCNext<AppRouter>({
       queryClientConfig: {
         defaultOptions: {
           queries: {
+            staleTime: 30_000,
+            refetchOnWindowFocus: false,
             retry(failureCount, _err) {
               const err = _err as never as Maybe<
                 TRPCClientErrorLike<AppRouter>

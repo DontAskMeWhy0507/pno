@@ -14,7 +14,6 @@ import {
 
 import { IconArrowLeft } from "@tabler/icons-react";
 
-import { LazyWrapper } from "../../common/lazy-wrapper";
 import { PageWrapper } from "../../common/page-wrapper";
 import { EnterWrapper } from "../../modules/auth/enter-wrapper";
 import { AuthGradient } from "../../modules/auth/gradient";
@@ -31,9 +30,24 @@ export default function AuthError() {
           It may have already been used or expired.
         </>
       );
-    } else {
-      return <>An unknown error occurred while trying to sign you in.</>;
     }
+    if (error === "AccessDenied") {
+      return (
+        <>
+          This Google account is not authorized to access this private PNO
+          workspace.
+        </>
+      );
+    }
+    if (error === "OAuthAccountNotLinked") {
+      return (
+        <>
+          This email is already associated with another sign-in method. Please
+          sign in with the original provider.
+        </>
+      );
+    }
+    return <>An unknown error occurred while trying to sign you in.</>;
   };
 
   return (
@@ -45,8 +59,7 @@ export default function AuthError() {
           noindex: true,
         }}
       />
-      <LazyWrapper>
-        <Center h="100vh" w="full" position="relative">
+      <Center minH="100dvh" w="full" py={8} px={4} position="relative">
           <AuthGradient />
           <EnterWrapper>
             <Container maxW="xl" w="full" zIndex={10}>
@@ -74,7 +87,6 @@ export default function AuthError() {
             </Container>
           </EnterWrapper>
         </Center>
-      </LazyWrapper>
     </>
   );
 }
