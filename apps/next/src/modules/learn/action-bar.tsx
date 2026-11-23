@@ -33,7 +33,7 @@ export const ActionBar = () => {
         mode: "Learn",
         correctness: -1,
         appearedInRound: active.term.appearedInRound || 0,
-        incorrectCount: active.term.incorrectCount + 1,
+        incorrectCount: active.term.incorrectCount,
       });
     }
   };
@@ -50,7 +50,7 @@ export const ActionBar = () => {
       <AnimatePresence>
         {visible && (
           <motion.div
-            style={{ position: "fixed", bottom: 0, width: "100%" }}
+            style={{ position: "fixed", bottom: 0, left: 0, width: "100%", zIndex: 50 }}
             initial={{ translateY: 80 }}
             animate={{ translateY: 0 }}
             exit={{ translateY: 80 }}

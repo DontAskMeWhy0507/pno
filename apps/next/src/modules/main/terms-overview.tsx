@@ -237,7 +237,7 @@ const TermsCategory: React.FC<TermsCategoryProps> = ({
             <HStack spacing="2">
               <HStack spacing="1" color={headingColor} fontSize="2xl">
                 <Icon size={20} />
-                <>{terms.length}</>
+                <>{internalTerms.length}</>
               </HStack>
               <>{heading}</>
             </HStack>

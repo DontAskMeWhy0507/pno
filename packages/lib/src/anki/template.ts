@@ -193,7 +193,8 @@ export function sanitizeAnkiHtml(
       if (
         !cleanSrc.startsWith("http://") &&
         !cleanSrc.startsWith("https://") &&
-        !cleanSrc.startsWith("data:image/")
+        !cleanSrc.startsWith("data:image/") &&
+        !cleanSrc.startsWith("/api/anki/media/")
       ) {
         imageSet.add(cleanSrc);
         const newSrc = encodeMediaPath(mediaUrlPrefix, cleanSrc);

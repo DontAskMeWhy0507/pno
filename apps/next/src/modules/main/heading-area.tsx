@@ -71,7 +71,7 @@ export const HeadingArea = () => {
         destructive
       />
       <Stack spacing={4}>
-        {(type == "Collab" || tags.length) && (
+        {(type == "Collab" || tags.length > 0) && (
           <HStack spacing="4">
             {type == "Collab" && (
               <HStack
@@ -98,7 +98,7 @@ export const HeadingArea = () => {
                 </Text>
               </HStack>
             )}
-            {tags.length && (
+            {tags.length > 0 && (
               <HStack spacing={3} flexWrap="wrap">
                 {tags.map((t, i) => (
                   <Tag bg={tagBg} key={i} fontWeight={600}>
@@ -118,7 +118,7 @@ export const HeadingArea = () => {
             </HStack>
             <Text>•</Text>
             <Text>
-              {terms?.length || 5} term{terms?.length != 1 ? "s" : ""}
+              {terms?.length ?? 0} term{terms?.length != 1 ? "s" : ""}
             </Text>
           </HStack>
           <SetCreatorOnly>

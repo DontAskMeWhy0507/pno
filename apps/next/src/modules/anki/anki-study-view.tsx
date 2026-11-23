@@ -59,6 +59,7 @@ export const AnkiStudyView: React.FC<AnkiStudyViewProps> = ({ studySetId }) => {
   const [sessionCards, setSessionCards] = useState<SessionCard[]>([]);
   const [liveCounts, setLiveCounts] = useState({ new: 0, learn: 0, review: 0 });
   const inFlightTermsRef = useRef<Set<string>>(new Set());
+  const lastLoadedUpdatedAtRef = useRef<number>(0);
 
   const utils = api.useContext();
   const queueQuery = api.anki.getReviewQueue.useQuery(
@@ -76,10 +77,17 @@ export const AnkiStudyView: React.FC<AnkiStudyViewProps> = ({ studySetId }) => {
     setSessionCards([]);
     setLiveCounts({ new: 0, learn: 0, review: 0 });
     inFlightTermsRef.current.clear();
+    lastLoadedUpdatedAtRef.current = 0;
   }, [studySetId]);
 
   useEffect(() => {
-    if (queueQuery.data && sessionCards.length === 0) {
+    if (
+      queueQuery.data &&
+      !queueQuery.isFetching &&
+      queueQuery.dataUpdatedAt !== lastLoadedUpdatedAtRef.current &&
+      sessionCards.length === 0
+    ) {
+      lastLoadedUpdatedAtRef.current = queueQuery.dataUpdatedAt;
       setSessionCards(queueQuery.data.cards as SessionCard[]);
       setLiveCounts({
         new: queueQuery.data.counts.new,
@@ -87,7 +95,7 @@ export const AnkiStudyView: React.FC<AnkiStudyViewProps> = ({ studySetId }) => {
         review: queueQuery.data.counts.review,
       });
     }
-  }, [queueQuery.data, sessionCards.length]);
+  }, [queueQuery.data, queueQuery.isFetching, queueQuery.dataUpdatedAt, sessionCards.length]);
 
   const submitReviewMutation = api.anki.submitReview.useMutation({
     onSuccess: (_data, variables) => {
@@ -139,6 +147,20 @@ export const AnkiStudyView: React.FC<AnkiStudyViewProps> = ({ studySetId }) => {
 
       setIsAnswerShown(false);
 
+      const now = new Date();
+      const prevState: CardScheduleState = {
+        queue: ratedCard.queue,
+        step: ratedCard.step,
+        interval: ratedCard.interval,
+        easeFactor: ratedCard.easeFactor,
+        reps: ratedCard.reps,
+        lapses: ratedCard.lapses,
+        due: new Date(ratedCard.due),
+        lastReviewedAt: null,
+      };
+      const nextState = calculateNextSchedule(prevState, rating, now);
+      const stayInSession = rating === 1 || nextState.queue === "Learning";
+
       // Update live New/Learn/Review counters
       setLiveCounts((prev) => {
         const next = { ...prev };
@@ -146,23 +168,11 @@ export const AnkiStudyView: React.FC<AnkiStudyViewProps> = ({ studySetId }) => {
         else if (ratedCard.queue === "Review")
           next.review = Math.max(0, next.review - 1);
         else next.learn = Math.max(0, next.learn - 1);
-        if (rating === 1) next.learn += 1;
+        if (stayInSession) next.learn += 1;
         return next;
       });
 
-      if (rating === 1) {
-        const now = new Date();
-        const prevState: CardScheduleState = {
-          queue: ratedCard.queue,
-          step: ratedCard.step,
-          interval: ratedCard.interval,
-          easeFactor: ratedCard.easeFactor,
-          reps: ratedCard.reps,
-          lapses: ratedCard.lapses,
-          due: new Date(ratedCard.due),
-          lastReviewedAt: null,
-        };
-        const nextState = calculateNextSchedule(prevState, 1, now);
+      if (stayInSession) {
         const requeued: SessionCard = {
           ...ratedCard,
           ...nextState,
@@ -180,14 +190,15 @@ export const AnkiStudyView: React.FC<AnkiStudyViewProps> = ({ studySetId }) => {
     [currentCard, studySetId, submitReviewMutation],
   );
 
-  // Global Keyboard shortcuts (disabled when finished or focused on inputs/buttons)
+  // Global Keyboard shortcuts (disabled when finished or focused on text inputs)
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (isFinished || queueQuery.isLoading || !currentCard) return;
+      if (e.ctrlKey || e.altKey || e.metaKey) return;
       if (
         e.target instanceof HTMLInputElement ||
         e.target instanceof HTMLTextAreaElement ||
-        e.target instanceof HTMLButtonElement ||
+        e.target instanceof HTMLSelectElement ||
         (e.target instanceof HTMLElement && e.target.isContentEditable)
       ) {
         return;
@@ -243,13 +254,22 @@ export const AnkiStudyView: React.FC<AnkiStudyViewProps> = ({ studySetId }) => {
           <Text color={secondaryText}>
             {queueQuery.error.message || "Failed to load study cards."}
           </Text>
-          <Button
-            leftIcon={<IconRefresh size={18} />}
-            colorScheme="orange"
-            onClick={() => void queueQuery.refetch()}
-          >
-            Retry
-          </Button>
+          <HStack spacing={3}>
+            <Button
+              variant="outline"
+              leftIcon={<IconArrowLeft size={18} />}
+              onClick={() => router.push(`/${studySetId}`)}
+            >
+              Back to Deck
+            </Button>
+            <Button
+              leftIcon={<IconRefresh size={18} />}
+              colorScheme="orange"
+              onClick={() => void queueQuery.refetch()}
+            >
+              Retry
+            </Button>
+          </HStack>
         </Stack>
       </Container>
     );
@@ -267,11 +287,13 @@ export const AnkiStudyView: React.FC<AnkiStudyViewProps> = ({ studySetId }) => {
           <HStack spacing={4}>
             <Button
               leftIcon={<IconRefresh size={18} />}
+              isLoading={queueQuery.isFetching}
               onClick={() => {
+                lastLoadedUpdatedAtRef.current = queueQuery.dataUpdatedAt;
                 setCurrentIndex(0);
                 setSessionCards([]);
                 setIsAnswerShown(false);
-                void utils.anki.getReviewQueue.invalidate({ studySetId });
+                void queueQuery.refetch();
               }}
             >
               Check Again
@@ -319,8 +341,10 @@ export const AnkiStudyView: React.FC<AnkiStudyViewProps> = ({ studySetId }) => {
         {/* Card View */}
         {currentCard && (
           <AnkiCard
+            key={`${currentCard.termId}-${currentIndex}`}
             frontHtml={currentCard.word}
             backHtml={currentCard.definition}
+            assetUrl={currentCard.assetUrl}
             isAnswerShown={isAnswerShown}
             onFlip={handleShowAnswer}
           />
@@ -344,7 +368,7 @@ export const AnkiStudyView: React.FC<AnkiStudyViewProps> = ({ studySetId }) => {
               <AnkiRatingBar
                 estimates={currentCard.estimates}
                 onRate={handleRate}
-                isLoading={submitReviewMutation.isLoading}
+                isLoading={inFlightTermsRef.current.has(currentCard.termId)}
               />
             )
           )}

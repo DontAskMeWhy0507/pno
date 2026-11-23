@@ -23,8 +23,11 @@ export const CreateMatchData: React.FC<React.PropsWithChildren> = ({
     let learnTerms = terms;
 
     if (matchStudyStarred) {
-      learnTerms = terms.filter((x) => starredTerms.includes(x.id));
-      isLeaderboardAllowed = false;
+      const starredOnly = terms.filter((x) => starredTerms.includes(x.id));
+      if (starredOnly.length > 0) {
+        learnTerms = starredOnly;
+        isLeaderboardAllowed = false;
+      }
     }
 
     storeRef.current.getState().initialize(learnTerms, isLeaderboardAllowed);

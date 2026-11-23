@@ -5,14 +5,13 @@ import {
   entityShare as entityShareTable,
   folder as folderTable,
 } from "@quenti/drizzle/schema";
+import { prisma } from "@quenti/prisma";
 
 import { PageWrapper } from "../../common/page-wrapper";
 import { Generic404 } from "../../components/generic-404";
 import { getLayout } from "../../layouts/main-layout";
 import type { inferSSRProps } from "../../lib/infer-ssr-props";
 import { Folder404 } from "../../modules/folders/folder-404";
-
-export const runtime = "experimental-edge";
 
 const ShareResolver = ({
   entity,
@@ -22,15 +21,17 @@ const ShareResolver = ({
 };
 
 export const getServerSideProps = async (ctx: GetServerSidePropsContext) => {
-  if (!db) return { props: { entity: null } };
-
   ctx.res.setHeader("Cache-Control", "s-maxage=1, stale-while-revalidate");
 
   const id = ctx.query?.id as string;
 
-  const entityShare = await db.query.entityShare.findFirst({
-    where: eq(entityShareTable.id, id.substring(1)),
-  });
+  const entityShare = db
+    ? await db.query.entityShare.findFirst({
+        where: eq(entityShareTable.id, id.substring(1)),
+      })
+    : await prisma.entityShare.findUnique({
+        where: { id: id.substring(1) },
+      });
 
   if (!entityShare) return { props: { entity: null } };
 
@@ -42,20 +43,33 @@ export const getServerSideProps = async (ctx: GetServerSidePropsContext) => {
       },
     };
   } else {
-    const folder = await db.query.folder.findFirst({
-      where: eq(folderTable.id, entityShare.entityId),
-      columns: {
-        id: true,
-        slug: true,
-      },
-      with: {
-        user: {
+    const folder = db
+      ? await db.query.folder.findFirst({
+          where: eq(folderTable.id, entityShare.entityId),
           columns: {
-            username: true,
+            id: true,
+            slug: true,
           },
-        },
-      },
-    });
+          with: {
+            user: {
+              columns: {
+                username: true,
+              },
+            },
+          },
+        })
+      : await prisma.folder.findUnique({
+          where: { id: entityShare.entityId },
+          select: {
+            id: true,
+            slug: true,
+            user: {
+              select: {
+                username: true,
+              },
+            },
+          },
+        });
 
     if (!folder) return { props: { entity: { type: entityShare.type } } };
 

@@ -24,14 +24,18 @@ export const DefaultFlashcardWrapper = () => {
     const ordered = termOrder
       .map((id) => termMap.get(id))
       .filter((t): t is NonNullable<typeof t> => !!t);
-    return cardsStudyStarred
-      ? ordered.filter((t) => starredTerms.includes(t.id))
-      : ordered;
+    if (!cardsStudyStarred) return ordered;
+    const starredOnly = ordered.filter((t) => starredTerms.includes(t.id));
+    return starredOnly.length > 0 ? starredOnly : ordered;
   }, [terms, termOrder, cardsStudyStarred, starredTerms]);
 
   const [index, setIndex] = React.useState(0);
   const indexRef = React.useRef(index);
   indexRef.current = index;
+
+  React.useEffect(() => {
+    setIndex(0);
+  }, [termOrder]);
 
   React.useEffect(() => {
     if (sortedTerms.length > 0 && index >= sortedTerms.length) {
@@ -48,11 +52,15 @@ export const DefaultFlashcardWrapper = () => {
   const flippedRef = React.useRef(isFlipped);
   flippedRef.current = isFlipped;
 
+  React.useEffect(() => {
+    setIsFlipped(shouldFlip);
+  }, [shouldFlip]);
+
   const term = sortedTerms[index];
   const starred = term ? starredTerms.includes(term.id) : false;
 
   const onPrev = async () => {
-    if (index === 0) return;
+    if (sortedTerms.length === 0 || index === 0) return;
 
     setIsFlipped(shouldFlip);
     setIndex((i) => (i - 1 + sortedTerms.length) % sortedTerms.length);
@@ -60,7 +68,7 @@ export const DefaultFlashcardWrapper = () => {
   };
 
   const onNext = async () => {
-    if (index === sortedTerms.length - 1) return;
+    if (sortedTerms.length === 0 || index >= sortedTerms.length - 1) return;
 
     setIsFlipped(shouldFlip);
     setIndex((i) => (i + 1) % sortedTerms.length);

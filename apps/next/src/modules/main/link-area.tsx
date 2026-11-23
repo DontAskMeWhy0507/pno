@@ -74,8 +74,8 @@ export const LinkArea = () => {
         href={`/${id}/blocks`}
         requireAuth
       />
-      <Linkable name="Crossword" icon={<IconGridDots />} comingSoon />
-      <Linkable name="Gravity" icon={<IconMeteor />} comingSoon />
+      <Linkable name="Crossword" icon={<IconGridDots />} href={`/${id}/crossword`} />
+      <Linkable name="Gravity" icon={<IconMeteor />} href={`/${id}/gravity`} />
     </SimpleGrid>
   );
 };

@@ -7,14 +7,15 @@ export class VectorStore {
     this.embeddings = embeddings;
   }
 
-  search(search: number[], k = 3) {
+  search(search: number[], k = 3, excludeIndex?: number) {
     const results = this.embeddings
       .map((vector, index) => ({
         similarity: similarity.cosine(search, vector),
         index,
       }))
-      .sort((a, b) => (a.similarity > b.similarity ? -1 : 1))
-      .slice(1, k + 1);
+      .filter(({ index }) => excludeIndex === undefined || index !== excludeIndex)
+      .sort((a, b) => b.similarity - a.similarity)
+      .slice(excludeIndex !== undefined ? 0 : 1, (excludeIndex !== undefined ? 0 : 1) + k);
 
     return results.map((r) => r.index);
   }

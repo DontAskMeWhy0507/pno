@@ -45,9 +45,11 @@ export const TrueFalseCard: React.FC<CardProps> = ({ i, result }) => {
 
   const remark = result ? remarks?.[0] : undefined;
 
-  const Asset = () => (
-    <SquareAssetPreview rounded={8} size={80} src={data.term.assetUrl || ""} />
+  const Asset = ({ src }: { src?: string | null }) => (
+    <SquareAssetPreview rounded={8} size={80} src={src || ""} />
   );
+
+  const rightAssetUrl = (data.distractor ?? data.term).assetUrl;
 
   return (
     <>
@@ -59,7 +61,8 @@ export const TrueFalseCard: React.FC<CardProps> = ({ i, result }) => {
           <RichPromptDisplay
             label={question.answerMode == "Definition" ? "Term" : "Definition"}
             extra={
-              question.answerMode == "Word" && data.term.assetUrl && <Asset />
+              question.answerMode == "Word" &&
+              data.term.assetUrl && <Asset src={data.term.assetUrl} />
             }
             {...richWord(question.answerMode, data.term, "prompt")}
           />
@@ -86,7 +89,7 @@ export const TrueFalseCard: React.FC<CardProps> = ({ i, result }) => {
             label={question.answerMode == "Definition" ? "Definition" : "Term"}
             extra={
               question.answerMode == "Definition" &&
-              data.term.assetUrl && <Asset />
+              rightAssetUrl && <Asset src={rightAssetUrl} />
             }
             {...rightSide}
           />

@@ -35,6 +35,9 @@ export const ShuffleLearnSection = () => {
       if (reshuffleRef.current === true) setIsDirty(true);
       setReshuffle(false);
     },
+    onError: () => {
+      setReshuffle(false);
+    },
   });
 
   const mutedColor = useColorModeValue("gray.600", "gray.400");

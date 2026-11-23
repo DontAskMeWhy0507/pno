@@ -1,5 +1,3 @@
-import { useRouter } from "next/router";
-
 import { Link } from "@quenti/components";
 import { api } from "@quenti/trpc";
 
@@ -31,6 +29,7 @@ import {
   type TablerIconsProps,
 } from "@tabler/icons-react";
 
+import { useEntityRootUrl } from "../hooks/use-entity-root-url";
 import { useSetFolderUnison } from "../hooks/use-set-folder-unison";
 import { AnyKeyPressLayer } from "../modules/learn/any-key-press-layer";
 import { useSortFlashcardsContext } from "../stores/use-sort-flashcards-store";
@@ -49,7 +48,7 @@ export const SortFlashcardProgress: React.FC<SortFlashcardProgressProps> = ({
   onResetProgress,
 }) => {
   const { id, container, entityType } = useSetFolderUnison();
-  const router = useRouter();
+  const rootUrl = useEntityRootUrl();
   const cardBg = useColorModeValue("white", "gray.750");
   const borderColor = useColorModeValue("gray.200", "gray.750");
 
@@ -145,7 +144,7 @@ export const SortFlashcardProgress: React.FC<SortFlashcardProgressProps> = ({
                     name="Back to folder overview"
                     description=""
                     icon={IconFolder}
-                    href={`${router.asPath}/../`}
+                    href={rootUrl}
                   />
                 )}
               </Stack>

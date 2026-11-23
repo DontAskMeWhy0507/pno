@@ -43,15 +43,38 @@ export const useShortcut = (
 
       if (
         (opts.ctrlKey == event.ctrlKey &&
+          (!opts.ctrlKey ? !(event.altKey || event.metaKey) : true) &&
           keys.some((key) => event.key === key)) ||
         (opts.altKey == event.altKey &&
           keys.some((key) => event.key === key)) ||
-        (opts.anyKey && !(event.ctrlKey || event.altKey || event.metaKey))
+        (opts.anyKey &&
+          !(event.ctrlKey || event.altKey || event.metaKey) &&
+          ![
+            "Escape",
+            "Tab",
+            "Shift",
+            "Control",
+            "Alt",
+            "Meta",
+            "CapsLock",
+            "ArrowUp",
+            "ArrowDown",
+            "ArrowLeft",
+            "ArrowRight",
+            "PageUp",
+            "PageDown",
+            "Home",
+            "End",
+          ].includes(event.key))
       ) {
+        const target = event.target as HTMLElement | null;
         if (
           opts.allowInput &&
-          (event.target instanceof HTMLInputElement ||
-            event.target instanceof HTMLTextAreaElement)
+          (target instanceof HTMLInputElement ||
+            target instanceof HTMLTextAreaElement ||
+            (target instanceof HTMLElement &&
+              (target.isContentEditable ||
+                !!target.closest('[contenteditable="true"]'))))
         )
           return;
 

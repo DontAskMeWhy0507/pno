@@ -97,6 +97,18 @@ function createDockPieces(): BlockPiece[] {
   return [getRandomPiece(), getRandomPiece(), getRandomPiece()];
 }
 
+function canPieceFitAnyRotation(
+  board: (string | null)[][],
+  piece: BlockPiece,
+): boolean {
+  let shape = piece.shape;
+  for (let rot = 0; rot < 4; rot++) {
+    if (canPieceFitAnywhere(board, { ...piece, shape })) return true;
+    shape = rotatePieceMatrix(shape);
+  }
+  return false;
+}
+
 export const BlocksContainer: React.FC = () => {
   const set = useSet();
   const rawTerms = set?.terms || [];
@@ -141,6 +153,8 @@ export const BlocksContainer: React.FC = () => {
 
   const gridRef = useRef<HTMLDivElement>(null);
   const timeoutsRef = useRef<number[]>([]);
+  const dragRef = useRef<DragState | null>(null);
+  dragRef.current = dragState;
 
   const scheduleTimeout = useCallback((fn: () => void, ms: number) => {
     const id = window.setTimeout(() => {
@@ -210,22 +224,29 @@ export const BlocksContainer: React.FC = () => {
       ? target.definition || target.word
       : target.word || target.definition;
 
-    const otherAnswers = Array.from(
-      new Set(
-        terms
-          .filter((_, idx) => idx !== targetIdx)
-          .map((t) =>
-            isTermPrompt ? t.definition || t.word : t.word || t.definition,
-          )
-          .filter((a) => Boolean(a) && a !== correctAnswer),
-      ),
-    );
+    const seen = new Set<string>([correctAnswer.trim().toLowerCase()]);
+    const otherAnswers: string[] = [];
+    for (let idx = 0; idx < terms.length; idx++) {
+      if (idx === targetIdx) continue;
+      const t = terms[idx]!;
+      const ans = isTermPrompt ? t.definition || t.word : t.word || t.definition;
+      const norm = ans.trim().toLowerCase();
+      if (!norm || seen.has(norm)) continue;
+      seen.add(norm);
+      otherAnswers.push(ans);
+    }
 
-    const shuffledOthers = [...otherAnswers].sort(() => 0.5 - Math.random());
-    const distractors = shuffledOthers.slice(0, 3);
-    const choices = [...distractors, correctAnswer].sort(
-      () => 0.5 - Math.random(),
-    );
+    const fisherYates = <T,>(arr: T[]): T[] => {
+      const copy = [...arr];
+      for (let i = copy.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [copy[i], copy[j]] = [copy[j]!, copy[i]!];
+      }
+      return copy;
+    };
+
+    const distractors = fisherYates(otherAnswers).slice(0, 3);
+    const choices = fisherYates([...distractors, correctAnswer]);
 
     return {
       prompt,
@@ -238,11 +259,6 @@ export const BlocksContainer: React.FC = () => {
   const triggerNextQuestion = useCallback(() => {
     const q = generateQuestion();
     if (!q) {
-      // Fallback if set has no terms
-      const fresh = createDockPieces();
-      setPieces(fresh);
-      setSelectedPieceId(fresh[0]!.id);
-      setPhase("placing");
       return;
     }
     setCurrentQuestion(q);
@@ -265,25 +281,52 @@ export const BlocksContainer: React.FC = () => {
           : p,
       ),
     );
+    if (dragRef.current && dragRef.current.piece.id === selectedPieceId) {
+      const rotated = {
+        ...dragRef.current.piece,
+        shape: rotatePieceMatrix(dragRef.current.piece.shape),
+      };
+      dragRef.current = { ...dragRef.current, piece: rotated };
+      setDragState(dragRef.current);
+    }
   }, [phase, selectedPieceId]);
 
   // Reroll current dock pieces
   const handleRerollPieces = useCallback(() => {
-    if (phase !== "placing") return;
+    if (phase !== "placing" || terms.length === 0) return;
+    clearAllTimeouts();
     const fresh = createDockPieces();
     setPieces(fresh);
     setSelectedPieceId(fresh[0]!.id);
     setHoverPos(null);
-  }, [phase]);
+
+    const anyNewFits = fresh.some((p) => canPieceFitAnyRotation(board, p));
+    if (!anyNewFits) {
+      playSound("gameover", soundEnabled);
+      scheduleTimeout(() => {
+        setPhase("gameover");
+      }, 450);
+    }
+  }, [board, clearAllTimeouts, phase, scheduleTimeout, soundEnabled, terms.length]);
 
   // Keyboard shortcut 'R' to rotate selected piece
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement | null;
+      if (
+        target instanceof HTMLInputElement ||
+        target instanceof HTMLTextAreaElement ||
+        (target instanceof HTMLElement && target.isContentEditable) ||
+        document.querySelector('[role="dialog"]')
+      ) {
+        return;
+      }
       if (
         (e.key === "r" || e.key === "R") &&
         phase === "placing" &&
         !e.ctrlKey &&
-        !e.metaKey
+        !e.metaKey &&
+        !e.altKey
       ) {
         e.preventDefault();
         handleRotateSelectedPiece();
@@ -296,7 +339,7 @@ export const BlocksContainer: React.FC = () => {
   // Place a specific piece onto the board at (r, c)
   const placePieceOnBoard = useCallback(
     (pieceToPlace: BlockPiece, r: number, c: number): boolean => {
-      if (phase !== "placing") return false;
+      if (phase !== "placing" || terms.length === 0) return false;
       if (!canPlacePiece(board, pieceToPlace, r, c)) return false;
 
       playSound("place", soundEnabled);
@@ -338,21 +381,7 @@ export const BlocksContainer: React.FC = () => {
       } else {
         setSelectedPieceId(remainingPieces[0]!.id);
         const anyCanFit = remainingPieces.some((p) =>
-          canPieceFitAnywhere(clearedBoard, p) ||
-          canPieceFitAnywhere(clearedBoard, {
-            ...p,
-            shape: rotatePieceMatrix(p.shape),
-          }) ||
-          canPieceFitAnywhere(clearedBoard, {
-            ...p,
-            shape: rotatePieceMatrix(rotatePieceMatrix(p.shape)),
-          }) ||
-          canPieceFitAnywhere(clearedBoard, {
-            ...p,
-            shape: rotatePieceMatrix(
-              rotatePieceMatrix(rotatePieceMatrix(p.shape)),
-            ),
-          }),
+          canPieceFitAnyRotation(clearedBoard, p),
         );
 
         if (!anyCanFit) {
@@ -370,6 +399,7 @@ export const BlocksContainer: React.FC = () => {
       pieces,
       scheduleTimeout,
       soundEnabled,
+      terms.length,
       triggerNextQuestion,
       updateScore,
     ],
@@ -382,6 +412,8 @@ export const BlocksContainer: React.FC = () => {
       clientY: number,
       grabRowOffset: number,
       grabColOffset: number,
+      pieceNumRows = 1,
+      pieceNumCols = 1,
     ): { r: number; c: number } | null => {
       if (!gridRef.current) return null;
       const rect = gridRef.current.getBoundingClientRect();
@@ -406,58 +438,75 @@ export const BlocksContainer: React.FC = () => {
 
       const rawCol = Math.floor(relX / cellW) - grabColOffset;
       const rawRow = Math.floor(relY / cellH) - grabRowOffset;
-      const c = Math.max(0, Math.min(GRID_SIZE - 1, rawCol));
-      const r = Math.max(0, Math.min(GRID_SIZE - 1, rawRow));
+      const maxCol = Math.max(0, GRID_SIZE - pieceNumCols);
+      const maxRow = Math.max(0, GRID_SIZE - pieceNumRows);
+      const c = Math.max(0, Math.min(maxCol, rawCol));
+      const r = Math.max(0, Math.min(maxRow, rawRow));
 
       return { r, c };
     },
     [],
   );
 
+  const isDragging = Boolean(dragState);
+
   // Pointer drag lifecycle (supports mouse, touch, pen)
   useEffect(() => {
-    if (!dragState) return;
+    if (!isDragging) return;
 
     const handlePointerMove = (e: PointerEvent) => {
-      const dx = e.clientX - dragState.startX;
-      const dy = e.clientY - dragState.startY;
-      const moved = dragState.moved || Math.hypot(dx, dy) > 5;
+      const current = dragRef.current;
+      if (!current) return;
+      const dx = e.clientX - current.startX;
+      const dy = e.clientY - current.startY;
+      const moved = current.moved || Math.hypot(dx, dy) > 5;
 
-      setDragState((prev) =>
-        prev
-          ? {
-              ...prev,
-              clientX: e.clientX,
-              clientY: e.clientY,
-              moved,
-            }
-          : null,
-      );
+      const updatedDrag: DragState = {
+        ...current,
+        clientX: e.clientX,
+        clientY: e.clientY,
+        moved,
+      };
+      dragRef.current = updatedDrag;
+      setDragState(updatedDrag);
 
       const pos = getGridPosFromPointer(
         e.clientX,
         e.clientY,
-        dragState.grabRowOffset,
-        dragState.grabColOffset,
+        current.grabRowOffset,
+        current.grabColOffset,
+        current.piece.shape.length,
+        current.piece.shape[0]?.length || 1,
       );
       setHoverPos(pos);
     };
 
     const handlePointerUp = (e: PointerEvent) => {
+      const current = dragRef.current;
+      dragRef.current = null;
+      setDragState(null);
+
+      if (!current) {
+        setHoverPos(null);
+        return;
+      }
+
+      const moved =
+        current.moved ||
+        Math.hypot(e.clientX - current.startX, e.clientY - current.startY) > 5;
       const pos = getGridPosFromPointer(
         e.clientX,
         e.clientY,
-        dragState.grabRowOffset,
-        dragState.grabColOffset,
+        current.grabRowOffset,
+        current.grabColOffset,
+        current.piece.shape.length,
+        current.piece.shape[0]?.length || 1,
       );
-      if (dragState.moved && pos) {
-        placePieceOnBoard(dragState.piece, pos.r, pos.c);
-      } else if (!dragState.moved) {
-        setHoverPos(null);
+      if (moved && pos) {
+        placePieceOnBoard(current.piece, pos.r, pos.c);
       } else {
         setHoverPos(null);
       }
-      setDragState(null);
     };
 
     window.addEventListener("pointermove", handlePointerMove);
@@ -468,31 +517,34 @@ export const BlocksContainer: React.FC = () => {
       window.removeEventListener("pointerup", handlePointerUp);
       window.removeEventListener("pointercancel", handlePointerUp);
     };
-  }, [dragState, getGridPosFromPointer, placePieceOnBoard]);
+  }, [isDragging, getGridPosFromPointer, placePieceOnBoard]);
 
   const handlePiecePointerDown = (
     e: React.PointerEvent<HTMLDivElement>,
     piece: BlockPiece,
   ) => {
-    if (phase !== "placing") return;
+    if (phase !== "placing" || terms.length === 0) return;
     e.preventDefault();
     setSelectedPieceId(piece.id);
 
     const rect = e.currentTarget.getBoundingClientRect();
     const numRows = piece.shape.length;
     const numCols = piece.shape[0]?.length || 1;
-    const relX = Math.max(0, Math.min(rect.width - 1, e.clientX - rect.left));
-    const relY = Math.max(0, Math.min(rect.height - 1, e.clientY - rect.top));
+    const padX = 16; // p={3.5} + borderWidth
+    const innerW = Math.max(1, rect.width - padX * 2);
+    const innerH = Math.max(1, rect.height - padX * 2);
+    const relX = Math.max(0, Math.min(innerW - 1, e.clientX - rect.left - padX));
+    const relY = Math.max(0, Math.min(innerH - 1, e.clientY - rect.top - padX));
     const grabColOffset = Math.min(
       numCols - 1,
-      Math.floor((relX / Math.max(1, rect.width)) * numCols),
+      Math.floor((relX / innerW) * numCols),
     );
     const grabRowOffset = Math.min(
       numRows - 1,
-      Math.floor((relY / Math.max(1, rect.height)) * numRows),
+      Math.floor((relY / innerH) * numRows),
     );
 
-    setDragState({
+    const nextDrag: DragState = {
       piece,
       clientX: e.clientX,
       clientY: e.clientY,
@@ -501,51 +553,91 @@ export const BlocksContainer: React.FC = () => {
       grabRowOffset,
       grabColOffset,
       moved: false,
-    });
+    };
+    dragRef.current = nextDrag;
+    setDragState(nextDrag);
   };
 
   // Answer handler
-  const handleAnswer = (choice: string) => {
-    if (selectedChoice !== null || !currentQuestion) return;
-    setSelectedChoice(choice);
+  const handleAnswer = useCallback(
+    (choice: string) => {
+      if (selectedChoice !== null || !currentQuestion) return;
+      setSelectedChoice(choice);
 
-    const correct = choice === currentQuestion.correctAnswer;
+      const correct = choice === currentQuestion.correctAnswer;
 
-    if (correct) {
-      playSound("correct", soundEnabled);
-      updateScore(100);
-      setStreak((s) => s + 1);
-      setCardsAnswered((c) => c + 1);
+      if (correct) {
+        playSound("correct", soundEnabled);
+        updateScore(100);
+        setStreak((s) => s + 1);
+        setCardsAnswered((c) => c + 1);
 
-      const newPieces = createDockPieces();
-      setPieces(newPieces);
-      setSelectedPieceId(newPieces[0]!.id);
-      const anyNewFits = newPieces.some(
-        (p) =>
-          canPieceFitAnywhere(board, p) ||
-          canPieceFitAnywhere(board, {
-            ...p,
-            shape: rotatePieceMatrix(p.shape),
-          }),
-      );
+        const newPieces = createDockPieces();
+        setPieces(newPieces);
+        setSelectedPieceId(newPieces[0]!.id);
+        const anyNewFits = newPieces.some((p) =>
+          canPieceFitAnyRotation(board, p),
+        );
 
-      scheduleTimeout(() => {
-        setSelectedChoice(null);
-        if (!anyNewFits) {
-          playSound("gameover", soundEnabled);
-          setPhase("gameover");
-        } else {
-          setPhase("placing");
-        }
-      }, 550);
-    } else {
-      playSound("wrong", soundEnabled);
-      setStreak(0);
-      scheduleTimeout(() => {
-        triggerNextQuestion();
-      }, 1200);
-    }
-  };
+        scheduleTimeout(() => {
+          setSelectedChoice(null);
+          if (!anyNewFits) {
+            playSound("gameover", soundEnabled);
+            setPhase("gameover");
+          } else {
+            setPhase("placing");
+          }
+        }, 550);
+      } else {
+        playSound("wrong", soundEnabled);
+        setStreak(0);
+        scheduleTimeout(() => {
+          triggerNextQuestion();
+        }, 1200);
+      }
+    },
+    [
+      board,
+      currentQuestion,
+      scheduleTimeout,
+      selectedChoice,
+      soundEnabled,
+      triggerNextQuestion,
+      updateScore,
+    ],
+  );
+
+  // Keyboard shortcuts 1-4 for answer choices during question phase
+  useEffect(() => {
+    const onNumberKeyDown = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement | null;
+      if (
+        target instanceof HTMLInputElement ||
+        target instanceof HTMLTextAreaElement ||
+        (target instanceof HTMLElement && target.isContentEditable) ||
+        document.querySelector('[role="dialog"]')
+      ) {
+        return;
+      }
+      if (
+        phase !== "question" ||
+        !currentQuestion ||
+        selectedChoice !== null ||
+        e.ctrlKey ||
+        e.metaKey ||
+        e.altKey
+      ) {
+        return;
+      }
+      const idx = Number(e.key) - 1;
+      if (idx >= 0 && idx < currentQuestion.choices.length) {
+        e.preventDefault();
+        handleAnswer(currentQuestion.choices[idx]!);
+      }
+    };
+    window.addEventListener("keydown", onNumberKeyDown);
+    return () => window.removeEventListener("keydown", onNumberKeyDown);
+  }, [currentQuestion, handleAnswer, phase, selectedChoice]);
 
   // Check if hover placement is valid and which rows/cols would clear
   const { isHoverValid, previewClearRows, previewClearCols } = useMemo(() => {
@@ -602,11 +694,13 @@ export const BlocksContainer: React.FC = () => {
     setPieces(initialPieces);
     setSelectedPieceId(initialPieces[0]!.id);
     setHoverPos(null);
+    dragRef.current = null;
     setDragState(null);
     setScore(0);
     setStreak(0);
     setLinesCleared(0);
     setCardsAnswered(0);
+    setCurrentQuestion(null);
     setSelectedChoice(null);
     setPhase("placing");
   };
@@ -614,6 +708,7 @@ export const BlocksContainer: React.FC = () => {
   // All ColorMode hooks hoisted unconditionally
   const bg = useColorModeValue("gray.50", "gray.900");
   const panelBg = useColorModeValue("white", "gray.800");
+  const panelBorder = useColorModeValue("gray.200", "gray.700");
   const gridFrameBg = useColorModeValue("gray.200", "gray.900");
   const cellEmptyBg = useColorModeValue("gray.100", "gray.750");
   const cellEmptyBorder = useColorModeValue("gray.200", "gray.700");
@@ -623,9 +718,27 @@ export const BlocksContainer: React.FC = () => {
   const selectedPieceBg = useColorModeValue("blue.50", "blue.900");
   const placingBannerBg = useColorModeValue("green.50", "green.900");
   const placingBannerBorder = useColorModeValue("green.200", "green.700");
+  const choiceBg = useColorModeValue("white", "gray.750");
+  const choiceBorder = useColorModeValue("gray.200", "gray.600");
+  const choiceHoverBorder = useColorModeValue("blue.400", "blue.300");
+  const choiceHoverBg = useColorModeValue("blue.50", "gray.700");
+  const choiceTextColor = useColorModeValue("gray.800", "gray.100");
+  const choiceBadgeBg = useColorModeValue("gray.100", "gray.700");
+
+  const ghostCellSize = gridRef.current
+    ? Math.max(
+        34,
+        Math.round(
+          (gridRef.current.getBoundingClientRect().width -
+            16 -
+            (GRID_SIZE - 1) * 2) /
+            GRID_SIZE,
+        ),
+      )
+    : 54;
 
   return (
-    <Box minH="calc(100vh - 80px)" bg={bg} py={4} userSelect="none">
+    <Box minH="calc(100vh - 80px)" bg={bg} py={{ base: 3, md: 5 }} userSelect="none">
       {/* Floating Ghost Piece while Dragging */}
       {dragState && dragState.moved && (
         <Box
@@ -633,8 +746,8 @@ export const BlocksContainer: React.FC = () => {
           left={`${dragState.clientX}px`}
           top={`${dragState.clientY}px`}
           transform={`translate(-${
-            dragState.grabColOffset * 38 + 19
-          }px, -${dragState.grabRowOffset * 38 + 19}px)`}
+            dragState.grabColOffset * (ghostCellSize + 2) + ghostCellSize / 2
+          }px, -${dragState.grabRowOffset * (ghostCellSize + 2) + ghostCellSize / 2}px)`}
           pointerEvents="none"
           zIndex={3000}
           opacity={0.92}
@@ -646,8 +759,8 @@ export const BlocksContainer: React.FC = () => {
                 {pRow.map((filled, pc) => (
                   <Box
                     key={pc}
-                    w="36px"
-                    h="36px"
+                    w={`${ghostCellSize}px`}
+                    h={`${ghostCellSize}px`}
                     bg={filled ? dragState.piece.color : "transparent"}
                     rounded="md"
                     border={filled ? "1px solid rgba(255,255,255,0.5)" : "none"}
@@ -659,15 +772,17 @@ export const BlocksContainer: React.FC = () => {
         </Box>
       )}
 
-      <Container maxW="5xl">
+      <Container maxW="1440px" px={{ base: 3, md: 6, xl: 8 }}>
         {/* Top bar */}
         <Flex
           justify="space-between"
           align="center"
-          mb={4}
-          p={3}
+          mb={5}
+          p={{ base: 3, md: 4 }}
           bg={panelBg}
-          rounded="xl"
+          borderWidth="2px"
+          borderColor={panelBorder}
+          rounded="2xl"
           boxShadow="sm"
         >
           <HStack spacing={3}>
@@ -676,20 +791,21 @@ export const BlocksContainer: React.FC = () => {
                 as={Link}
                 href={`/${set?.id}`}
                 aria-label="Back"
-                icon={<IconArrowLeft size={18} />}
+                icon={<IconArrowLeft size={20} />}
                 size="sm"
                 variant="ghost"
               />
             </Tooltip>
-            <HStack spacing={2}>
-              <IconCube color="#3b82f6" size={24} />
-              <Heading size="sm" fontWeight={700}>
+            <HStack spacing={2.5}>
+              <IconCube color="#3b82f6" size={26} />
+              <Heading size="md" fontWeight={700}>
                 Blocks
               </Heading>
               <Text
-                fontSize="xs"
+                fontSize="sm"
                 color="gray.500"
                 display={{ base: "none", md: "block" }}
+                fontWeight={500}
               >
                 {set?.title}
               </Text>
@@ -699,43 +815,43 @@ export const BlocksContainer: React.FC = () => {
           {/* Stats Bar */}
           <HStack spacing={{ base: 2, md: 3 }}>
             <Box
-              px={3}
-              py={1}
+              px={3.5}
+              py={1.5}
               bg={statBoxBg}
-              rounded="lg"
-              fontSize="xs"
+              rounded="xl"
+              fontSize={{ base: "xs", sm: "sm" }}
               fontWeight={700}
             >
-              <HStack spacing={1}>
+              <HStack spacing={1.5}>
                 <Text color="gray.500">SCORE</Text>
-                <Text color="blue.500" fontSize="sm">
+                <Text color="blue.500" fontSize={{ base: "sm", sm: "md" }}>
                   {score}
                 </Text>
               </HStack>
             </Box>
 
             <Box
-              px={3}
-              py={1}
+              px={3.5}
+              py={1.5}
               bg={statBoxBg}
-              rounded="lg"
-              fontSize="xs"
+              rounded="xl"
+              fontSize={{ base: "xs", sm: "sm" }}
               fontWeight={700}
               display={{ base: "none", sm: "block" }}
             >
-              <HStack spacing={1}>
-                <IconTrophy size={14} color="#f59e0b" />
+              <HStack spacing={1.5}>
+                <IconTrophy size={16} color="#f59e0b" />
                 <Text color="gray.500">BEST</Text>
-                <Text color="orange.400" fontSize="sm">
+                <Text color="orange.400" fontSize={{ base: "sm", sm: "md" }}>
                   {highScore}
                 </Text>
               </HStack>
             </Box>
 
             {streak > 1 && (
-              <Badge colorScheme="orange" px={2} py={1} rounded="md">
+              <Badge colorScheme="orange" px={2.5} py={1.5} rounded="lg" fontSize="xs">
                 <HStack spacing={1}>
-                  <IconFlame size={12} />
+                  <IconFlame size={14} />
                   <Text>{streak} streak</Text>
                 </HStack>
               </Badge>
@@ -770,21 +886,23 @@ export const BlocksContainer: React.FC = () => {
         </Flex>
 
         {/* Main Game Arena */}
-        <SimpleGrid columns={{ base: 1, lg: 12 }} spacing={6} alignItems="start">
+        <SimpleGrid columns={{ base: 1, lg: 12 }} spacing={6} alignItems="stretch">
           {/* Left / Main Column: 8x8 Board & Drag-and-Drop Dock */}
           <Box
             gridColumn={{ lg: "span 7" }}
             bg={panelBg}
-            p={{ base: 3, md: 5 }}
+            p={{ base: 4, md: 6 }}
             rounded="2xl"
-            boxShadow="sm"
+            borderWidth="2px"
+            borderColor={panelBorder}
+            boxShadow="md"
           >
-            <Flex justify="space-between" align="center" mb={3}>
-              <Text fontSize="xs" fontWeight={700} color="gray.500">
+            <Flex justify="space-between" align="center" mb={4}>
+              <Text fontSize="sm" fontWeight={700} color="gray.500">
                 8×8 PUZZLE BOARD
               </Text>
               <HStack spacing={2}>
-                <Badge colorScheme="purple" fontSize="xs">
+                <Badge colorScheme="purple" fontSize="xs" px={2.5} py={0.5} rounded="md">
                   {linesCleared} lines cleared
                 </Badge>
               </HStack>
@@ -838,8 +956,8 @@ export const BlocksContainer: React.FC = () => {
                         return (
                           <Box
                             key={c}
-                            w={{ base: "36px", sm: "44px" }}
-                            h={{ base: "36px", sm: "44px" }}
+                            w={{ base: "38px", sm: "48px", md: "56px", xl: "62px" }}
+                            h={{ base: "38px", sm: "48px", md: "56px", xl: "62px" }}
                             bg={cellBg}
                             opacity={opacity}
                             rounded="md"
@@ -879,7 +997,7 @@ export const BlocksContainer: React.FC = () => {
             {/* Piece Dock with Drag-and-Drop + Rotate + Reroll */}
             <Box
               mt={5}
-              pt={3}
+              pt={4}
               borderTop="1px solid"
               borderColor={cellEmptyBorder}
             >
@@ -890,7 +1008,7 @@ export const BlocksContainer: React.FC = () => {
                 wrap="wrap"
                 gap={2}
               >
-                <Text fontSize="xs" fontWeight={700} color="gray.500">
+                <Text fontSize="sm" fontWeight={700} color="gray.500">
                   {phase === "placing"
                     ? "Drag & drop (or tap/click) a block piece onto the 8×8 board"
                     : "Answer the question on the right to unlock 3 new blocks"}
@@ -899,20 +1017,20 @@ export const BlocksContainer: React.FC = () => {
                 {phase === "placing" && pieces.length > 0 && (
                   <HStack spacing={2}>
                     <Button
-                      size="xs"
+                      size="sm"
                       variant="outline"
                       colorScheme="blue"
-                      leftIcon={<IconRotateClockwise size={14} />}
+                      leftIcon={<IconRotateClockwise size={15} />}
                       onClick={handleRotateSelectedPiece}
                       title="Rotate selected block 90° (Key R)"
                     >
                       Rotate (R)
                     </Button>
                     <Button
-                      size="xs"
+                      size="sm"
                       variant="ghost"
                       colorScheme="gray"
-                      leftIcon={<IconRefresh size={14} />}
+                      leftIcon={<IconRefresh size={15} />}
                       onClick={handleRerollPieces}
                       title="Reroll 3 new blocks"
                     >
@@ -924,8 +1042,8 @@ export const BlocksContainer: React.FC = () => {
 
               <HStack
                 justify="center"
-                spacing={{ base: 4, sm: 6 }}
-                minH="92px"
+                spacing={{ base: 4, sm: 8 }}
+                minH="110px"
                 py={2}
               >
                 {pieces.length > 0 ? (
@@ -937,7 +1055,7 @@ export const BlocksContainer: React.FC = () => {
                     return (
                       <Box
                         key={piece.id}
-                        p={3}
+                        p={3.5}
                         rounded="xl"
                         border="2px solid"
                         borderColor={isSelected ? piece.color : "transparent"}
@@ -953,16 +1071,16 @@ export const BlocksContainer: React.FC = () => {
                         onClick={() => setSelectedPieceId(piece.id)}
                         style={{ touchAction: "none" }}
                       >
-                        <Stack spacing="2px">
+                        <Stack spacing="3px">
                           {piece.shape.map((pRow, pr) => (
-                            <HStack key={pr} spacing="2px">
+                            <HStack key={pr} spacing="3px">
                               {pRow.map((filled, pc) => (
                                 <Box
                                   key={pc}
-                                  w="18px"
-                                  h="18px"
+                                  w={{ base: "22px", md: "26px" }}
+                                  h={{ base: "22px", md: "26px" }}
                                   bg={filled ? piece.color : "transparent"}
-                                  rounded="xs"
+                                  rounded="sm"
                                   boxShadow={
                                     filled
                                       ? "inset 0 1px 2px rgba(255,255,255,0.35)"
@@ -977,7 +1095,7 @@ export const BlocksContainer: React.FC = () => {
                     );
                   })
                 ) : (
-                  <Text fontSize="xs" color="gray.400">
+                  <Text fontSize="sm" fontWeight={500} color="gray.400">
                     All 3 blocks placed — answer the question on the right to get more!
                   </Text>
                 )}
@@ -989,14 +1107,16 @@ export const BlocksContainer: React.FC = () => {
           <Box
             gridColumn={{ lg: "span 5" }}
             bg={panelBg}
-            p={{ base: 4, md: 5 }}
+            p={{ base: 4, md: 6 }}
             rounded="2xl"
-            boxShadow="sm"
+            borderWidth="2px"
+            borderColor={panelBorder}
+            boxShadow="md"
           >
-            <Flex align="center" gap={2} mb={3}>
-              <IconBrain size={20} color="#3b82f6" />
+            <Flex align="center" gap={2} mb={4}>
+              <IconBrain size={22} color="#3b82f6" />
               <Heading
-                size="xs"
+                size="sm"
                 textTransform="uppercase"
                 letterSpacing="wide"
                 color="blue.500"
@@ -1006,15 +1126,15 @@ export const BlocksContainer: React.FC = () => {
             </Flex>
 
             {terms.length === 0 ? (
-              <Stack spacing={3} py={4} textAlign="center">
-                <Text fontSize="sm" color="gray.500">
+              <Stack spacing={4} py={6} textAlign="center">
+                <Text fontSize="md" color="gray.500">
                   This study set does not contain any terms yet.
                 </Text>
                 <Button
                   as={Link}
                   href={`/${set?.id}`}
                   colorScheme="blue"
-                  size="sm"
+                  size="md"
                 >
                   Back to study set
                 </Button>
@@ -1022,9 +1142,9 @@ export const BlocksContainer: React.FC = () => {
             ) : phase === "question" && currentQuestion ? (
               <Stack spacing={4}>
                 <Box
-                  p={4}
+                  p={5}
                   bg={promptBg}
-                  border="1px solid"
+                  borderWidth="2px"
                   borderColor={promptBorder}
                   rounded="xl"
                 >
@@ -1032,64 +1152,114 @@ export const BlocksContainer: React.FC = () => {
                     fontSize="xs"
                     color="blue.600"
                     _dark={{ color: "blue.300" }}
-                    fontWeight={600}
-                    mb={1}
+                    fontWeight={700}
+                    letterSpacing="wider"
+                    mb={1.5}
                   >
                     REVIEW QUESTION
                   </Text>
-                  <Text fontSize="md" fontWeight={700}>
+                  <Text fontSize={{ base: "lg", md: "xl" }} fontWeight={700} lineHeight="1.5">
                     {currentQuestion.prompt}
                   </Text>
                 </Box>
 
-                <Text fontSize="xs" fontWeight={700} color="gray.500">
+                <Text fontSize="sm" fontWeight={600} color="gray.500">
                   Choose the correct answer to unlock 3 new blocks:
                 </Text>
 
-                <Stack spacing={2}>
+                <Stack spacing={3}>
                   {currentQuestion.choices.map((choice, i) => {
                     const isSelected = selectedChoice === choice;
                     const isCorrect = choice === currentQuestion.correctAnswer;
+                    const answered = selectedChoice !== null;
 
-                    let btnColor = undefined;
-                    let explicitBg: string | undefined = undefined;
-                    if (selectedChoice !== null) {
+                    let cardBg = choiceBg;
+                    let cardBorder = choiceBorder;
+                    let cardColor = choiceTextColor;
+                    let badgeBg = choiceBadgeBg;
+                    let badgeColor = choiceTextColor;
+
+                    if (answered) {
                       if (isCorrect) {
-                        btnColor = "green";
-                        explicitBg = "green.500";
+                        cardBg = "green.500";
+                        cardBorder = "green.500";
+                        cardColor = "white";
+                        badgeBg = "green.600";
+                        badgeColor = "white";
                       } else if (isSelected && !isCorrect) {
-                        btnColor = "red";
-                        explicitBg = "red.500";
+                        cardBg = "red.500";
+                        cardBorder = "red.500";
+                        cardColor = "white";
+                        badgeBg = "red.600";
+                        badgeColor = "white";
                       }
                     }
 
                     return (
-                      <Button
+                      <Box
                         key={i}
-                        variant={
-                          isSelected || (selectedChoice !== null && isCorrect)
-                            ? "solid"
-                            : "outline"
-                        }
-                        colorScheme={btnColor}
-                        bg={explicitBg}
-                        color={explicitBg ? "white" : undefined}
-                        _hover={explicitBg ? { bg: explicitBg } : undefined}
-                        size="md"
-                        h="auto"
-                        py={3}
-                        px={4}
-                        justifyContent="flex-start"
-                        whiteSpace="normal"
-                        textAlign="left"
-                        fontSize="xs"
-                        fontWeight={600}
+                        as="button"
+                        type="button"
+                        w="full"
+                        p={4}
                         rounded="xl"
-                        isDisabled={selectedChoice !== null}
+                        borderWidth="2px"
+                        borderColor={cardBorder}
+                        bg={cardBg}
+                        color={cardColor}
+                        textAlign="left"
+                        display="flex"
+                        alignItems="flex-start"
+                        gap={3}
+                        whiteSpace="normal"
+                        wordBreak="break-word"
+                        h="auto"
+                        overflow="visible"
+                        cursor={answered ? "default" : "pointer"}
+                        opacity={answered && !isCorrect && !isSelected ? 0.65 : 1}
+                        transition="all 0.15s ease"
+                        _hover={
+                          !answered
+                            ? {
+                                borderColor: choiceHoverBorder,
+                                bg: choiceHoverBg,
+                                transform: "translateY(-1px)",
+                              }
+                            : undefined
+                        }
+                        _focusVisible={{
+                          outline: "2px solid",
+                          outlineColor: "blue.400",
+                          outlineOffset: "2px",
+                        }}
+                        disabled={answered}
                         onClick={() => handleAnswer(choice)}
                       >
-                        {choice}
-                      </Button>
+                        <Box
+                          minW="28px"
+                          h="28px"
+                          rounded="lg"
+                          bg={badgeBg}
+                          color={badgeColor}
+                          display="flex"
+                          alignItems="center"
+                          justifyContent="center"
+                          fontSize="xs"
+                          fontWeight={700}
+                          flexShrink={0}
+                          mt="1px"
+                        >
+                          {i + 1}
+                        </Box>
+                        <Text
+                          fontSize={{ base: "sm", md: "md" }}
+                          fontWeight={500}
+                          lineHeight="1.55"
+                          flex="1"
+                        >
+                          {choice}
+                        </Text>
+                      </Box>
                     );
                   })}
                 </Stack>
@@ -1097,15 +1267,15 @@ export const BlocksContainer: React.FC = () => {
             ) : phase === "placing" ? (
               <Stack spacing={4}>
                 <Box
-                  p={4}
+                  p={5}
                   bg={placingBannerBg}
-                  border="1px solid"
+                  borderWidth="2px"
                   borderColor={placingBannerBorder}
                   rounded="xl"
                   textAlign="center"
                 >
                   <Text
-                    fontSize="sm"
+                    fontSize="md"
                     fontWeight={700}
                     color="green.600"
                     _dark={{ color: "green.300" }}
@@ -1113,33 +1283,34 @@ export const BlocksContainer: React.FC = () => {
                     Placement Phase ({pieces.length} {pieces.length === 1 ? "block" : "blocks"} left)
                   </Text>
                   <Text
-                    fontSize="xs"
+                    fontSize="sm"
                     color="gray.600"
                     _dark={{ color: "gray.300" }}
-                    mt={1}
+                    mt={1.5}
+                    lineHeight="1.5"
                   >
                     Drag &amp; drop blocks from the dock onto the 8×8 board (or press R to rotate). Fill rows or columns to score combo points!
                   </Text>
                 </Box>
 
-                <Box p={4} bg={statBoxBg} rounded="xl">
-                  <Text fontSize="xs" fontWeight={700} color="gray.500" mb={2}>
+                <Box p={5} bg={statBoxBg} rounded="xl">
+                  <Text fontSize="xs" fontWeight={700} color="gray.500" mb={3}>
                     STUDY PROGRESS
                   </Text>
-                  <SimpleGrid columns={2} spacing={3}>
+                  <SimpleGrid columns={2} spacing={4}>
                     <Box>
-                      <Text fontSize="xs" color="gray.500">
+                      <Text fontSize="xs" color="gray.500" fontWeight={600}>
                         CARDS REVIEWED
                       </Text>
-                      <Text fontSize="lg" fontWeight={700} color="blue.500">
+                      <Text fontSize="2xl" fontWeight={700} color="blue.500">
                         {cardsAnswered}
                       </Text>
                     </Box>
                     <Box>
-                      <Text fontSize="xs" color="gray.500">
+                      <Text fontSize="xs" color="gray.500" fontWeight={600}>
                         STREAK
                       </Text>
-                      <Text fontSize="lg" fontWeight={700} color="orange.500">
+                      <Text fontSize="2xl" fontWeight={700} color="orange.500">
                         {streak} 🔥
                       </Text>
                     </Box>

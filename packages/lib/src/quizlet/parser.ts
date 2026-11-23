@@ -362,7 +362,11 @@ export function validateQuizletUrl(rawUrl: string): string {
   ) {
     throw new Error("Only https://quizlet.com study set URLs are supported.");
   }
-  if (!/^\/(?:[a-z]{2}\/)?\d+(?:\/[^/?#]+)?\/?$/i.test(parsed.pathname)) {
+  if (
+    !/^\/(?:[a-z]{2}(?:-[a-z]{2})?\/)?\d+(?:\/[^/?#]+){0,2}\/?$/i.test(
+      parsed.pathname,
+    )
+  ) {
     throw new Error("URL does not look like a Quizlet study set link.");
   }
   parsed.hash = "";

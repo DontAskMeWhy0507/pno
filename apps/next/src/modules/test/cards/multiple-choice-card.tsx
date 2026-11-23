@@ -30,7 +30,17 @@ export const MultipleChoiceCard: React.FC<CardProps> = ({ i, result }) => {
   const answerQuestion = useTestContext((s) => s.answerQuestion);
   const clearAnswer = useTestContext((s) => s.clearAnswer);
 
-  const evaluation = result ? data.answer === data.term.id : undefined;
+  const chosenChoice = data.choices.find((c) => c.id === data.answer);
+  const chosenText = chosenChoice
+    ? word(question.answerMode, chosenChoice, "answer").trim().toLowerCase()
+    : "";
+  const expectedText = word(question.answerMode, data.term, "answer")
+    .trim()
+    .toLowerCase();
+  const isCorrectMcq =
+    data.answer === data.term.id ||
+    (expectedText.length > 0 && chosenText === expectedText);
+  const evaluation = result ? isCorrectMcq : undefined;
   const remark = result ? remarks?.[0] : undefined;
 
   const EvaluationWrapper: React.FC<
@@ -106,7 +116,7 @@ export const MultipleChoiceCard: React.FC<CardProps> = ({ i, result }) => {
                 <Wrapper evaluation={evaluateTerm(choice.id)}>
                   <HStack justifyContent="space-between" gap="4" w="full">
                     <Text
-                      size="lg"
+                      fontSize="lg"
                       whiteSpace="pre-wrap"
                       textAlign="start"
                       overflowWrap="anywhere"

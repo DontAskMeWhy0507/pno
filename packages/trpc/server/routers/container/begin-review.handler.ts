@@ -31,7 +31,11 @@ export const beginReviewHandler = async ({
     });
   }
 
-  if (!container.studiableTerms.filter((x) => x.incorrectCount > 0).length) {
+  if (
+    !container.studiableTerms.filter(
+      (x) => x.mode === "Learn" && x.incorrectCount > 0,
+    ).length
+  ) {
     throw new TRPCError({
       code: "BAD_REQUEST",
       message: "No terms to review",
@@ -53,6 +57,7 @@ export const beginReviewHandler = async ({
         updateMany: {
           where: {
             containerId: container.id,
+            mode: "Learn",
           },
           data: {
             appearedInRound: null,

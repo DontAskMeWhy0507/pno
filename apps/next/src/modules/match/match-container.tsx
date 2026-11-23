@@ -25,7 +25,7 @@ export const MatchContainer = () => {
   const root = useEntityRootUrl();
 
   const { title, id, entityType } = useSetFolderUnison();
-  const intro = window.location.search.includes("intro");
+  const intro = router.asPath.includes("intro");
 
   const terms = useMatchContext((state) => state.terms);
   const summary = useMatchContext((state) => state.roundSummary);
@@ -98,7 +98,7 @@ export const MatchContainer = () => {
     void (async () => {
       const elapsed = Math.floor((summary.endTime - startTime) / 100);
 
-      if (elapsed > MATCH_MIN_TIME) {
+      if (elapsed >= MATCH_MIN_TIME) {
         try {
           await add.mutateAsync({
             entityId: id,

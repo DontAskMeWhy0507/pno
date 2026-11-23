@@ -104,6 +104,8 @@ const MatchInfo = () => {
         w="250px"
         ml="7"
         overflow="hidden"
+        position="relative"
+        zIndex={50}
       >
         <Box
           bg="orange.300"

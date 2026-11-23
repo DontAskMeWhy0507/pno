@@ -89,6 +89,7 @@ export const formatElapsedTime = (ms: number) => {
   if (value.startsWith("00:")) {
     return value.substring(3);
   }
+  return value;
 };
 
 export const formatDeciseconds = (deciseconds: number) => {

@@ -17,6 +17,9 @@ export const getAnswerMode = (
   return answerMode;
 };
 
+const getAnswerText = (mode: StudySetAnswerMode, term: FacingTerm) =>
+  (mode === "Definition" ? term.definition : term.word).trim().toLowerCase();
+
 export const generateTrueFalseQuestion = (
   term: TermWithDistractors,
   answerMode: StudySetAnswerMode,
@@ -24,18 +27,40 @@ export const generateTrueFalseQuestion = (
 ): TestQuestion<TrueFalseData> => {
   const mode = getAnswerMode(answerMode);
   const evaluation = Math.random() > 0.5;
-  const distractor = !evaluation
-    ? getRandom(term.distractors.filter((d) => d.type == mode))
-    : undefined;
+  const targetText = getAnswerText(mode, term);
+
+  let distractorTerm: FacingTerm | undefined;
+  if (!evaluation) {
+    const storedCandidates = term.distractors
+      .filter((d) => d.type == mode)
+      .map((d) => allTerms.find((t) => t.id == d.distractingId))
+      .filter(
+        (t): t is FacingTerm =>
+          !!t &&
+          t.id !== term.id &&
+          getAnswerText(mode, t).length > 0 &&
+          getAnswerText(mode, t) !== targetText,
+      );
+
+    distractorTerm = getRandom(storedCandidates);
+
+    if (!distractorTerm) {
+      const fallbackCandidates = allTerms.filter(
+        (t) =>
+          t.id !== term.id &&
+          getAnswerText(mode, t).length > 0 &&
+          getAnswerText(mode, t) !== targetText,
+      );
+      distractorTerm = getRandom(fallbackCandidates);
+    }
+  }
 
   return {
     type: TestQuestionType.TrueFalse,
     answerMode: mode,
     data: {
       term,
-      distractor: distractor
-        ? allTerms.find((t) => t.id == distractor.distractingId)
-        : undefined,
+      distractor: distractorTerm,
     },
     answered: false,
   };
@@ -47,13 +72,45 @@ export const generateMcqQuestion = (
   alTerms: FacingTerm[],
 ): TestQuestion<MultipleChoiceData> => {
   const mode = getAnswerMode(answerMode);
+  const seenIds = new Set<string>([term.id]);
+  const seenTexts = new Set<string>([getAnswerText(mode, term)]);
+  const distractorTerms: FacingTerm[] = [];
 
-  const distractors = shuffleArray(
+  const storedDistractors = shuffleArray(
     term.distractors.filter((d) => d.type == mode),
   );
-  const distractorTerms = distractors
-    .map((d) => alTerms.find((t) => t.id == d.distractingId))
-    .filter((t): t is FacingTerm => !!t);
+  for (const d of storedDistractors) {
+    if (distractorTerms.length >= 3) break;
+    const found = alTerms.find((t) => t.id == d.distractingId);
+    if (!found) continue;
+    const text = getAnswerText(mode, found);
+    if (seenIds.has(found.id) || !text || seenTexts.has(text)) continue;
+    seenIds.add(found.id);
+    seenTexts.add(text);
+    distractorTerms.push(found);
+  }
+
+  if (distractorTerms.length < 3) {
+    for (const candidate of shuffleArray([...alTerms])) {
+      if (distractorTerms.length >= 3) break;
+      const text = getAnswerText(mode, candidate);
+      if (seenIds.has(candidate.id) || !text || seenTexts.has(text)) continue;
+      seenIds.add(candidate.id);
+      seenTexts.add(text);
+      distractorTerms.push(candidate);
+    }
+  }
+
+  if (distractorTerms.length < 3) {
+    for (const candidate of shuffleArray([...alTerms])) {
+      if (distractorTerms.length >= 3) break;
+      if (seenIds.has(candidate.id)) continue;
+      const text = getAnswerText(mode, candidate);
+      if (!text) continue;
+      seenIds.add(candidate.id);
+      distractorTerms.push(candidate);
+    }
+  }
 
   const choices = shuffleArray([term, ...distractorTerms]);
 

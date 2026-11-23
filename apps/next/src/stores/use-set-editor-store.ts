@@ -158,7 +158,8 @@ export const createSetEditorStore = (
         const deleted = new Array<string>();
 
         set((state) => {
-          const filtered = state.terms
+          const filtered = [...state.terms]
+            .sort((a, b) => a.rank - b.rank)
             .filter((x) => {
               const keep = !!x.word.length || !!x.definition.length;
               if (!keep && state.serverTerms.includes(x.id)) deleted.push(x.id);
@@ -261,9 +262,11 @@ export const createSetEditorStore = (
       },
       reorderTerm: (id: string, rank: number) => {
         set((state) => {
-          const term = state.terms.find((t) => t.id === id)!;
+          const ordered = [...state.terms].sort((a, b) => a.rank - b.rank);
+          const term = ordered.find((t) => t.id === id);
+          if (!term) return {};
 
-          const newTerms = state.terms.filter((t) => t.id !== id);
+          const newTerms = ordered.filter((t) => t.id !== id);
           newTerms.splice(rank, 0, term);
 
           return {

@@ -45,8 +45,8 @@ export const ActionArea = () => {
         isOpen={addToFolder}
         onClose={async () => {
           setAddToFolder(false);
-          await utils.folders.invalidate(undefined, {
-            queryKey: ["recentForSetAdd", id],
+          await utils.folders.recentForSetAdd.invalidate({
+            studySetId: id,
           });
         }}
       />

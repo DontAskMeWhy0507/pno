@@ -67,13 +67,15 @@ export const IncorrectState: React.FC<IncorrectStateProps> = ({
   };
 
   React.useEffect(() => {
-    setTimeout(() => {
+    const t1 = setTimeout(() => {
+      if (!stackRef.current || !fullStackRef.current) return;
       void (async () => {
+        if (!stackRef.current || !fullStackRef.current) return;
         controls.set({
-          height: `${stackRef.current!.offsetHeight}px`,
+          height: `${stackRef.current.offsetHeight}px`,
         });
         await controls.start({
-          height: `${fullStackRef.current!.offsetHeight}px`,
+          height: `${fullStackRef.current.offsetHeight}px`,
           transition: {
             duration: 0.5,
             delay: 0.5,
@@ -82,7 +84,11 @@ export const IncorrectState: React.FC<IncorrectStateProps> = ({
       })();
     });
 
-    setTimeout(() => setCheckVisible(true), 1000);
+    const t2 = setTimeout(() => setCheckVisible(true), 1000);
+    return () => {
+      clearTimeout(t1);
+      clearTimeout(t2);
+    };
   }, [controls]);
 
   const diff = guess
@@ -156,7 +162,7 @@ export const IncorrectState: React.FC<IncorrectStateProps> = ({
                       ) : x.removed ? (
                         ""
                       ) : (
-                        <ScriptFormatter>{x.value}</ScriptFormatter>
+                        <ScriptFormatter key={i}>{x.value}</ScriptFormatter>
                       ),
                     )
                   ) : (

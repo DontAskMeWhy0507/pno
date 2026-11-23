@@ -89,11 +89,11 @@ export const ImportTermsModal: React.FC<ImportTermsModalProps> = ({
     if (!value || !value.trim()) return [];
     const normalized = value.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
 
-    // When using default Tab/Newline delimiters, leverage smart auto-detect parser
+    // When using Tab/Newline, parse strictly unless no tabs exist on any line
     if (td === "\t" && cd === "\n") {
       const smart = parseQuizletExportText(normalized, {
-        termDelimiter: "auto",
-        rowDelimiter: "auto",
+        termDelimiter: "\t",
+        rowDelimiter: "\n",
       });
       if (smart.length > 0) {
         return smart.map(({ word, definition }) => ({ word, definition }));

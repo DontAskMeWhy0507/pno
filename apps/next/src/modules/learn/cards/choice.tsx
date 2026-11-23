@@ -64,7 +64,17 @@ export const ChoiceCard: React.FC<ChoiceCardProps> = ({ active }) => {
     if (answered) return;
     const elapsed = Date.now() - start;
 
-    if (term.id === active.term.id) {
+    const chosenText = word(active.answerMode, term, "answer")
+      .trim()
+      .toLowerCase();
+    const expectedText = word(active.answerMode, active.term, "answer")
+      .trim()
+      .toLowerCase();
+    const isCorrect =
+      term.id === active.term.id ||
+      (expectedText.length > 0 && chosenText === expectedText);
+
+    if (isCorrect) {
       answerCorrectly(term.id);
 
       put.mutate({
@@ -222,7 +232,7 @@ export const ChoiceCard: React.FC<ChoiceCardProps> = ({ active }) => {
                   </div>
                 )}
                 <Text
-                  size="lg"
+                  fontSize="lg"
                   color={
                     isHighlightedTerm(choice.id)
                       ? isCorrectTerm(choice.id)

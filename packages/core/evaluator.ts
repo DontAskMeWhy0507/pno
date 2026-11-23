@@ -58,8 +58,17 @@ export const evaluate = (
    * @returns The result of the evaluation
    */
   const evaluateInner = (): EvaluationResult => {
-    const inputAnswers = input.split(/[,;\/]/).map((a) => a.trim());
-    const answerAnswers = answer.split(/[,;\/]/).map((a) => a.trim());
+    const inputAnswers = input
+      .split(/[,;\/]/)
+      .map((a) => a.trim())
+      .filter((a) => a.length > 0);
+    const answerAnswers = answer
+      .split(/[,;\/]/)
+      .map((a) => a.trim())
+      .filter((a) => a.length > 0);
+
+    if (!inputAnswers.length || !answerAnswers.length)
+      return EvaluationResult.Incorrect;
 
     const fullEquality = answerAnswers.every(
       (a) => !!inputAnswers.find((i) => answerEvaluator(i, a)),
@@ -81,15 +90,14 @@ export const evaluate = (
     return evaluateInner();
   }
 
-  // Ignore text in parentheses
-  input = input
-    .replace(/\(.*?\)/g, "")
-    .trim()
-    .toLowerCase();
-  answer = answer
-    .replace(/\(.*?\)/g, "")
-    .trim()
-    .toLowerCase();
+  // Ignore text in parentheses unless stripping leaves the answer empty
+  const stripParens = (val: string) => {
+    const stripped = cleanSpaces(val.replace(/\(.*?\)/g, ""));
+    const fallback = cleanSpaces(val.replace(/[()]/g, ""));
+    return (stripped.length > 0 ? stripped : fallback || val).toLowerCase();
+  };
+  input = stripParens(input);
+  answer = stripParens(answer);
 
   return evaluateInner();
 };

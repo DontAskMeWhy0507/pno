@@ -32,12 +32,11 @@ const Flashcards = () => {
           />
           <Container
             maxW="full"
-            h="calc(100vh - 80px)"
-            minHeight="720px"
+            minH="calc(100vh - 80px)"
             px="0"
-            overflow="hidden"
+            pb="8"
           >
-            <Container maxW="7xl" h="calc(100vh - 180px)" minHeight="620px">
+            <Container maxW="7xl" minH="calc(100vh - 180px)">
               <Stack spacing={6}>
                 <TitleBar />
                 <FlashcardArea />

@@ -25,7 +25,7 @@ export const StudyStarredSection = () => {
       <Switch
         size="lg"
         isChecked={cardsStudyStarred}
-        isDisabled={starredTerms.length == 0}
+        isDisabled={starredTerms.length == 0 && !cardsStudyStarred}
         onChange={(e) => {
           setCardsStudyStarred(e.target.checked);
           apiSetCardsStudyStarred.mutate({

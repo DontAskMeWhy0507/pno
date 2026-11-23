@@ -30,7 +30,6 @@ import {
 
 import {
   IconBooks,
-  IconBuildingSkyscraper,
   IconCloudDownload,
   IconFolder,
   IconFolderPlus,
@@ -198,7 +197,7 @@ export const CommandMenu: React.FC<CommandMenuProps> = ({
             const path = window.location.pathname;
             if (path == `/${draft.id}/create`) return false;
             if (path == "/create") {
-              const latest = data.drafts.sort(
+              const latest = [...data.drafts].sort(
                 (a, b) =>
                   new Date(b.savedAt).getTime() - new Date(a.savedAt).getTime(),
               )[0];
@@ -259,15 +258,6 @@ export const CommandMenu: React.FC<CommandMenuProps> = ({
         action: (ctrl) => openLink(`/home`, ctrl),
         shouldShow: () => window.location.pathname !== "/home",
       });
-      if (me && me.orgMembership) {
-        total.push({
-          icon: <IconBuildingSkyscraper />,
-          name: me.orgMembership.organization.name,
-          label: "Navigate to your organization",
-          action: (ctrl) => openLink(`/orgs`, ctrl),
-          shouldShow: () => window.location.pathname !== "/orgs",
-        });
-      }
 
       total.push({
         icon: <IconUser />,

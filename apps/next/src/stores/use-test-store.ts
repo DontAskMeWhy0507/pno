@@ -311,14 +311,14 @@ export const createTestStore = (
         set({
           settings: {
             questionCount: effectiveCount,
-            questionTypes,
+            questionTypes: types,
             answerMode,
             studyStarred,
           },
           allTerms: all,
           starredTerms,
           questionCount: effectiveCount,
-          questionTypes,
+          questionTypes: types,
           answerMode,
           outline: consolidated,
           timeline,
@@ -399,10 +399,12 @@ export const createTestStore = (
 
         const increment = (type: TestQuestionType) => {
           score++;
-          byType.find((t) => t.type == type)!.score++;
+          const entry = byType.find((t) => t.type == type);
+          if (entry) entry.score++;
         };
         const answerCorrectly = (index: number) => {
-          byQuestion.find((q) => q.index == index)!.correct = true;
+          const entry = byQuestion.find((q) => q.index == index);
+          if (entry) entry.correct = true;
         };
 
         const pushRemark = (
@@ -441,11 +443,30 @@ export const createTestStore = (
             }
             case TestQuestionType.MultipleChoice: {
               const data = question.data as MultipleChoiceData;
-              if (data.answer == data.term.id) {
+              const chosen = data.choices.find((c) => c.id === data.answer);
+              const chosenText = chosen
+                ? (question.answerMode === "Definition"
+                    ? chosen.definition
+                    : chosen.word
+                  )
+                    .trim()
+                    .toLowerCase()
+                : "";
+              const expectedText = (
+                question.answerMode === "Definition"
+                  ? data.term.definition
+                  : data.term.word
+              )
+                .trim()
+                .toLowerCase();
+              const isMcqCorrect =
+                data.answer == data.term.id ||
+                (expectedText.length > 0 && chosenText === expectedText);
+              if (isMcqCorrect) {
                 increment(question.type);
                 answerCorrectly(index);
               }
-              pushRemark(data.term.id, data.answer == data.term.id);
+              pushRemark(data.term.id, isMcqCorrect);
 
               break;
             }

@@ -128,30 +128,6 @@ export const MobileMenu: React.FC<MobileMenuProps> = ({
           >
             PNO Home
           </Button>
-          <Button
-            variant={isQuiz ? "solid" : "outline"}
-            colorScheme="blue"
-            fontWeight={700}
-            fontSize="sm"
-            onClick={async () => {
-              onClose();
-              await router.push("/home");
-            }}
-          >
-            Quiz
-          </Button>
-          <Button
-            variant={isIelts ? "solid" : "outline"}
-            colorScheme="purple"
-            fontWeight={700}
-            fontSize="sm"
-            onClick={async () => {
-              onClose();
-              await router.push("/ielts");
-            }}
-          >
-            IELTS
-          </Button>
 
           {isQuiz && (
             <Menu

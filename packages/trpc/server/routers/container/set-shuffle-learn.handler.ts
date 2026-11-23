@@ -46,21 +46,24 @@ export const setShuffleLearnHandler = async ({
       0,
       i,
     ]);
-    const formatted = vals.map((x) => Prisma.sql`(${Prisma.join(x)})`);
+    if (vals.length > 0) {
+      const formatted = vals.map((x) => Prisma.sql`(${Prisma.join(x)})`);
 
-    const query = Prisma.sql`
-      INSERT INTO StudiableTerm (userId, termId, containerId, correctness, studiableRank)
-      VALUES ${Prisma.join(formatted)}
-      ON DUPLICATE KEY UPDATE studiableRank = VALUES(studiableRank);
-      `;
+      const query = Prisma.sql`
+        INSERT INTO StudiableTerm (userId, termId, containerId, correctness, studiableRank)
+        VALUES ${Prisma.join(formatted)}
+        ON DUPLICATE KEY UPDATE studiableRank = VALUES(studiableRank);
+        `;
 
-    await ctx.prisma.$executeRaw(query);
+      await ctx.prisma.$executeRaw(query);
+    }
   } else {
     await ctx.prisma.studiableTerm.updateMany({
       // Using half of the composite primary key
       where: {
         userId: ctx.session.user.id,
         containerId: container.id,
+        mode: "Learn",
       },
       data: {
         studiableRank: null,

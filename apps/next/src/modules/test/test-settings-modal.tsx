@@ -44,13 +44,24 @@ export const TestSettingsModal: React.FC<TestSettingsModalProps> = ({
 }) => {
   const startRef = React.useRef<HTMLButtonElement>(null);
 
-  const questionCount = useTestContext((s) => s.settings.questionCount);
+  const liveSettings = useTestContext((s) => s.settings);
   const allTerms = useTestContext((s) => s.allTerms.length);
   const starredTerms = useTestContext((s) => s.starredTerms.length);
-  const answerMode = useTestContext((s) => s.settings.answerMode);
-  const studyStarred = useTestContext((s) => s.settings.studyStarred);
   const setSettings = useTestContext((s) => s.setSettings);
-  const enabled = useTestContext((s) => s.settings.questionTypes.length > 0);
+
+  const [draft, setDraft] = React.useState(liveSettings);
+
+  React.useEffect(() => {
+    if (isOpen) {
+      setDraft(liveSettings);
+    }
+  }, [isOpen, liveSettings]);
+
+  const { questionCount, answerMode, studyStarred, questionTypes } = draft;
+  const maxQuestions = Math.max(1, studyStarred ? starredTerms : allTerms);
+  const sliderMax = Math.max(2, maxQuestions);
+  const clampedCount = Math.min(Math.max(1, questionCount), maxQuestions);
+  const enabled = questionTypes.length > 0;
 
   const mutedColor = useColorModeValue("gray.600", "gray.400");
 
@@ -96,11 +107,12 @@ export const TestSettingsModal: React.FC<TestSettingsModalProps> = ({
               </Stack>
               <Slider
                 min={1}
-                max={studyStarred ? starredTerms : allTerms}
+                max={sliderMax}
                 step={1}
-                value={questionCount}
+                isDisabled={maxQuestions <= 1}
+                value={clampedCount}
                 onChange={(v) => {
-                  setSettings({ questionCount: v });
+                  setDraft((prev) => ({ ...prev, questionCount: v }));
                 }}
               >
                 <SliderTrack
@@ -140,7 +152,7 @@ export const TestSettingsModal: React.FC<TestSettingsModalProps> = ({
                     fontWeight={700}
                     fontFamily="heading"
                   >
-                    {questionCount}
+                    {clampedCount}
                   </Text>
                 </SliderThumb>
               </Slider>
@@ -148,7 +160,18 @@ export const TestSettingsModal: React.FC<TestSettingsModalProps> = ({
             <SimpleGrid columns={{ base: 1, sm: 2 }} spacing="3">
               {Object.values(TestQuestionType).map((t) => (
                 <GridItem key={t}>
-                  <QuestionTypeComponent type={t} />
+                  <QuestionTypeComponent
+                    type={t}
+                    checked={questionTypes.includes(t)}
+                    onToggle={() =>
+                      setDraft((prev) => ({
+                        ...prev,
+                        questionTypes: prev.questionTypes.includes(t)
+                          ? prev.questionTypes.filter((q) => q !== t)
+                          : [...prev.questionTypes, t],
+                      }))
+                    }
+                  />
                 </GridItem>
               ))}
             </SimpleGrid>
@@ -174,20 +197,23 @@ export const TestSettingsModal: React.FC<TestSettingsModalProps> = ({
             >
               <ToggleGroup.Tab
                 onClick={() => {
-                  setSettings({ studyStarred: false });
+                  setDraft((prev) => ({ ...prev, studyStarred: false }));
                 }}
-                isDisabled={!starredTerms}
               >
                 All
               </ToggleGroup.Tab>
               <ToggleGroup.Tab
                 onClick={() => {
-                  setSettings({
+                  setDraft((prev) => ({
+                    ...prev,
                     studyStarred: true,
-                    questionCount: Math.min(questionCount, starredTerms),
-                  });
+                    questionCount: Math.max(
+                      1,
+                      Math.min(prev.questionCount, starredTerms),
+                    ),
+                  }));
                 }}
-                isDisabled={!starredTerms}
+                isDisabled={!starredTerms && !studyStarred}
               >
                 Starred
               </ToggleGroup.Tab>
@@ -210,7 +236,7 @@ export const TestSettingsModal: React.FC<TestSettingsModalProps> = ({
               <SelectAnswerMode
                 value={answerMode}
                 onChange={(v) => {
-                  setSettings({ answerMode: v });
+                  setDraft((prev) => ({ ...prev, answerMode: v }));
                 }}
               />
             </Box>
@@ -223,6 +249,10 @@ export const TestSettingsModal: React.FC<TestSettingsModalProps> = ({
               ref={startRef}
               isDisabled={!enabled}
               onClick={() => {
+                setSettings({
+                  ...draft,
+                  questionCount: clampedCount,
+                });
                 onReset();
                 onClose();
               }}
@@ -236,25 +266,12 @@ export const TestSettingsModal: React.FC<TestSettingsModalProps> = ({
   );
 };
 
-const QuestionTypeComponent: React.FC<{ type: TestQuestionType }> = ({
-  type,
-}) => {
-  const questionTypes = useTestContext((s) => s.settings.questionTypes);
-  const setSettings = useTestContext((s) => s.setSettings);
-
+const QuestionTypeComponent: React.FC<{
+  type: TestQuestionType;
+  checked: boolean;
+  onToggle: () => void;
+}> = ({ type, checked, onToggle }) => {
   const Icon = getQuestionTypeIcon(type);
-
-  const checked = questionTypes.includes(type);
-  const enable = () => {
-    setSettings({
-      questionTypes: [...questionTypes, type],
-    });
-  };
-  const disable = () => {
-    setSettings({
-      questionTypes: questionTypes.filter((t) => t !== type),
-    });
-  };
 
   const selectedBorder = useColorModeValue("blue.600", "blue.200");
   const defaultBorder = useColorModeValue("gray.200", "gray.600");
@@ -270,10 +287,7 @@ const QuestionTypeComponent: React.FC<{ type: TestQuestionType }> = ({
       py="6"
       px="4"
       colorScheme="gray"
-      onClick={() => {
-        if (checked) disable();
-        else enable();
-      }}
+      onClick={onToggle}
     >
       <HStack w="full">
         <Box

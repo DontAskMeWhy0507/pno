@@ -1,3 +1,4 @@
+import { useSession } from "next-auth/react";
 import React from "react";
 
 import { shuffleArray } from "@quenti/lib/array";
@@ -19,6 +20,7 @@ import { FlashcardsSettingsModal } from "../flashcards/flashcards-settings-modal
 import { LinkArea } from "./link-area";
 
 export const FlashcardPreview = () => {
+  const authed = useSession().status == "authenticated";
   const data = useSet();
   const enableCardsSorting = useContainerContext((s) => s.enableCardsSorting);
   const [isDirty, setIsDirty] = useSetPropertiesStore((s) => [
@@ -43,7 +45,7 @@ export const FlashcardPreview = () => {
     s.toggleAutoplayFlashcards,
   ]);
 
-  const _termOrder = data.terms
+  const _termOrder = [...data.terms]
     .sort((a, b) => a.rank - b.rank)
     .map((t) => t.id);
   const [termOrder, setTermOrder] = React.useState<string[]>(
@@ -95,13 +97,19 @@ export const FlashcardPreview = () => {
                 leftIcon={<IconArrowsShuffle />}
                 variant={shuffle ? "solid" : "outline"}
                 onClick={() => {
-                  void (async () => {
-                    await apiSetShuffle.mutateAsync({
-                      entityId: data.id,
-                      shuffle: !shuffle,
-                      type: "StudySet",
-                    });
-                  })();
+                  if (authed) {
+                    void (async () => {
+                      try {
+                        await apiSetShuffle.mutateAsync({
+                          entityId: data.id,
+                          shuffle: !shuffle,
+                          type: "StudySet",
+                        });
+                      } catch {
+                        // Non-fatal shuffle sync
+                      }
+                    })();
+                  }
 
                   toggleShuffle();
                 }}

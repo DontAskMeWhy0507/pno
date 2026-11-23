@@ -56,15 +56,18 @@ const leaderboardSummary = (
   highscores: MatchSummaryFeedbackProps["highscores"],
 ): React.ReactNode => {
   const selfIndex = highscores.findIndex((h) => h.userId == userId);
-  const personal = highscores[selfIndex]!;
+  const personal = selfIndex >= 0 ? highscores[selfIndex] : undefined;
+  if (!personal) {
+    return `Completed in ${formatDeciseconds(elapsed)} seconds.`;
+  }
   const isPr = elapsed == personal.time;
-  const successor = highscores[Math.max(selfIndex - 1, 0)]!;
+  const successor = highscores[Math.max(selfIndex - 1, 0)];
 
   if (!isPr) {
     return `See if you can beat your personal record of ${formatDeciseconds(
       personal.time,
     )} seconds.`;
-  } else if (successor.userId != userId) {
+  } else if (successor && successor.userId != userId) {
     return (
       <>
         Now see if you can beat{" "}
@@ -84,15 +87,19 @@ const personalSummary = (
   elapsed: number,
   highscore: MatchSummaryFeedbackProps["highscore"],
 ) => {
+  if (typeof highscore?.bestTime !== "number") {
+    return `Completed in ${formatDeciseconds(elapsed)} seconds.`;
+  }
+
   const isPr = elapsed == highscore.bestTime;
 
   if (!isPr) {
     return `See if you can beat your personal record of ${formatDeciseconds(
-      highscore.bestTime!,
+      highscore.bestTime,
     )} seconds.`;
   } else {
     return `Think you can beat ${formatDeciseconds(
-      highscore.bestTime!,
+      highscore.bestTime,
     )} seconds now?`;
   }
 };

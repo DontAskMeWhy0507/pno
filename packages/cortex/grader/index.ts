@@ -43,12 +43,20 @@ export const bulkGradeAnswers = async (
   );
 
   for (const { index } of requiringEntailment) {
-    const value = entailment.shift()!;
+    const value = entailment.shift();
+    if (!value) continue;
+
+    // When HuggingFace is not configured, bulkProcessEntailment returns neutral/0;
+    // preserve the high cosine similarity evaluation instead of falsely failing.
+    const evaluation =
+      value.label === "neutral" && value.score === 0
+        ? evaluations[index]!.evaluation
+        : value.label === "entailment";
 
     evaluations[index] = {
       ...evaluations[index]!,
       entailment: value,
-      evaluation: value.label === "entailment",
+      evaluation,
     };
   }
 

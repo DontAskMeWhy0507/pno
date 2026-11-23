@@ -14,6 +14,10 @@ const APP_VERSION = pjson.version;
 let cachedDefaultSession: { session: Session; expiresAt: number } | null = null;
 const DEFAULT_SESSION_TTL_MS = 5 * 60 * 1000;
 
+export const invalidateDefaultOwnerSession = () => {
+  cachedDefaultSession = null;
+};
+
 export const getDefaultOwnerSession = async (): Promise<Session | null> => {
   const now = Date.now();
   if (cachedDefaultSession && cachedDefaultSession.expiresAt > now) {

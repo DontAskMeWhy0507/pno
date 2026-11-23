@@ -93,12 +93,19 @@ export const SearchImagesModal: React.FC<SearchImagesModalProps> = ({
 
         editorEventChannel.emit("requestUploadUrl", currentContextRef.current!);
       },
+      error: (err) => {
+        setUploadError(err.message || "Could not process image file.");
+        reset();
+      },
     });
   };
 
   const { getRootProps, getInputProps } = useDropzone({
     accept: {
-      "image/png": [".png", ".jpg", ".jpeg", ".gif"],
+      "image/png": [".png"],
+      "image/jpeg": [".jpg", ".jpeg"],
+      "image/gif": [".gif"],
+      "image/webp": [".webp"],
     },
     maxFiles: 1,
     onDropAccepted: (files) => {
@@ -109,7 +116,13 @@ export const SearchImagesModal: React.FC<SearchImagesModalProps> = ({
   React.useEffect(() => {
     const upload = (jwt?: string) => {
       void (async () => {
-        if (!jwt) return;
+        if (!jwt || !env.NEXT_PUBLIC_CDN_WORKER_ENDPOINT) {
+          setUploadError(
+            "Image upload storage is not configured on this server. Try searching Unsplash instead.",
+          );
+          reset();
+          return;
+        }
 
         const result = (await doUpload(jwt, fileRef.current!)) as boolean;
         if (!result) {

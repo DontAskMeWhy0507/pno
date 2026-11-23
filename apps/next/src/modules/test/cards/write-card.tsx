@@ -33,7 +33,7 @@ export const WriteCard: React.FC<CardProps> = ({ i, result }) => {
 
   const handleClick = (c: string) => {
     const value = answer || "";
-    const cursorPosition = inputRef.current!.selectionStart || value.length;
+    const cursorPosition = inputRef.current?.selectionStart ?? value.length;
     const textBeforeCursor = value.substring(0, cursorPosition);
     const textAfterCursor = value.substring(cursorPosition);
     answerQuestion(i, textBeforeCursor + c + textAfterCursor, true, true);
@@ -95,7 +95,7 @@ export const WriteCard: React.FC<CardProps> = ({ i, result }) => {
             </Stack>
           ) : (
             <Stack spacing="6">
-              <EvaluatedFalse>{answer || ""}</EvaluatedFalse>
+              <EvaluatedFalse>{answer?.trim() ? answer : "Skipped"}</EvaluatedFalse>
               <Stack spacing="2">
                 <GenericLabel>
                   Correct{" "}
@@ -138,13 +138,19 @@ export const WriteCard: React.FC<CardProps> = ({ i, result }) => {
               fontWeight={700}
               bg={inputBg}
               variant="flushed"
+              borderColor="transparent"
               _placeholder={{
                 color: placeholderColor,
               }}
               value={answer ?? ""}
               onChange={(e) => {
-                if (e.target.value.trim().length > 0) {
-                  answerQuestion(i, e.target.value, true, true);
+                if (e.target.value.length > 0) {
+                  answerQuestion(
+                    i,
+                    e.target.value,
+                    e.target.value.trim().length > 0,
+                    true,
+                  );
                 } else clearAnswer(i);
               }}
               onKeyDown={(e) => {

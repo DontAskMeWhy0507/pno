@@ -298,7 +298,19 @@ export async function importAnkiBuffer(
           ? sampleDeck.name.split(" ")[0]
           : undefined);
 
-      if (parsed.decks.length > 1 && rootName) {
+      const nonEmptyDecks =
+        parsed.decks.length > 1
+          ? parsed.decks.filter((d) => d.cards.length > 0)
+          : parsed.decks;
+
+      if (nonEmptyDecks.length === 0 || nonEmptyDecks.every((d) => !d.cards.length)) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "This Anki package contains no importable cards.",
+        });
+      }
+
+      if (nonEmptyDecks.length > 1 && rootName) {
         const folder = await tx.folder.create({
           data: {
             title: rootName.slice(0, 255),
@@ -307,13 +319,21 @@ export async function importAnkiBuffer(
           },
         });
         folderId = folder.id;
+        await tx.container.create({
+          data: {
+            userId,
+            entityId: folder.id,
+            type: "Folder",
+            viewedAt: new Date(),
+          },
+        });
       }
 
       let firstSetId = "";
       let totalTerms = 0;
 
-      for (const deck of parsed.decks) {
-        if (!deck.cards.length && parsed.decks.length > 1) continue;
+      for (const deck of nonEmptyDecks) {
+        if (!deck.cards.length && nonEmptyDecks.length > 1) continue;
 
         const cleanTitle = deck.name.replace(/::/g, " - ").slice(0, 255);
         const studySet = await tx.studySet.create({
@@ -326,6 +346,15 @@ export async function importAnkiBuffer(
             userId,
             created: true,
             tags: ["anki"],
+          },
+        });
+
+        await tx.container.create({
+          data: {
+            userId,
+            entityId: studySet.id,
+            type: "StudySet",
+            viewedAt: new Date(),
           },
         });
 

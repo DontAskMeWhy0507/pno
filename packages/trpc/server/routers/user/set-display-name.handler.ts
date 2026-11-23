@@ -1,3 +1,5 @@
+import { invalidateDefaultOwnerSession } from "@quenti/auth";
+
 import { TRPCError } from "@trpc/server";
 
 import type { NonNullableUserContext } from "../../lib/types";
@@ -23,6 +25,7 @@ export const setDisplayNameHandler = async ({
       displayName: input.displayName,
     },
   });
+  invalidateDefaultOwnerSession();
 };
 
 export default setDisplayNameHandler;

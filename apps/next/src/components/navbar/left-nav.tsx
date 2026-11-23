@@ -28,7 +28,6 @@ import {
   IconFolder,
   IconFolderPlus,
   IconPlus,
-  IconSchool,
   IconSearch,
 } from "@tabler/icons-react";
 
@@ -92,29 +91,6 @@ export const LeftNav: React.FC<LeftNavProps> = ({
           </Heading>
         </HStack>
       </Flex>
-      <HStack display={["none", "none", "flex"]} spacing="1">
-        <Button
-          as={Link}
-          href="/home"
-          variant={isQuiz ? "subtle" : "ghost"}
-          colorScheme={isQuiz ? "blue" : "gray"}
-          fontWeight={700}
-          fontSize="sm"
-        >
-          Quiz
-        </Button>
-        <Button
-          as={Link}
-          href="/ielts"
-          variant={isIelts ? "subtle" : "ghost"}
-          colorScheme={isIelts ? "blue" : "gray"}
-          fontWeight={700}
-          fontSize="sm"
-          leftIcon={<IconSchool size={17} />}
-        >
-          IELTS
-        </Button>
-      </HStack>
 
       {/* Context-aware Create button & Search bar */}
       {isQuiz && (

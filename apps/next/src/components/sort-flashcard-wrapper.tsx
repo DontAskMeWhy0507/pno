@@ -80,8 +80,11 @@ export const SortFlashcardWrapper = () => {
     controls.set({
       rotateX: -90,
     });
-    visibleFlashcards[0]!.isFlipped = !visibleFlashcards[0]!.isFlipped;
-    setVisibleFlashcards(Array.from(visibleFlashcards));
+    setVisibleFlashcards((prev) =>
+      prev.map((card) =>
+        card.id === id ? { ...card, isFlipped: !card.isFlipped } : card,
+      ),
+    );
 
     await controls.start({
       rotateX: 0,
@@ -92,6 +95,7 @@ export const SortFlashcardWrapper = () => {
   };
 
   const markCard = (term: StudiableTerm, know: boolean) => {
+    if (!term) return;
     allowAnimation();
     setState(know ? "known" : "stillLearning");
     controls.set({ zIndex: 105 });
@@ -105,9 +109,7 @@ export const SortFlashcardWrapper = () => {
       mode: "Flashcards",
       correctness: know ? 1 : -1,
       appearedInRound: currentRound,
-      incorrectCount: know
-        ? term.incorrectCount || 0
-        : term.incorrectCount + 1,
+      incorrectCount: term.incorrectCount || 0,
     });
   };
 
@@ -143,7 +145,7 @@ export const SortFlashcardWrapper = () => {
     if (!progressView && term)
       setVisibleFlashcards([{ ...term, isFlipped: shouldFlip, index }]);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [term]);
+  }, [term, shouldFlip]);
 
   React.useEffect(() => {
     if (progressView) {

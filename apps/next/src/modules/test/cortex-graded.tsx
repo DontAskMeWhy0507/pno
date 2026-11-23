@@ -23,8 +23,10 @@ export const CortexGraded: React.FC<CortextGradedProps> = ({ response }) => {
       </Text>
       <Tooltip
         bg="white"
+        color="gray.900"
         _dark={{
           bg: "gray.900",
+          color: "white",
         }}
         py="2"
         px="3"

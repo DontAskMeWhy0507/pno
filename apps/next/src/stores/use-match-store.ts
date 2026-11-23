@@ -235,12 +235,28 @@ export const createMatchStore = (
         const targetType = term.type == "word" ? "definition" : "word";
 
         const indexes = get().getIndicesUnder(index);
+        const draggedRow = get().studiableTerms.find((t) => t.id === target);
+        const norm = (s: string) => s.trim().toLowerCase();
+
         let correctIndex: number | undefined;
         const incorrects: number[] = [];
         indexes.forEach((idx) => {
           const candidate = get().terms[idx];
-          if (candidate && candidate.id == target && candidate.type == targetType)
-            correctIndex = idx;
+          if (!candidate || candidate.type !== targetType) {
+            incorrects.push(idx);
+            return;
+          }
+          const candRow = get().studiableTerms.find(
+            (t) => t.id === candidate.id,
+          );
+          const sameText =
+            draggedRow &&
+            candRow &&
+            ((norm(draggedRow.word).length > 0 &&
+              norm(draggedRow.word) === norm(candRow.word)) ||
+              (norm(draggedRow.definition).length > 0 &&
+                norm(draggedRow.definition) === norm(candRow.definition)));
+          if (candidate.id == target || sameText) correctIndex = idx;
           else incorrects.push(idx);
         });
 

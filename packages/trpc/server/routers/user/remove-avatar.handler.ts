@@ -1,3 +1,4 @@
+import { invalidateDefaultOwnerSession } from "@quenti/auth";
 import { env } from "@quenti/env/client";
 import { deleteAvatar } from "@quenti/images/server";
 
@@ -21,6 +22,7 @@ export const removeAvatarHandler = async ({ ctx }: RemoveAvatarOptions) => {
       image,
     },
   });
+  invalidateDefaultOwnerSession();
 
   return { image };
 };

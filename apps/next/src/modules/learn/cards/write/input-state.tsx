@@ -82,7 +82,7 @@ export const InputState: React.FC<InputStateProps> = ({ active, onSubmit }) => {
   };
 
   const handleClick = (c: string) => {
-    const cursorPosition = inputRef.current!.selectionStart || answer.length;
+    const cursorPosition = inputRef.current?.selectionStart ?? answer.length;
     const textBeforeCursor = answer.substring(0, cursorPosition);
     const textAfterCursor = answer.substring(cursorPosition);
     setAnswer(textBeforeCursor + c + textAfterCursor);
@@ -104,7 +104,7 @@ export const InputState: React.FC<InputStateProps> = ({ active, onSubmit }) => {
           {!!specialCharacters.length && (
             <Box>
               <div style={{ margin: -4, maxHeight: 128, overflowY: "auto" }}>
-                {specialCharacters.sort().map((c, i) => (
+                {[...specialCharacters].sort().map((c, i) => (
                   <CharacterButtonWrapper
                     key={i}
                     character={c}

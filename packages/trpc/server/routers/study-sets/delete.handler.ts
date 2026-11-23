@@ -30,19 +30,23 @@ export const deleteHandler = async ({ ctx, input }: DeleteOptions) => {
     });
   }
 
-  const termWithCdnAsset = await ctx.prisma.term.findFirst({
-    where: {
-      studySetId: input.studySetId,
-      AND: {
-        assetUrl: {
-          startsWith: env.ASSETS_BUCKET_URL,
+  if (env.ASSETS_BUCKET_URL) {
+    const termWithCdnAsset = await ctx.prisma.term.findFirst({
+      where: {
+        studySetId: input.studySetId,
+        AND: {
+          assetUrl: {
+            startsWith: env.ASSETS_BUCKET_URL,
+          },
         },
       },
-    },
-  });
+    });
 
-  if (termWithCdnAsset) {
-    await deleteStudySetAssets(studySet.id);
+    if (termWithCdnAsset) {
+      await deleteStudySetAssets(studySet.id).catch((err) => {
+        console.error("deleteStudySetAssets failed:", err);
+      });
+    }
   }
 
   return await ctx.prisma.studySet.delete({

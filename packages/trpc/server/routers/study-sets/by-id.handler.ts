@@ -88,20 +88,29 @@ export const byIdHandler = async ({ ctx, input }: ByIdOptions) => {
       });
   }
 
-  if (input.withDistractors && studySet.cortexStale) {
+  if (
+    input.withDistractors &&
+    (studySet.cortexStale ||
+      (studySet.terms.length >= 2 &&
+        studySet.terms.every((t) => !(t as WidenedTerm).distractors?.length)))
+  ) {
     const start = Date.now();
 
-    const distractors = await regenerateCortex(input.studySetId);
+    try {
+      const distractors = await regenerateCortex(input.studySetId);
 
-    ctx.req.log.debug("cortex.bulkGenerateDistractors", {
-      studySetId: studySet.id,
-      terms: studySet.terms.length,
-      distractors: distractors.length,
-      batches: Math.ceil(studySet.terms.length / 96),
-      elapsed: Date.now() - start,
-    });
+      ctx.req.log.debug("cortex.bulkGenerateDistractors", {
+        studySetId: studySet.id,
+        terms: studySet.terms.length,
+        distractors: distractors.length,
+        batches: Math.ceil(studySet.terms.length / 96),
+        elapsed: Date.now() - start,
+      });
 
-    studySet = (await getWithDistractors(input.studySetId)) as Widened;
+      studySet = (await getWithDistractors(input.studySetId)) as Widened;
+    } catch (err) {
+      console.error("regenerateCortex failed:", err);
+    }
   }
 
   const container = await ctx.prisma.container.upsert({

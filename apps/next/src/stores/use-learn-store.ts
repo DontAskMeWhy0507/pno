@@ -83,6 +83,10 @@ export const createLearnStore = (initProps?: Partial<LearnStoreProps>) => {
       ...DEFAULT_PROPS,
       ...initProps,
       initialize: (mode, answerMode, studiableTerms, allTerms, round) => {
+        if (answerTimer) {
+          clearTimeout(answerTimer);
+          answerTimer = null;
+        }
         const words =
           answerMode != "Both"
             ? studiableTerms.map((x) => word(answerMode, x, "answer"))
@@ -139,22 +143,20 @@ export const createLearnStore = (initProps?: Partial<LearnStoreProps>) => {
         }, 1000);
       },
       answerIncorrectly: (termId) => {
+        if (get().answered) return;
         set((state) => ({
           answered: termId,
           status: "incorrect",
-          roundTimeline:
-            state.roundProgress != state.termsThisRound - 1
-              ? [
-                  ...state.roundTimeline,
-                  state.roundTimeline[state.roundCounter]!,
-                ]
-              : state.roundTimeline,
+          roundTimeline: state.roundTimeline[state.roundCounter]
+            ? [...state.roundTimeline, state.roundTimeline[state.roundCounter]!]
+            : state.roundTimeline,
           prevTermWasIncorrect: true,
         }));
       },
       acknowledgeIncorrect: () => {
         set((state) => {
-          const active = state.roundTimeline[state.roundCounter]!;
+          const active = state.roundTimeline[state.roundCounter];
+          if (!active) return {};
           active.term.correctness = -1;
           active.term.incorrectCount++;
 
@@ -172,7 +174,7 @@ export const createLearnStore = (initProps?: Partial<LearnStoreProps>) => {
           active.term.correctness = 2;
 
           const roundTimeline = [...state.roundTimeline];
-          if (state.roundProgress != state.termsThisRound - 1) {
+          if (roundTimeline.length > state.roundCounter + 1) {
             // Remove the added question from the timeline
             roundTimeline.pop();
           }
@@ -193,21 +195,27 @@ export const createLearnStore = (initProps?: Partial<LearnStoreProps>) => {
             const hasMissedTerms = !!state.studiableTerms.find(
               (x) => x.incorrectCount > 0,
             );
-            return { completed: true, hasMissedTerms };
+            return {
+              completed: true,
+              hasMissedTerms,
+              status: undefined,
+              answered: undefined,
+            };
           }
 
-          if (state.roundProgress === state.termsThisRound - 1) {
+          if (correct && state.roundProgress === state.termsThisRound - 1) {
             return {
               roundSummary: {
                 round: state.currentRound,
                 termsThisRound: Array.from(
                   new Set(state.roundTimeline.map((q) => q.term)),
                 ),
-                progress: state.studiableTerms.filter((x) => x.correctness != 0)
+                progress: state.studiableTerms.filter((x) => x.correctness > 0)
                   .length,
                 totalTerms: state.numTerms,
               },
               status: undefined,
+              answered: undefined,
             };
           }
 
@@ -239,18 +247,15 @@ export const createLearnStore = (initProps?: Partial<LearnStoreProps>) => {
       incorrectFromUnknown: (termId) => {
         set((state) => ({
           answered: termId,
-          roundTimeline:
-            state.roundProgress != state.termsThisRound - 1
-              ? [
-                  ...state.roundTimeline,
-                  state.roundTimeline[state.roundCounter]!,
-                ]
-              : state.roundTimeline,
+          roundTimeline: state.roundTimeline[state.roundCounter]
+            ? [...state.roundTimeline, state.roundTimeline[state.roundCounter]!]
+            : state.roundTimeline,
           prevTermWasIncorrect: true,
         }));
 
         set((state) => {
-          const active = state.roundTimeline[state.roundCounter]!;
+          const active = state.roundTimeline[state.roundCounter];
+          if (!active) return {};
           active.term.correctness = -1;
           active.term.incorrectCount++;
 
@@ -259,6 +264,10 @@ export const createLearnStore = (initProps?: Partial<LearnStoreProps>) => {
         });
       },
       nextRound: (start = false) => {
+        if (answerTimer) {
+          clearTimeout(answerTimer);
+          answerTimer = null;
+        }
         set((state) => {
           const currentRound = state.currentRound + (!start ? 1 : 0);
 
@@ -291,6 +300,9 @@ export const createLearnStore = (initProps?: Partial<LearnStoreProps>) => {
             if (x.correctness == 0) x.appearedInRound = currentRound;
           });
 
+          const normText = (mode: StudySetAnswerMode, t: TermWithDistractors) =>
+            word(mode, t, "answer").trim().toLowerCase();
+
           const roundTimeline: Question[] = termsThisRound.map((term) => {
             const choice = term.correctness < 1;
             const answerMode: StudySetAnswerMode =
@@ -301,14 +313,49 @@ export const createLearnStore = (initProps?: Partial<LearnStoreProps>) => {
                   : "Word";
 
             if (choice) {
-              const distractorIds = term.distractors
+              const seenIds = new Set<string>([term.id]);
+              const seenTexts = new Set<string>([normText(answerMode, term)]);
+              const distractors: TermWithDistractors[] = [];
+
+              const storedIds = term.distractors
                 .filter((x) => x.type == answerMode)
                 .map((x) => x.distractingId);
-              const distractors = state.allTerms.filter((x) =>
-                distractorIds.includes(x.id),
-              );
 
-              const choices = shuffleArray(distractors.concat(term));
+              for (const candidate of state.allTerms) {
+                if (distractors.length >= 3) break;
+                if (!storedIds.includes(candidate.id)) continue;
+                const text = normText(answerMode, candidate);
+                if (seenIds.has(candidate.id) || !text || seenTexts.has(text))
+                  continue;
+                seenIds.add(candidate.id);
+                seenTexts.add(text);
+                distractors.push(candidate);
+              }
+
+              if (distractors.length < 3) {
+                for (const candidate of shuffleArray([...state.allTerms])) {
+                  if (distractors.length >= 3) break;
+                  const text = normText(answerMode, candidate);
+                  if (seenIds.has(candidate.id) || !text || seenTexts.has(text))
+                    continue;
+                  seenIds.add(candidate.id);
+                  seenTexts.add(text);
+                  distractors.push(candidate);
+                }
+              }
+
+              if (distractors.length < 3) {
+                for (const candidate of shuffleArray([...state.allTerms])) {
+                  if (distractors.length >= 3) break;
+                  if (seenIds.has(candidate.id)) continue;
+                  const text = normText(answerMode, candidate);
+                  if (!text) continue;
+                  seenIds.add(candidate.id);
+                  distractors.push(candidate);
+                }
+              }
+
+              const choices = shuffleArray([...distractors, term]);
 
               return {
                 answerMode,

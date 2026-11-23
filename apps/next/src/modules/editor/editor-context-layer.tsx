@@ -54,6 +54,14 @@ export const EditorContextLayer: React.FC<
 
   const apiSetClassesWithAccess = api.studySets.setAllowedClasses.useMutation();
 
+  const setMutationSaveError = (e: { message?: string }) => {
+    storeRef
+      .current!.getState()
+      .setSaveError(
+        e.message || "Failed to save changes. Please try again.",
+      );
+  };
+
   const apiAddTerm = api.terms.add.useMutation({
     onSuccess: (data, { term: termInput }) => {
       const state = storeRef.current!.getState();
@@ -74,6 +82,7 @@ export const EditorContextLayer: React.FC<
         }));
       }
     },
+    onError: setMutationSaveError,
   });
   const apiBulkAddTerms = api.terms.bulkAdd.useMutation({
     onSuccess: (data) => {
@@ -86,24 +95,37 @@ export const EditorContextLayer: React.FC<
       }));
       state.addServerTerms(data.map((x) => x.id));
     },
+    onError: setMutationSaveError,
   });
   const apiBulkDeleteTerms = api.terms.bulkDelete.useMutation({
     onSuccess: (_, { terms }) => {
       const state = storeRef.current!.getState();
       state.removeServerTerms(terms);
     },
+    onError: setMutationSaveError,
   });
   const apiDeleteTerm = api.terms.delete.useMutation({
     onSuccess: (data) => {
       const state = storeRef.current!.getState();
       state.removeServerTerms([data.deleted]);
     },
+    onError: setMutationSaveError,
   });
-  const apiEditTerm = api.terms.edit.useMutation();
-  const apiBulkEdit = api.terms.bulkEdit.useMutation();
-  const apiSetImage = api.terms.setImage.useMutation();
-  const apiRemoveImage = api.terms.removeImage.useMutation();
-  const apiReorderTerm = api.terms.reorder.useMutation();
+  const apiEditTerm = api.terms.edit.useMutation({
+    onError: setMutationSaveError,
+  });
+  const apiBulkEdit = api.terms.bulkEdit.useMutation({
+    onError: setMutationSaveError,
+  });
+  const apiSetImage = api.terms.setImage.useMutation({
+    onError: setMutationSaveError,
+  });
+  const apiRemoveImage = api.terms.removeImage.useMutation({
+    onError: setMutationSaveError,
+  });
+  const apiReorderTerm = api.terms.reorder.useMutation({
+    onError: setMutationSaveError,
+  });
 
   const apiUploadImage = api.terms.uploadImage.useMutation({
     onSuccess: (jwt) => {

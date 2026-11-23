@@ -22,25 +22,30 @@ const InternalFolder = dynamic(
 
 export const runtime = "experimental-edge";
 
-const FolderPage = ({ folder }: inferSSRProps<typeof getServerSideProps>) => {
-  if (!folder) return <Folder404 />;
+const FolderPage = ({
+  folder,
+  fallbackClient,
+}: inferSSRProps<typeof getServerSideProps>) => {
+  if (!folder && !fallbackClient) return <Folder404 />;
 
   return (
     <>
-      <HeadSeo
-        title={folder.title}
-        description={folder.description}
-        entity={{
-          type: "Folder",
-          title: folder.title,
-          description: folder.description,
-          numItems: folder.studySets,
-          user: {
-            username: folder.user.username!,
-            image: folder.user.image || "",
-          },
-        }}
-      />
+      {folder && (
+        <HeadSeo
+          title={folder.title}
+          description={folder.description}
+          entity={{
+            type: "Folder",
+            title: folder.title,
+            description: folder.description,
+            numItems: folder.studySets,
+            user: {
+              username: folder.user.username!,
+              image: folder.user.image || "",
+            },
+          }}
+        />
+      )}
       <LazyWrapper>
         <InternalFolder />
       </LazyWrapper>
@@ -52,7 +57,7 @@ FolderPage.PageWrapper = PageWrapper;
 FolderPage.getLayout = getLayout;
 
 export const getServerSideProps = async (ctx: GetServerSidePropsContext) => {
-  if (!db) return { props: { set: null } };
+  if (!db) return { props: { folder: null, fallbackClient: true } };
 
   const username = (ctx.query?.username as string).substring(1);
   const idOrSlug = ctx.query?.slug as string;

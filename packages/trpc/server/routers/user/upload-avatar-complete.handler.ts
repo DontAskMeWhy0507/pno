@@ -1,3 +1,4 @@
+import { invalidateDefaultOwnerSession } from "@quenti/auth";
 import { getUserAvatarUrl } from "@quenti/images/server";
 
 import type { NonNullableUserContext } from "../../lib/types";
@@ -16,6 +17,7 @@ export const uploadAvatarCompleteHandler = async ({
     where: { id: ctx.session.user.id },
     data: { image: url },
   });
+  invalidateDefaultOwnerSession();
 };
 
 export default uploadAvatarCompleteHandler;

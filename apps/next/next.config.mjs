@@ -214,48 +214,56 @@ let config = {
       destination: "/profile/:profile/folders/:slug/match/leaderboard",
     },
     {
-      source: "/:id(c[a-z0-9]{24})",
+      source: "/:id(c[a-z0-9]{20,32})",
       destination: "/sets/:id",
     },
     {
-      source: "/:id(c[a-z0-9]{24})/edit",
+      source: "/:id(c[a-z0-9]{20,32})/edit",
       destination: "/sets/:id/edit",
     },
     {
-      source: "/:id(c[a-z0-9]{24})/create",
+      source: "/:id(c[a-z0-9]{20,32})/create",
       destination: "/sets/:id/create",
     },
     {
-      source: "/:id(c[a-z0-9]{24})/collab",
+      source: "/:id(c[a-z0-9]{20,32})/collab",
       destination: "/sets/:id/collab",
     },
     {
-      source: "/:id(c[a-z0-9]{24})/flashcards",
+      source: "/:id(c[a-z0-9]{20,32})/flashcards",
       destination: "/sets/:id/flashcards",
     },
     {
-      source: "/:id(c[a-z0-9]{24})/learn",
+      source: "/:id(c[a-z0-9]{20,32})/learn",
       destination: "/sets/:id/learn",
     },
     {
-      source: "/:id(c[a-z0-9]{24})/match",
+      source: "/:id(c[a-z0-9]{20,32})/match",
       destination: "/sets/:id/match",
     },
     {
-      source: "/:id(c[a-z0-9]{24})/match/leaderboard",
+      source: "/:id(c[a-z0-9]{20,32})/match/leaderboard",
       destination: "/sets/:id/match/leaderboard",
     },
     {
-      source: "/:id(c[a-z0-9]{24})/test",
+      source: "/:id(c[a-z0-9]{20,32})/test",
       destination: "/sets/:id/test",
     },
     {
-      source: "/:id(c[a-z0-9]{24})/anki",
+      source: "/:id(c[a-z0-9]{20,32})/anki",
       destination: "/sets/:id/anki",
     },
     {
-      source: "/:id(c[a-z0-9]{24})/blocks",
+      source: "/:id(c[a-z0-9]{20,32})/blocks",
       destination: "/sets/:id/blocks",
+    },
+    {
+      source: "/:id(c[a-z0-9]{20,32})/crossword",
+      destination: "/sets/:id/crossword",
+    },
+    {
+      source: "/:id(c[a-z0-9]{20,32})/gravity",
+      destination: "/sets/:id/gravity",
     },
     {
       source: "/a/:id/:assignmentId",

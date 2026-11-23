@@ -64,6 +64,7 @@ export const ImportFromAnkiModal: React.FC<ImportFromAnkiModalProps> = ({
     effectChannel.emit("prepareConfetti");
     effectChannel.emit("confetti");
 
+    resetState();
     onClose();
     if (data.createdSetId) {
       await router.push(`/${data.createdSetId}`);
@@ -237,6 +238,10 @@ export const ImportFromAnkiModal: React.FC<ImportFromAnkiModalProps> = ({
           if (resp.ok) {
             const data = (await resp.json()) as { mediaBase?: string | null };
             if (data.mediaBase) resolvedMediaBase = data.mediaBase;
+          } else {
+            throw new Error(
+              `Media batch upload failed (${resp.status}). Please retry or check server media storage settings.`,
+            );
           }
           currentBatch = [];
           currentBatchBytes = 0;
@@ -390,7 +395,7 @@ export const ImportFromAnkiModal: React.FC<ImportFromAnkiModalProps> = ({
                     onClick={handleLoadDriveFiles}
                     isLoading={driveLoading}
                     loadingText="Loading your Drive files..."
-                    disabled={loading}
+                    isDisabled={loading}
                   >
                     Import from Google Drive
                   </Button>
@@ -455,7 +460,7 @@ export const ImportFromAnkiModal: React.FC<ImportFromAnkiModalProps> = ({
                       ))
                     )}
                     <Text fontSize="xs" color={secondaryText}>
-                      Decks over ~150 MB may be too large for in-app import.
+                      Decks over 50 MB may be too large for in-app Google Drive import.
                     </Text>
                   </Stack>
                 )}
@@ -485,14 +490,14 @@ export const ImportFromAnkiModal: React.FC<ImportFromAnkiModalProps> = ({
                   resetState();
                   onClose();
                 }}
-                disabled={loading}
+                isDisabled={loading}
               >
                 Cancel
               </Button>
               <Button
                 colorScheme="orange"
                 onClick={handleImport}
-                disabled={!selectedFile || loading}
+                isDisabled={!selectedFile || loading}
                 isLoading={loading}
               >
                 Import Deck

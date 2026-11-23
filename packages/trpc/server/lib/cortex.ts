@@ -25,9 +25,8 @@ export const regenerateCortex = async (id: string) => {
     },
   });
 
-  const distractors = await bulkGenerateDistractors(
-    terms.filter((t) => !t.ephemeral),
-  );
+  const operatableTerms = terms.filter((t) => !t.ephemeral);
+  const distractors = await bulkGenerateDistractors(operatableTerms);
 
   const ids = terms.map((d) => d.id);
 
@@ -36,19 +35,21 @@ export const regenerateCortex = async (id: string) => {
       OR: [{ termId: { in: ids } }, { distractingId: { in: ids } }],
     },
   });
-  await prisma.distractor.createMany({
-    data: distractors.map((d) => ({
-      type: d.type == "word" ? "Word" : "Definition",
-      termId: d.termId,
-      distractingId: d.distractorId,
-    })),
-  });
+  if (distractors.length > 0) {
+    await prisma.distractor.createMany({
+      data: distractors.map((d) => ({
+        type: d.type == "word" ? "Word" : "Definition",
+        termId: d.termId,
+        distractingId: d.distractorId,
+      })),
+    });
+  }
   await prisma.studySet.update({
     where: {
       id,
     },
     data: {
-      cortexStale: false,
+      cortexStale: operatableTerms.length >= 2 && distractors.length === 0,
     },
   });
 

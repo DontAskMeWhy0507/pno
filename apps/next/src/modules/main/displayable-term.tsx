@@ -109,48 +109,59 @@ export const DisplayableTerm: React.FC<DisplayableTermProps> = ({ term }) => {
       wordRichText: term.wordRichText as JSONContent | null,
       definitionRichText: term.definitionRichText as JSONContent | null,
     });
+    if (!isEditing) {
+      wordEditor?.commands.setContent(editorInput(term as EditorTerm, "word"));
+      definitionEditor?.commands.setContent(
+        editorInput(term as EditorTerm, "definition"),
+      );
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [term.word, term.definition, term.wordRichText, term.definitionRichText]);
 
   const getEditorPlainTexts = () => {
-    const wordJson = wordEditor!.getJSON();
-    const definitionJson = definitionEditor!.getJSON();
+    if (!wordEditor || !definitionEditor) return null;
+    const wordJson = wordEditor.getJSON();
+    const definitionJson = definitionEditor.getJSON();
     const word = getPlainText(wordJson);
     const definition = getPlainText(definitionJson);
     return { word, definition, wordJson, definitionJson };
   };
 
-  const doEdit = () => {
-    setIsEditing((e) => {
-      if (e) {
-        const { word, definition, wordJson, definitionJson } =
-          getEditorPlainTexts();
+  const isEditingRef = React.useRef(isEditing);
+  isEditingRef.current = isEditing;
 
-        const wordRichText = hasRichText(wordJson, word);
-        const definitionRichText = hasRichText(definitionJson, definition);
+  const doEdit = React.useCallback(() => {
+    if (!isEditingRef.current) return;
+    isEditingRef.current = false;
+    setIsEditing(false);
 
-        const values = {
-          word,
-          definition,
-          wordRichText: wordRichText ? wordJson : null,
-          definitionRichText: definitionRichText ? definitionJson : null,
-        };
+    const parsed = getEditorPlainTexts();
+    if (!parsed) return;
+    const { word, definition, wordJson, definitionJson } = parsed;
 
-        setCache(values);
+    const wordRichText = hasRichText(wordJson, word);
+    const definitionRichText = hasRichText(definitionJson, definition);
 
-        void edit.mutateAsync({
-          id: term.id,
-          studySetId: term.studySetId,
-          ...values,
-          wordRichText: wordRichText ? richTextToHtml(wordJson) : undefined,
-          definitionRichText: definitionRichText
-            ? richTextToHtml(definitionJson)
-            : undefined,
-        });
-      }
+    const values = {
+      word,
+      definition,
+      wordRichText: wordRichText ? wordJson : null,
+      definitionRichText: definitionRichText ? definitionJson : null,
+    };
 
-      return false;
+    setCache(values);
+
+    void edit.mutateAsync({
+      id: term.id,
+      studySetId: term.studySetId,
+      ...values,
+      wordRichText: wordRichText ? richTextToHtml(wordJson) : undefined,
+      definitionRichText: definitionRichText
+        ? richTextToHtml(definitionJson)
+        : undefined,
     });
-  };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [term.id, term.studySetId, wordEditor, definitionEditor]);
 
   const ref = useOutsideClick(doEdit);
 
@@ -326,7 +337,7 @@ export const DisplayableTerm: React.FC<DisplayableTermProps> = ({ term }) => {
                 transform={{ base: "scale(0.8)", md: "scale(1)" }}
                 icon={<Star size={18} />}
                 variant="ghost"
-                aria-label="Edit"
+                aria-label="Star"
                 rounded="full"
                 onClick={() => {
                   if (!authed) {

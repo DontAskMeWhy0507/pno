@@ -1,3 +1,4 @@
+import { invalidateDefaultOwnerSession } from "@quenti/auth";
 import { env } from "@quenti/env/server";
 
 import { TRPCError } from "@trpc/server";
@@ -29,6 +30,7 @@ export const deleteAccountHandler = async ({ ctx }: DeleteAccountOptions) => {
       id: ctx.session.user.id,
     },
   });
+  invalidateDefaultOwnerSession();
 };
 
 export default deleteAccountHandler;

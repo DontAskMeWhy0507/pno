@@ -7,6 +7,7 @@ import { api } from "@quenti/trpc";
 import { useLoading } from "../hooks/use-loading";
 import { EditorContextLayer } from "./editor/editor-context-layer";
 import { EditorLoading } from "./editor/editor-loading";
+import { Set404 } from "./main/set-404";
 
 export const HydrateEditSetData: React.FC<React.PropsWithChildren> = ({
   children,
@@ -16,12 +17,13 @@ export const HydrateEditSetData: React.FC<React.PropsWithChildren> = ({
   const id = router.query.id as string;
   const { loading } = useLoading();
 
-  const { data } = api.studySets.byId.useQuery(
+  const { data, isError, error } = api.studySets.byId.useQuery(
     { studySetId: id },
     {
       enabled: !!id && session.status === "authenticated",
       staleTime: 0,
       cacheTime: 0,
+      retry: false,
       onError: (e) => {
         if (e.data?.httpStatus == 403) {
           void router.push(`/${id}`);
@@ -38,6 +40,14 @@ export const HydrateEditSetData: React.FC<React.PropsWithChildren> = ({
       },
     },
   );
+
+  if (
+    isError &&
+    error?.data?.httpStatus !== 403 &&
+    error?.data?.httpStatus !== 412
+  ) {
+    return <Set404 />;
+  }
 
   if (loading || !data || data.userId !== session.data?.user?.id)
     return <EditorLoading mode="edit" />;

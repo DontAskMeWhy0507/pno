@@ -1,3 +1,4 @@
+import { invalidateDefaultOwnerSession } from "@quenti/auth";
 import { failsPrecondition } from "@quenti/lib/usernames";
 import { Prisma } from "@quenti/prisma/client";
 
@@ -58,6 +59,7 @@ export const changeUsernameHandler = async ({
         username: input.username,
       },
     });
+    invalidateDefaultOwnerSession();
   } catch (e) {
     if (
       e instanceof Prisma.PrismaClientKnownRequestError &&

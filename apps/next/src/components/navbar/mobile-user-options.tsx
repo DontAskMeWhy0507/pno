@@ -18,16 +18,12 @@ import {
 } from "@chakra-ui/react";
 
 import {
-  IconBuildingSkyscraper,
   IconLogout,
   IconMoon,
   IconSettings,
   IconSun,
   IconUserCircle,
 } from "@tabler/icons-react";
-
-import { useMe } from "../../hooks/use-me";
-import { TeacherOnly } from "../teacher-only";
 
 interface MobileUserOptionsProps {
   closeMenu: () => void;
@@ -38,8 +34,6 @@ export const MobileUserOptions: React.FC<MobileUserOptionsProps> = ({
 }) => {
   const session = useSession()!.data!;
   const user = session.user!;
-
-  const { data: me } = useMe();
 
   const { colorMode, toggleColorMode } = useColorMode();
   const color = useColorModeValue("black", "white");
@@ -66,20 +60,6 @@ export const MobileUserOptions: React.FC<MobileUserOptionsProps> = ({
             </Text>
           </WrapItem>
         </Wrap>
-        {me?.orgMembership && (
-          <TeacherOnly>
-            <IconButton
-              variant="outline"
-              overflow="hidden"
-              textOverflow="ellipsis"
-              colorScheme="gray"
-              as={Link}
-              aria-label="Organization"
-              href={`/orgs/${me.orgMembership.organization.id}`}
-              icon={<IconBuildingSkyscraper size={18} />}
-            />
-          </TeacherOnly>
-        )}
       </HStack>
       <Stack spacing={4}>
         <Button

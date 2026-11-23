@@ -37,11 +37,14 @@ export const ResultsCard = () => {
   const questionCount = useTestContext((s) => s.questionCount);
   const [startedAt, endedAt] = useTestContext((s) => [s.startedAt, s.endedAt]);
 
+  const safePercent =
+    questionCount > 0 ? Math.round((result.score / questionCount) * 100) : 0;
+
   const [perc, setPerc] = React.useState(0);
   React.useEffect(() => {
     requestAnimationFrame(() => {
-      setPerc((result.score / questionCount) * 100);
-      if ((result.score * 1.0) / questionCount >= 0.93) {
+      setPerc(questionCount > 0 ? (result.score / questionCount) * 100 : 0);
+      if (questionCount > 0 && (result.score * 1.0) / questionCount >= 0.93) {
         effectChannel.emit("prepareConfetti");
         requestAnimationFrame(() => {
           effectChannel.emit("confetti");
@@ -116,7 +119,7 @@ export const ResultsCard = () => {
               fontSize="xl"
               fontWeight={700}
             >
-              {`${Math.round((result.score / questionCount) * 100)}%`}
+              {`${safePercent}%`}
             </CircularProgressLabel>
           </CircularProgress>
           <Center justifySelf={{ base: "start", md: undefined }}>

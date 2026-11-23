@@ -36,12 +36,10 @@ export const MatchSummary = () => {
   const t = router.query.t as string;
   const eligible = ((router.query.eligible as string) || "true") == "true";
 
-  const safeParseT = (t: string) => {
-    try {
-      return parseInt(t);
-    } catch {
-      return 0;
-    }
+  const safeParseT = (t?: string) => {
+    if (!t) return 0;
+    const parsed = Number.parseInt(t, 10);
+    return Number.isNaN(parsed) ? 0 : parsed;
   };
 
   const leaderboard = api.leaderboard.byEntityId.useQuery(
@@ -51,6 +49,7 @@ export const MatchSummary = () => {
     },
     {
       enabled: router.isReady,
+      retry: false,
     },
   );
 
@@ -63,15 +62,16 @@ export const MatchSummary = () => {
       },
       {
         enabled: router.isReady,
+        retry: false,
       },
     );
 
-  const elapsed =
-    typeof highscore?.bestTime == "number"
-      ? Math.max(highscore.bestTime, safeParseT(t))
-      : safeParseT(t);
+  const elapsed = safeParseT(t);
+  const effectiveLeaderboard = leaderboard.data ?? {
+    highscores: [],
+  };
 
-  if (!leaderboard.data || !highscore || !isFetchedAfterMount)
+  if ((!leaderboard.data && !leaderboard.isError) || !isFetchedAfterMount)
     return <Loading />;
 
   return (
@@ -84,8 +84,8 @@ export const MatchSummary = () => {
               <MatchSummaryFeedback
                 eligible={eligible}
                 elapsed={elapsed}
-                highscore={highscore}
-                highscores={leaderboard.data.highscores}
+                highscore={highscore ?? { bestTime: null }}
+                highscores={effectiveLeaderboard.highscores}
               />
             ) : (
               <Stack spacing="1" mb="3" mx="3">
@@ -101,7 +101,9 @@ export const MatchSummary = () => {
                 <Heading size="lg">{title}</Heading>
               </Stack>
             )}
-            {eligible && <Leaderboard data={leaderboard.data} />}
+            {eligible && leaderboard.data && (
+              <Leaderboard data={leaderboard.data} />
+            )}
           </>
         ) : (
           <>
@@ -119,7 +121,9 @@ export const MatchSummary = () => {
                 </Text>
               </Stack>
             </Stack>
-            {eligible && <Leaderboard data={leaderboard.data} />}
+            {eligible && leaderboard.data && (
+              <Leaderboard data={leaderboard.data} />
+            )}
           </>
         )}
         <ButtonGroup w="full" justifyContent="end" spacing="3">

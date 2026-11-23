@@ -69,9 +69,10 @@ export const RawMatchCard: React.FC<MatchCardProps> = ({
       await animate(y, term.targetY, { duration: MATCH_SHUFFLE_TIME });
     })();
 
-    setTimeout(() => {
+    const t = setTimeout(() => {
       setIsInMotion(false);
     }, MATCH_SHUFFLE_TIME * 1000);
+    return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [term.targetX, term.targetY]);
 
@@ -112,6 +113,8 @@ export const RawMatchCard: React.FC<MatchCardProps> = ({
         shadow="md"
         transition="border-color ease-in-out 150ms"
         maxW="200px"
+        maxH="180px"
+        overflowY="auto"
         w="max-content"
         position="absolute"
         cursor="move"
@@ -128,7 +131,7 @@ export const RawMatchCard: React.FC<MatchCardProps> = ({
               disablePointerEvents
             />
           )}
-          <Text fontSize="sm">
+          <Text fontSize="sm" overflowWrap="anywhere">
             <Display text={term.word} richText={term.richWord} />
           </Text>
         </Stack>

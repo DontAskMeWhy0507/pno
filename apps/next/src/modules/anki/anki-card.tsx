@@ -6,6 +6,7 @@ import { AnkiAudioPlayer, stopAllAnkiAudio } from "./anki-audio-player";
 export interface AnkiCardProps {
   frontHtml: string;
   backHtml: string;
+  assetUrl?: string | null;
   isAnswerShown: boolean;
   onFlip?: () => void;
 }
@@ -13,6 +14,7 @@ export interface AnkiCardProps {
 export const AnkiCard: React.FC<AnkiCardProps> = ({
   frontHtml,
   backHtml,
+  assetUrl,
   isAnswerShown,
   onFlip,
 }) => {
@@ -33,38 +35,48 @@ export const AnkiCard: React.FC<AnkiCardProps> = ({
     () => sanitizeAnkiHtml(frontHtml).html,
     [frontHtml],
   );
-  const safeBackHtml = useMemo(
-    () => sanitizeAnkiHtml(backHtml).html,
-    [backHtml],
+  const safeBackHtml = useMemo(() => {
+    let cleaned = sanitizeAnkiHtml(backHtml).html;
+    const trimmedFront = safeFrontHtml.trim();
+    if (trimmedFront && cleaned.trimStart().startsWith(trimmedFront)) {
+      cleaned = cleaned
+        .trimStart()
+        .slice(trimmedFront.length)
+        .replace(/^\s*(?:<hr\b[^>]*\/?>|<br\s*\/?>)+\s*/i, "");
+    }
+    return cleaned;
+  }, [backHtml, safeFrontHtml]);
+
+  const extractAudioSources = (html: string) => {
+    const matches: string[] = [];
+    const regex = /data-src=["']([^"']+)["']/gi;
+    let match: RegExpExecArray | null;
+    while ((match = regex.exec(html)) !== null) {
+      if (match[1] && !matches.includes(match[1])) matches.push(match[1]);
+    }
+    return matches;
+  };
+
+  // Extract audio files referenced in sanitized front/back HTML
+  const frontAudioSources = useMemo(
+    () => extractAudioSources(safeFrontHtml),
+    [safeFrontHtml],
   );
-
-  // Extract audio files referenced in front HTML
-  const frontAudioSources = useMemo(() => {
-    const matches: string[] = [];
-    const regex = /data-src=["']([^"']+\.(?:mp3|wav|ogg|m4a))["']/gi;
-    let match: RegExpExecArray | null;
-    while ((match = regex.exec(frontHtml)) !== null) {
-      if (match[1] && !matches.includes(match[1])) matches.push(match[1]);
-    }
-    return matches;
-  }, [frontHtml]);
-
-  // Extract audio files referenced in back HTML
-  const backAudioSources = useMemo(() => {
-    const matches: string[] = [];
-    const regex = /data-src=["']([^"']+\.(?:mp3|wav|ogg|m4a))["']/gi;
-    let match: RegExpExecArray | null;
-    while ((match = regex.exec(backHtml)) !== null) {
-      if (match[1] && !matches.includes(match[1])) matches.push(match[1]);
-    }
-    return matches;
-  }, [backHtml]);
+  const backAudioSources = useMemo(
+    () => extractAudioSources(safeBackHtml),
+    [safeBackHtml],
+  );
 
   // Distinct back audio files (avoid re-playing front pronunciation on answer side)
   const newBackAudioSources = useMemo(() => {
     const frontSet = new Set(frontAudioSources);
     return backAudioSources.filter((src) => !frontSet.has(src));
   }, [frontAudioSources, backAudioSources]);
+
+  const showSeparateAsset =
+    !!assetUrl &&
+    !safeFrontHtml.includes(assetUrl) &&
+    !safeBackHtml.includes(assetUrl);
 
   return (
     <Card
@@ -129,6 +141,10 @@ export const AnkiCard: React.FC<AnkiCardProps> = ({
             <Divider borderColor={borderColor} />
             <Box textAlign="center" fontSize={{ base: "lg", md: "xl" }} lineHeight="1.6" w="full">
               <div dangerouslySetInnerHTML={{ __html: safeBackHtml }} />
+              {showSeparateAsset && (
+                /* eslint-disable-next-line @next/next/no-img-element */
+                <img src={assetUrl} alt="Card visual" className="anki-img" />
+              )}
               {/* Only render players for new back audio or allow playing them without duplicate autoplay */}
               {newBackAudioSources.map((src, i) => (
                 <AnkiAudioPlayer

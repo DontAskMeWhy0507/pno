@@ -77,7 +77,7 @@ export const UnknownPartialState: React.FC<UnknownPartialStateProps> = ({
         mode: "Learn",
         correctness: -1,
         appearedInRound: active.term.appearedInRound || 0,
-        incorrectCount: active.term.incorrectCount + 1,
+        incorrectCount: active.term.incorrectCount,
       });
     })();
   };
@@ -208,7 +208,7 @@ const ChoiceOption: React.FC<ChoiceOptionProps> = ({
           </Text>
         </Flex>
         <Text
-          size="lg"
+          fontSize="lg"
           color={textColor}
           whiteSpace="normal"
           textAlign="start"
@@ -234,7 +234,7 @@ const PartialShotcutLayer: React.FC<PartialShotcutLayerProps> = ({
     ctrlKey: false,
     allowInput: true,
   });
-  useShortcut(["2"], () => onRequireAll, {
+  useShortcut(["2"], () => onRequireAll(), {
     ctrlKey: false,
     allowInput: true,
   });

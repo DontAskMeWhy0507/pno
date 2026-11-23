@@ -1,3 +1,5 @@
+import { invalidateDefaultOwnerSession } from "@quenti/auth";
+
 import { TRPCError } from "@trpc/server";
 
 import type { NonNullableUserContext } from "../../lib/types";
@@ -31,6 +33,7 @@ export async function setUserTypeHandler({ ctx, input }: SetUserTypeOptions) {
     where: { id: ctx.session.user.id },
     data: { type: input.type },
   });
+  invalidateDefaultOwnerSession();
 }
 
 export default setUserTypeHandler;

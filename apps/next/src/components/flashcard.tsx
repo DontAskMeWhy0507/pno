@@ -158,10 +158,17 @@ export const Flashcard: React.FC<FlashcardProps> = ({
             </HStack>
           </Flex>
         </Grid>
-        <Center flex={1} my="4" overflowY="auto">
+        <Flex
+          flex={1}
+          my="4"
+          overflowY="auto"
+          justifyContent="center"
+          alignItems="flex-start"
+        >
           <Flex
             w="full"
-            h="full"
+            minH="full"
+            my="auto"
             flexDir={{
               base: "column-reverse",
               md: "row",
@@ -169,7 +176,7 @@ export const Flashcard: React.FC<FlashcardProps> = ({
           >
             <Center
               flex="1"
-              height={{
+              minH={{
                 base: containerHeight,
                 md: "100%",
               }}
@@ -214,7 +221,7 @@ export const Flashcard: React.FC<FlashcardProps> = ({
               </Center>
             )}
           </Flex>
-        </Center>
+        </Flex>
         <HStack spacing={4}>
           <Button
             w="full"

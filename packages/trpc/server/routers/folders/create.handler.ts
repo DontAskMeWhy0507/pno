@@ -11,7 +11,8 @@ type CreateOptions = {
 };
 
 export const createHandler = async ({ ctx, input }: CreateOptions) => {
-  const slug = slugify(input.title, { lower: true }).slice(0, 191) || null;
+  const slug =
+    slugify(input.title, { lower: true, strict: true }).slice(0, 191) || null;
   const existing = slug
     ? await ctx.prisma.folder.findUnique({
         where: {

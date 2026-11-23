@@ -20,13 +20,17 @@ export const CircularTermMastery: React.FC<CircularTermMasteryProps> = ({
   known,
   stillLearning,
 }) => {
+  const total = known + stillLearning;
+  const masteryPct = total > 0 ? Math.round((known / total) * 100) : 0;
+
   const [perc, setPerc] = React.useState(0);
   React.useEffect(() => {
-    setTimeout(() => {
-      setPerc((known / (known + stillLearning)) * 100);
+    const t = setTimeout(() => {
+      setPerc(total > 0 ? (known / total) * 100 : 0);
     }, 300);
+    return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [known, total]);
 
   return (
     <HStack spacing={6}>
@@ -43,7 +47,7 @@ export const CircularTermMastery: React.FC<CircularTermMasteryProps> = ({
           fontSize="xl"
           fontWeight={700}
         >
-          {`${Math.round((known / (known + stillLearning)) * 100)}%`}
+          {`${masteryPct}%`}
         </CircularProgressLabel>
       </CircularProgress>
       <HStack spacing={4}>

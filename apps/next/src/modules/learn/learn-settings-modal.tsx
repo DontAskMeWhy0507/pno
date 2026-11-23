@@ -1,3 +1,4 @@
+import { useIsMutating } from "@tanstack/react-query";
 import React from "react";
 
 import { Modal } from "@quenti/components/modal";
@@ -50,6 +51,16 @@ export const LearnSettingsModal: React.FC<LearnSettingsModal> = ({
   const multipleAnswerMode = useContainerContext((s) => s.multipleAnswerMode);
   const setIsDirty = useSetPropertiesStore((s) => s.setIsDirty);
 
+  const isMutating = useIsMutating();
+  const [pendingDirty, setPendingDirty] = React.useState(false);
+
+  React.useEffect(() => {
+    if (pendingDirty && isMutating === 0) {
+      setPendingDirty(false);
+      setIsDirty(true);
+    }
+  }, [pendingDirty, isMutating, setIsDirty]);
+
   const sm = useMediaQuery("(min-width: 768px)")[0];
 
   return (
@@ -62,7 +73,10 @@ export const LearnSettingsModal: React.FC<LearnSettingsModal> = ({
             container.answerWith !== answerWith ||
             container.studyStarred !== studyStarred;
 
-          setIsDirty(isDirty);
+          if (isDirty) {
+            if (isMutating > 0) setPendingDirty(true);
+            else setIsDirty(true);
+          }
           onClose();
         }}
         isCentered={sm}

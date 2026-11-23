@@ -42,21 +42,31 @@ export const CreateLearnData: React.FC<React.PropsWithChildren> = ({
           : a.rank - b.rank,
       );
 
+    let learnModeToUse = container.learnMode;
+
     if (container.studyStarred) {
-      learnTerms = learnTerms.filter((x) =>
+      const starredFiltered = learnTerms.filter((x) =>
         container.starredTerms.includes(x.id),
       );
+      if (starredFiltered.length > 0) {
+        learnTerms = starredFiltered;
+      }
     }
-    if (container.learnMode == "Review") {
-      learnTerms = learnTerms
+    if (learnModeToUse == "Review") {
+      const reviewFiltered = learnTerms
         .filter((x) => x.incorrectCount > 0)
         .sort((a, b) => b.incorrectCount - a.incorrectCount);
+      if (reviewFiltered.length > 0) {
+        learnTerms = reviewFiltered;
+      } else {
+        learnModeToUse = "Learn";
+      }
     }
 
     storeRef.current
       .getState()
       .initialize(
-        container.learnMode,
+        learnModeToUse,
         container.answerWith,
         learnTerms as StudiableTermWithDistractors[],
         terms as TermWithDistractors[],

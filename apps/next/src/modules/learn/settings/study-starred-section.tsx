@@ -43,7 +43,6 @@ export const StudyStarredSection = () => {
               studyStarred: false,
             });
           }}
-          isDisabled={!starredTerms.length}
         >
           All
         </ToggleGroup.Tab>
@@ -56,7 +55,7 @@ export const StudyStarredSection = () => {
               studyStarred: true,
             });
           }}
-          isDisabled={!starredTerms.length}
+          isDisabled={!starredTerms.length && !studyStarred}
         >
           Starred
         </ToggleGroup.Tab>

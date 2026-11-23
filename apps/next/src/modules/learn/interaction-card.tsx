@@ -75,7 +75,7 @@ export const InteractionCard = () => {
             <Box
               w="full"
               h="full"
-              background="red"
+              background="transparent"
               rounded="2xl"
               boxShadow={`0 5px 60px -5px ${
                 status == "correct"

@@ -424,7 +424,7 @@ export const ImportFromQuizletModal: React.FC<ImportFromQuizletModalProps> = ({
                       <Textarea
                         rows={5}
                         placeholder={
-                          'escalate @to become or make something become greater or more serious.\n"His financial problems escalated after he became unemployed."\nv./leo thang\n\ndestructive @causing, or able to cause, damage.'
+                          'escalate @to become or make something become greater or more serious.\n"His financial problems escalated after he became unemployed."\nv. / to increase rapidly\n\ndestructive @causing, or able to cause, damage.'
                         }
                         fontFamily="monospace"
                         fontSize="xs"
