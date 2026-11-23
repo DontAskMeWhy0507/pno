@@ -64,6 +64,22 @@ let config = {
         "./node_modules/sql.js/dist/sql-wasm.wasm",
       ],
     },
+    outputFileTracingExcludes: {
+      "*": [
+        "./public/audio/**/*",
+        "./public/ielts-app/**/*",
+        "./public/tests/**/*",
+        "./public/uploads/**/*",
+        "public/audio/**/*",
+        "public/ielts-app/**/*",
+        "public/tests/**/*",
+        "public/uploads/**/*",
+        "../../apps/next/public/audio/**/*",
+        "../../apps/next/public/ielts-app/**/*",
+        "../../apps/next/public/tests/**/*",
+        "../../apps/next/public/uploads/**/*",
+      ],
+    },
     // Tommy, I love you so much https://holocron.so/blog/optimizing-next.js-cold-starts-for-vercel
     esmExternals: false,
   },
