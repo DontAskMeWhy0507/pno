@@ -665,6 +665,7 @@ export async function createPresignedMediaUploads(params: {
   skipQuotaCheck?: boolean;
   expiresInSeconds?: number;
   forcePresigned?: boolean;
+  preferWorker?: boolean;
 }): Promise<PresignedMediaUploadResult> {
   const cfg = getMediaS3Config();
   if (!cfg) {
@@ -709,7 +710,12 @@ export async function createPresignedMediaUploads(params: {
     const workerSecret = process.env.MEDIA_WORKER_SECRET?.trim();
     const expiresIn = params.expiresInSeconds ?? 900;
 
-    if (workerUrl && workerSecret && !params.forcePresigned) {
+    if (
+      workerUrl &&
+      workerSecret &&
+      params.preferWorker === true &&
+      !params.forcePresigned
+    ) {
       const token = createMediaWorkerToken({
         prefix: cleanPrefix,
         secret: workerSecret,

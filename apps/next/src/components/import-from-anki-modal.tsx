@@ -525,7 +525,7 @@ export const ImportFromAnkiModal: React.FC<ImportFromAnkiModalProps> = ({
                 allUploads.push(...chunkRes.uploads);
               }
 
-              const DIRECT_CONCURRENCY = 16;
+              const DIRECT_CONCURRENCY = 24;
               let nextIdx = 1;
               const workers = Array.from(
                 {
@@ -543,20 +543,24 @@ export const ImportFromAnkiModal: React.FC<ImportFromAnkiModalProps> = ({
 
                     const rawBytes = await decompressEntryBytes(entryPair[0]);
                     if (rawBytes) {
-                      await fetchWithRetry(async () => {
-                        const putResp = await fetch(uploadTarget.url, {
-                          method: "PUT",
-                          headers: {
-                            "Content-Type": uploadTarget.contentType,
-                          },
-                          body: rawBytes.slice().buffer,
-                        });
-                        if (!putResp.ok) {
-                          throw new Error(
-                            `Direct upload failed (${putResp.status}) for ${uploadTarget.safeName}`,
-                          );
-                        }
-                      });
+                      await fetchWithRetry(
+                        async () => {
+                          const putResp = await fetch(uploadTarget.url, {
+                            method: "PUT",
+                            headers: {
+                              "Content-Type": uploadTarget.contentType,
+                            },
+                            body: rawBytes.slice().buffer,
+                          });
+                          if (!putResp.ok) {
+                            throw new Error(
+                              `Direct upload failed (${putResp.status}) for ${uploadTarget.safeName}`,
+                            );
+                          }
+                        },
+                        3,
+                        [250, 800, 2000],
+                      );
                       uploadedRawBytes += rawBytes.byteLength;
                     }
                     uploadedFilesCount += 1;

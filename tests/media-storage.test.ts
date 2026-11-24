@@ -259,7 +259,7 @@ describe("Media Storage, Hard Quota Guard & CDN Fallback", () => {
       expect(diag.s3Error).not.toContain("SUPER_SECRET_ACCESS_KEY_VALUE");
     });
 
-    test("createPresignedMediaUploads uses worker mode when MEDIA_WORKER_* set, respects forcePresigned, and enforces 9GB cap", async () => {
+    test("createPresignedMediaUploads defaults to presigned PUT, uses worker only when preferWorker=true, and enforces 9GB cap", async () => {
       process.env.MEDIA_WORKER_URL = "https://pno-r2-uploader.example.workers.dev";
       process.env.MEDIA_WORKER_SECRET = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
 
@@ -277,11 +277,19 @@ describe("Media Storage, Hard Quota Guard & CDN Fallback", () => {
         });
 
       process.env.MEDIA_S3_BUCKET = "pno-worker-ok";
-      const workerPlan = await createPresignedMediaUploads({
+      const defaultPlan = await createPresignedMediaUploads({
         filenames: ["01.mp3"],
         prefix: "anki/imports/workertest1",
         estimatedTotalBytes: 10_000,
         estimatedTotalObjects: 1,
+      });
+      expect(defaultPlan.mode).toBe("presigned");
+
+      const workerPlan = await createPresignedMediaUploads({
+        filenames: ["01.mp3"],
+        prefix: "anki/imports/workertest1",
+        skipQuotaCheck: true,
+        preferWorker: true,
       });
 
       expect(workerPlan.mode).toBe("worker");
@@ -301,6 +309,7 @@ describe("Media Storage, Hard Quota Guard & CDN Fallback", () => {
         filenames: ["01.mp3"],
         prefix: "anki/imports/workertest1",
         skipQuotaCheck: true,
+        preferWorker: true,
         forcePresigned: true,
       });
       expect(forcedPresign.mode).toBe("presigned");
