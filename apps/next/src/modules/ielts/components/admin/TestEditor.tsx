@@ -28,6 +28,8 @@ import { useAudioBlob } from '../../hooks/useAudioBlob';
 
 interface TestEditorProps {
   initialExam?: Exam | null;
+  defaultCollection?: string;
+  defaultSkill?: 'reading' | 'listening';
   onSave: (exam: Exam) => void;
   onCancel: () => void;
 }
@@ -36,8 +38,8 @@ const AudioTrackPreview: FC<{ audioUrl: string; onClear: () => void }> = ({ audi
   const { blobUrl, isLoading } = useAudioBlob(audioUrl);
 
   return (
-    <div className="pt-2 p-3 bg-slate-50 border border-slate-200 rounded-lg space-y-1.5">
-      <div className="flex items-center justify-between text-xs font-bold text-gray-700">
+    <div className="pt-2 p-3 bg-slate-50 dark:bg-gray-900 border border-slate-200 dark:border-gray-700 rounded-lg space-y-1.5">
+      <div className="flex items-center justify-between text-xs font-bold text-gray-700 dark:text-gray-300">
         <span className="flex items-center gap-1">
           <Music className="w-3.5 h-3.5 text-blue-600" />
           <span>Audio Track Preview</span>
@@ -64,6 +66,8 @@ const AudioTrackPreview: FC<{ audioUrl: string; onClear: () => void }> = ({ audi
 
 export const TestEditor: FC<TestEditorProps> = ({
   initialExam,
+  defaultCollection,
+  defaultSkill = 'reading',
   onSave,
   onCancel,
 }) => {
@@ -101,12 +105,37 @@ export const TestEditor: FC<TestEditorProps> = ({
       return cloned;
     }
 
+    if (defaultSkill === 'listening') {
+      return {
+        id: 'exam_' + Date.now(),
+        title: 'NEW IELTS LISTENING TEST',
+        description: 'Custom listening practice test',
+        category: 'IELTS Listening',
+        collection: defaultCollection || 'My Tests',
+        durationMinutes: 30,
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+        isBuiltin: false,
+        parts: [1, 2, 3, 4].map((num) => ({
+          id: `part-${num}`,
+          partNumber: num,
+          title: `Section ${num}`,
+          subtitle: '',
+          passage: '',
+          footnotes: '',
+          audioUrl: '',
+          questionGroups: [],
+        })),
+      };
+    }
+
     // Default new exam (Reading 3 passages)
     return {
       id: 'exam_' + Date.now(),
       title: 'NEW IELTS PRACTICE TEST',
       description: 'Custom practice test',
       category: 'IELTS Academic Reading',
+      collection: defaultCollection || 'My Tests',
       durationMinutes: 60,
       createdAt: Date.now(),
       updatedAt: Date.now(),
@@ -550,9 +579,9 @@ export const TestEditor: FC<TestEditorProps> = ({
   const activePart = typeof activeTab === 'number' ? exam.parts[getActivePartIndex()] : null;
 
   return (
-    <div className="fixed inset-0 z-50 bg-slate-50 flex flex-col overflow-hidden select-text font-sans">
+    <div className="fixed inset-0 z-50 bg-slate-50 dark:bg-gray-900 flex flex-col overflow-hidden select-text font-sans">
       {/* Header — PNO Quiz Editor Header Style */}
-      <div className="min-h-16 py-3 bg-white border-b-2 border-gray-200 px-6 flex flex-wrap items-center justify-between gap-3 shadow-2xs">
+      <div className="min-h-16 py-3 bg-white dark:bg-gray-800 border-b-2 border-gray-200 dark:border-gray-700 px-6 flex flex-wrap items-center justify-between gap-3 shadow-2xs">
         <div className="flex items-center gap-3">
           {isListening ? (
             <div className="w-10 h-10 rounded-xl bg-blue-600 text-white flex items-center justify-center shadow-xs">
@@ -565,12 +594,12 @@ export const TestEditor: FC<TestEditorProps> = ({
           )}
           <div>
             <h2
-              className="text-lg font-extrabold text-gray-900 leading-tight"
+              className="text-lg font-extrabold text-gray-900 dark:text-gray-100 leading-tight"
               style={{ fontFamily: outfit.style.fontFamily }}
             >
               {initialExam ? 'Edit Practice Test' : 'Create Practice Test'}
             </h2>
-            <span className="text-xs font-medium text-gray-500">
+            <span className="text-xs font-medium text-gray-500 dark:text-gray-400">
               {isListening ? 'IELTS Listening Test (Audio + 4 Sections)' : 'IELTS Reading Test (Passages + Questions)'}
             </span>
           </div>
@@ -580,7 +609,7 @@ export const TestEditor: FC<TestEditorProps> = ({
           <button
             type="button"
             onClick={() => setShowQuickKeyModal(true)}
-            className="px-3.5 py-2 text-xs font-bold text-gray-800 bg-gray-100 hover:bg-gray-200 border-2 border-gray-200 rounded-xl transition flex items-center gap-1.5"
+            className="px-3.5 py-2 text-xs font-bold text-gray-800 dark:text-gray-100 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 border-2 border-gray-200 dark:border-gray-700 rounded-xl transition flex items-center gap-1.5"
             title="Paste answer key and explanations from AI or answer sheet"
           >
             <Sparkles className="w-3.5 h-3.5 text-blue-600" />
@@ -589,7 +618,7 @@ export const TestEditor: FC<TestEditorProps> = ({
 
           <button
             onClick={onCancel}
-            className="px-4 py-2 text-xs font-bold text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-xl border-2 border-gray-200 transition"
+            className="px-4 py-2 text-xs font-bold text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-xl border-2 border-gray-200 dark:border-gray-700 transition"
           >
             Cancel
           </button>
@@ -604,14 +633,14 @@ export const TestEditor: FC<TestEditorProps> = ({
       </div>
 
       {/* Tabs — PNO Soft-Rounded Pill Tabs */}
-      <div className="bg-white border-b-2 border-gray-200 px-6 py-2.5 flex items-center gap-2 overflow-x-auto select-none">
-        <div className="flex items-center gap-1 bg-gray-100 p-1 rounded-xl border-2 border-gray-200">
+      <div className="bg-white dark:bg-gray-800 border-b-2 border-gray-200 dark:border-gray-700 px-6 py-2.5 flex items-center gap-2 overflow-x-auto select-none">
+        <div className="flex items-center gap-1 bg-gray-100 dark:bg-gray-700 p-1 rounded-xl border-2 border-gray-200 dark:border-gray-700">
           <button
             onClick={() => setActiveTab('info')}
             className={`py-1.5 px-3.5 text-xs font-bold rounded-lg transition shrink-0 ${
               activeTab === 'info'
                 ? 'bg-blue-600 text-white shadow-2xs'
-                : 'text-gray-600 hover:text-gray-900'
+                : 'text-gray-600 dark:text-gray-400 hover:text-gray-900'
             }`}
           >
             General Info
@@ -624,7 +653,7 @@ export const TestEditor: FC<TestEditorProps> = ({
               className={`py-1.5 px-3.5 text-xs font-bold rounded-lg transition flex items-center gap-1.5 shrink-0 ${
                 activeTab === idx
                   ? 'bg-blue-600 text-white shadow-2xs'
-                  : 'text-gray-600 hover:text-gray-900'
+                  : 'text-gray-600 dark:text-gray-400 hover:text-gray-900'
               }`}
             >
               {isListening ? (
@@ -653,29 +682,29 @@ export const TestEditor: FC<TestEditorProps> = ({
       <div className="flex-1 overflow-y-auto p-6 max-w-5xl mx-auto w-full">
         {/* Tab 1: General Info */}
         {activeTab === 'info' && (
-          <div className="bg-white rounded-xl border border-gray-200 p-6 space-y-5 shadow-xs">
+          <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-6 space-y-5 shadow-xs">
             {/* Skill Format Display / Switcher */}
             {initialExam ? (
-              <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-xl flex items-center justify-between">
+              <div className="p-3.5 bg-slate-50 dark:bg-gray-900 border border-slate-200 dark:border-gray-700 rounded-xl flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   {isListening ? (
                     <Headphones className="w-4 h-4 text-blue-600" />
                   ) : (
                     <BookOpen className="w-4 h-4 text-blue-600" />
                   )}
-                  <span className="text-xs font-bold text-gray-900 uppercase tracking-wider">
+                  <span className="text-xs font-bold text-gray-900 dark:text-gray-100 uppercase tracking-wider">
                     {isListening
                       ? 'IELTS Listening Test (Audio + 4 Sections)'
                       : 'IELTS Reading Test (3 Passages)'}
                   </span>
                 </div>
-                <span className="text-[11px] font-semibold text-slate-500 bg-white px-2 py-0.5 rounded border border-slate-200">
+                <span className="text-[11px] font-semibold text-slate-500 bg-white dark:bg-gray-800 px-2 py-0.5 rounded border border-slate-200 dark:border-gray-700">
                   Skill Format Locked
                 </span>
               </div>
             ) : (
-              <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl space-y-3">
-                <span className="text-xs font-bold text-gray-700 uppercase tracking-wide block">
+              <div className="p-4 bg-slate-50 dark:bg-gray-900 border border-slate-200 dark:border-gray-700 rounded-xl space-y-3">
+                <span className="text-xs font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wide block">
                   Select Test Format
                 </span>
                 <div className="flex flex-wrap items-center gap-2">
@@ -685,7 +714,7 @@ export const TestEditor: FC<TestEditorProps> = ({
                     className={`flex items-center gap-2 px-4 py-2 text-xs font-bold rounded-lg border transition ${
                       !isListening
                         ? 'bg-blue-600 text-white border-blue-600 shadow-xs'
-                        : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-100'
+                        : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700'
                     }`}
                   >
                     <BookOpen className="w-4 h-4" />
@@ -698,7 +727,7 @@ export const TestEditor: FC<TestEditorProps> = ({
                     className={`flex items-center gap-2 px-4 py-2 text-xs font-bold rounded-lg border transition ${
                       isListening
                         ? 'bg-blue-600 text-white border-blue-600 shadow-xs'
-                        : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-100'
+                        : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700'
                     }`}
                   >
                     <Headphones className="w-4 h-4" />
@@ -709,7 +738,7 @@ export const TestEditor: FC<TestEditorProps> = ({
             )}
 
             <div>
-              <label className="block text-xs font-bold text-gray-700 uppercase mb-1">
+              <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 uppercase mb-1">
                 Test Title *
               </label>
               <input
@@ -717,13 +746,13 @@ export const TestEditor: FC<TestEditorProps> = ({
                 value={exam.title}
                 onChange={(e) => handleUpdateExamField('title', e.target.value)}
                 placeholder={isListening ? 'e.g. CAMBRIDGE 18 TEST 1 LISTENING' : 'e.g. CAMBRIDGE 18 TEST 1 READING'}
-                className="w-full px-3 py-2 text-sm border rounded-lg border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-600 font-medium"
+                className="w-full px-3 py-2 text-sm border rounded-lg border-gray-300 dark:border-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-600 font-medium"
               />
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <label className="block text-xs font-bold text-gray-700 uppercase mb-1">
+                <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 uppercase mb-1">
                   Category
                 </label>
                 <select
@@ -739,7 +768,7 @@ export const TestEditor: FC<TestEditorProps> = ({
                       }
                     }
                   }}
-                  className="w-full px-3 py-2 text-sm border rounded-lg border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-600 bg-white"
+                  className="w-full px-3 py-2 text-sm border rounded-lg border-gray-300 dark:border-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-600 bg-white dark:bg-gray-800"
                 >
                   {isListening ? (
                     <option value="IELTS Listening">IELTS Listening</option>
@@ -753,27 +782,27 @@ export const TestEditor: FC<TestEditorProps> = ({
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-gray-700 uppercase mb-1">
+                <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 uppercase mb-1">
                   Duration (Minutes)
                 </label>
                 <input
                   type="number"
                   value={exam.durationMinutes}
                   onChange={(e) => handleUpdateExamField('durationMinutes', parseInt(e.target.value) || 60)}
-                  className="w-full px-3 py-2 text-sm border rounded-lg border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-600 font-medium"
+                  className="w-full px-3 py-2 text-sm border rounded-lg border-gray-300 dark:border-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-600 font-medium"
                 />
               </div>
             </div>
 
             <div>
-              <label className="block text-xs font-bold text-gray-700 uppercase mb-1 flex items-center gap-1">
+              <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 uppercase mb-1 flex items-center gap-1">
                 <Folder className="w-3.5 h-3.5 text-blue-600" />
                 <span>Collection</span>
               </label>
               <select
                 value={exam.collection || getExamCollection(exam)}
                 onChange={(e) => handleUpdateExamField('collection', e.target.value)}
-                className="w-full px-3 py-2 text-sm border rounded-lg border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-600 bg-white font-medium"
+                className="w-full px-3 py-2 text-sm border rounded-lg border-gray-300 dark:border-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-600 bg-white dark:bg-gray-800 font-medium"
               >
                 {getAllCollections().map((c) => (
                   <option key={c.id} value={c.name}>
@@ -784,7 +813,7 @@ export const TestEditor: FC<TestEditorProps> = ({
             </div>
 
             <div>
-              <label className="block text-xs font-bold text-gray-700 uppercase mb-1">
+              <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 uppercase mb-1">
                 Description / Notes
               </label>
               <textarea
@@ -792,7 +821,7 @@ export const TestEditor: FC<TestEditorProps> = ({
                 onChange={(e) => handleUpdateExamField('description', e.target.value)}
                 rows={3}
                 placeholder="Source notes, difficulty level, test tips..."
-                className="w-full px-3 py-2 text-sm border rounded-lg border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-600 font-normal"
+                className="w-full px-3 py-2 text-sm border rounded-lg border-gray-300 dark:border-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-600 font-normal"
               />
             </div>
           </div>
@@ -802,17 +831,17 @@ export const TestEditor: FC<TestEditorProps> = ({
         {typeof activeTab === 'number' && activePart && (
           <div className="space-y-6">
             {/* Section Header & Part Delete Action */}
-            <div className="flex items-center justify-between bg-white px-5 py-3 rounded-xl border border-gray-200 shadow-2xs">
+            <div className="flex items-center justify-between bg-white dark:bg-gray-800 px-5 py-3 rounded-xl border border-gray-200 dark:border-gray-700 shadow-2xs">
               <div className="flex items-center gap-2">
                 {isListening ? (
                   <Headphones className="w-4 h-4 text-blue-600" />
                 ) : (
                   <BookOpen className="w-4 h-4 text-blue-600" />
                 )}
-                <span className="font-bold text-sm text-gray-900">
+                <span className="font-bold text-sm text-gray-900 dark:text-gray-100">
                   {isListening ? `Section ${activePart.partNumber} Details` : `Part ${activePart.partNumber} Passage & Content`}
                 </span>
-                <span className="text-xs text-gray-500">({getPartQuestionCount(getActivePartIndex())} questions)</span>
+                <span className="text-xs text-gray-500 dark:text-gray-400">({getPartQuestionCount(getActivePartIndex())} questions)</span>
               </div>
 
               {exam.parts.length > 1 && (
@@ -830,11 +859,11 @@ export const TestEditor: FC<TestEditorProps> = ({
 
             {/* AUDIO CONFIGURATION CARD (for Listening or any part with audio) */}
             {(isListening || activePart.audioUrl) && (
-              <div className="bg-white rounded-xl border-2 border-blue-200 p-5 space-y-4 shadow-xs">
+              <div className="bg-white dark:bg-gray-800 rounded-xl border-2 border-blue-200 p-5 space-y-4 shadow-xs">
                 <div className="flex items-center justify-between border-b pb-2.5">
                   <div className="flex items-center gap-2">
                     <Volume2 className="w-4 h-4 text-blue-600" />
-                    <h3 className="text-sm font-bold text-gray-900">
+                    <h3 className="text-sm font-bold text-gray-900 dark:text-gray-100">
                       Audio Track (Section {activePart.partNumber})
                     </h3>
                   </div>
@@ -852,7 +881,7 @@ export const TestEditor: FC<TestEditorProps> = ({
                 </div>
 
                 <div className="space-y-3">
-                  <label className="block text-xs font-bold text-gray-700">
+                  <label className="block text-xs font-bold text-gray-700 dark:text-gray-300">
                     Audio Source (Local path or Web URL):
                   </label>
                   <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
@@ -861,7 +890,7 @@ export const TestEditor: FC<TestEditorProps> = ({
                       value={activePart.audioUrl || ''}
                       onChange={(e) => handleUpdatePart('audioUrl', e.target.value)}
                       placeholder="e.g. /audio/vol9/test1.mp4 or https://example.com/audio.mp3"
-                      className="flex-1 px-3 py-2 text-xs border rounded-lg border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-600 font-mono"
+                      className="flex-1 px-3 py-2 text-xs border rounded-lg border-gray-300 dark:border-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-600 font-mono"
                     />
 
                     {/* Choose Audio File from Computer */}
@@ -876,7 +905,7 @@ export const TestEditor: FC<TestEditorProps> = ({
                       type="button"
                       onClick={() => audioFileInputRef.current?.click()}
                       disabled={isUploadingAudio}
-                      className="px-3.5 py-2 text-xs font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg border border-slate-300 transition flex items-center justify-center gap-1.5 shrink-0 disabled:opacity-50"
+                      className="px-3.5 py-2 text-xs font-bold text-slate-700 bg-slate-100 dark:bg-gray-800 hover:bg-slate-200 rounded-lg border border-slate-300 transition flex items-center justify-center gap-1.5 shrink-0 disabled:opacity-50"
                       title="Upload and save audio file directly into website folder"
                     >
                       {isUploadingAudio ? (
@@ -900,8 +929,8 @@ export const TestEditor: FC<TestEditorProps> = ({
                     </div>
                   )}
 
-                  <p className="text-[11px] text-gray-500">
-                    💡 Tip: Audio files are saved directly into your project's website folder (<code className="bg-gray-100 px-1 py-0.5 rounded text-gray-800">public/tests/listening/{exam.id || 'custom-test'}/audio/</code> or <code className="bg-gray-100 px-1 py-0.5 rounded text-gray-800">public/audio/</code>).
+                  <p className="text-[11px] text-gray-500 dark:text-gray-400">
+                    💡 Tip: Audio files are saved directly into your project's website folder (<code className="bg-gray-100 dark:bg-gray-700 px-1 py-0.5 rounded text-gray-800 dark:text-gray-100">public/tests/listening/{exam.id || 'custom-test'}/audio/</code> or <code className="bg-gray-100 dark:bg-gray-700 px-1 py-0.5 rounded text-gray-800 dark:text-gray-100">public/audio/</code>).
                   </p>
 
                   {/* Audio Player Live Preview (Anti-IDM protected) */}
@@ -916,8 +945,8 @@ export const TestEditor: FC<TestEditorProps> = ({
             )}
 
             {/* Passage / Script Editor */}
-            <div className="bg-white rounded-xl border border-gray-200 p-6 space-y-4 shadow-xs">
-              <h3 className="text-sm font-bold text-gray-900 border-b pb-2 flex items-center gap-1.5">
+            <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-6 space-y-4 shadow-xs">
+              <h3 className="text-sm font-bold text-gray-900 dark:text-gray-100 border-b pb-2 flex items-center gap-1.5">
                 {isListening ? (
                   <>
                     <FileText className="w-4 h-4 text-blue-600" />
@@ -933,7 +962,7 @@ export const TestEditor: FC<TestEditorProps> = ({
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-xs font-bold text-gray-700 mb-1">
+                  <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 mb-1">
                     {isListening ? 'Section Title' : 'Passage Title'}
                   </label>
                   <input
@@ -941,12 +970,12 @@ export const TestEditor: FC<TestEditorProps> = ({
                     value={activePart.title}
                     onChange={(e) => handleUpdatePart('title', e.target.value)}
                     placeholder={isListening ? 'e.g. Hotel Reservation' : 'e.g. The Baobabs of Madagascar'}
-                    className="w-full px-3 py-1.5 text-sm border rounded-lg border-gray-300 focus:ring-2 focus:ring-blue-600"
+                    className="w-full px-3 py-1.5 text-sm border rounded-lg border-gray-300 dark:border-gray-600 focus:ring-2 focus:ring-blue-600"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-xs font-bold text-gray-700 mb-1">
+                  <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 mb-1">
                     {isListening ? 'Section Subtitle / Topic' : 'Passage Subtitle (Italic description)'}
                   </label>
                   <input
@@ -954,13 +983,13 @@ export const TestEditor: FC<TestEditorProps> = ({
                     value={activePart.subtitle || ''}
                     onChange={(e) => handleUpdatePart('subtitle', e.target.value)}
                     placeholder="Brief summary or context..."
-                    className="w-full px-3 py-1.5 text-sm border rounded-lg border-gray-300 focus:ring-2 focus:ring-blue-600"
+                    className="w-full px-3 py-1.5 text-sm border rounded-lg border-gray-300 dark:border-gray-600 focus:ring-2 focus:ring-blue-600"
                   />
                 </div>
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-gray-700 mb-1">
+                <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 mb-1">
                   {isListening
                     ? 'Audio Transcript / Script (Optional - used for review & explanations):'
                     : 'Passage Text (Separate paragraphs with an empty line):'}
@@ -974,13 +1003,13 @@ export const TestEditor: FC<TestEditorProps> = ({
                       ? 'Optional: Paste the audio recording transcript here so test takers can review the script after completing the exam.'
                       : 'Enter reading passage content...'
                   }
-                  className="w-full px-3 py-2 text-sm border rounded-lg border-gray-300 focus:ring-2 focus:ring-blue-600 font-sans leading-relaxed"
+                  className="w-full px-3 py-2 text-sm border rounded-lg border-gray-300 dark:border-gray-600 focus:ring-2 focus:ring-blue-600 font-sans leading-relaxed"
                 />
               </div>
 
               {!isListening && (
                 <div>
-                  <label className="block text-xs font-bold text-gray-700 mb-1">
+                  <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 mb-1">
                     Footnotes (e.g. * Malagasy: of Madagascar)
                   </label>
                   <input
@@ -988,7 +1017,7 @@ export const TestEditor: FC<TestEditorProps> = ({
                     value={activePart.footnotes || ''}
                     onChange={(e) => handleUpdatePart('footnotes', e.target.value)}
                     placeholder="Vocabulary glossaries..."
-                    className="w-full px-3 py-1.5 text-sm border rounded-lg border-gray-300 focus:ring-2 focus:ring-blue-600"
+                    className="w-full px-3 py-1.5 text-sm border rounded-lg border-gray-300 dark:border-gray-600 focus:ring-2 focus:ring-blue-600"
                   />
                 </div>
               )}
@@ -997,7 +1026,7 @@ export const TestEditor: FC<TestEditorProps> = ({
             {/* Question Groups Section */}
             <div className="space-y-4">
               <div className="flex items-center justify-between">
-                <h3 className="text-sm font-bold text-gray-900 flex items-center gap-1.5">
+                <h3 className="text-sm font-bold text-gray-900 dark:text-gray-100 flex items-center gap-1.5">
                   <Layers className="w-4 h-4 text-blue-600" />
                   <span>Question Groups</span>
                 </h3>
@@ -1012,13 +1041,13 @@ export const TestEditor: FC<TestEditorProps> = ({
               </div>
 
               {activePart.questionGroups.length === 0 && (
-                <div className="text-center py-8 bg-white rounded-xl border border-dashed border-gray-300 text-gray-500 text-xs">
+                <div className="text-center py-8 bg-white dark:bg-gray-800 rounded-xl border border-dashed border-gray-300 dark:border-gray-600 text-gray-500 dark:text-gray-400 text-xs">
                   No question groups in this section yet. Click "+ Add Question Group" above.
                 </div>
               )}
 
               {activePart.questionGroups.map((group, gIdx) => (
-                <div key={group.id} className="bg-white rounded-xl border border-gray-300 p-5 space-y-4 shadow-xs">
+                <div key={group.id} className="bg-white dark:bg-gray-800 rounded-xl border border-gray-300 dark:border-gray-600 p-5 space-y-4 shadow-xs">
                   {/* Group Header & Controls */}
                   <div className="flex items-center justify-between border-b pb-3">
                     <div className="flex items-center gap-3 flex-1 mr-4">
@@ -1035,7 +1064,7 @@ export const TestEditor: FC<TestEditorProps> = ({
                           }
                         }}
                         placeholder="Group Title: Questions 1–10"
-                        className="px-2.5 py-1 text-xs font-bold text-gray-800 border rounded-lg w-52"
+                        className="px-2.5 py-1 text-xs font-bold text-gray-800 dark:text-gray-100 border rounded-lg w-52"
                       />
                     </div>
                     <button
@@ -1050,7 +1079,7 @@ export const TestEditor: FC<TestEditorProps> = ({
 
                   {/* Group Instructions */}
                   <div>
-                    <label className="block text-xs font-bold text-gray-700 mb-1">
+                    <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 mb-1">
                       Instructions:
                     </label>
                     <textarea
@@ -1066,17 +1095,17 @@ export const TestEditor: FC<TestEditorProps> = ({
                       }}
                       rows={2}
                       placeholder="e.g. Complete the notes below. Write NO MORE THAN TWO WORDS AND/OR A NUMBER for each answer."
-                      className="w-full px-3 py-1.5 text-xs border rounded-lg border-gray-300"
+                      className="w-full px-3 py-1.5 text-xs border rounded-lg border-gray-300 dark:border-gray-600"
                     />
                   </div>
 
                   {/* Shared Content (Inline Blanks for Notes/Summary/Table) */}
                   <div>
                     <div className="flex items-center justify-between mb-1">
-                      <label className="block text-xs font-bold text-gray-700">
+                      <label className="block text-xs font-bold text-gray-700 dark:text-gray-300">
                         Notes / Sentence Completion Text with Blanks (Optional):
                       </label>
-                      <span className="text-[11px] text-gray-500 font-mono">
+                      <span className="text-[11px] text-gray-500 dark:text-gray-400 font-mono">
                         Use &#123;&#123;1&#125;&#125;, &#123;&#123;2&#125;&#125; for blank inputs
                       </span>
                     </div>
@@ -1093,18 +1122,18 @@ export const TestEditor: FC<TestEditorProps> = ({
                       }}
                       rows={4}
                       placeholder="e.g. Jim's weekly rent will be $ {{1}}&#10;Jim can park his car in the {{2}}"
-                      className="w-full px-3 py-2 text-xs border rounded-lg border-gray-300 font-mono text-gray-800 leading-relaxed"
+                      className="w-full px-3 py-2 text-xs border rounded-lg border-gray-300 dark:border-gray-600 font-mono text-gray-800 dark:text-gray-100 leading-relaxed"
                     />
                   </div>
 
                   {/* Questions in group */}
                   <div className="space-y-3 pt-2">
-                    <div className="text-xs font-bold text-gray-600 uppercase">
+                    <div className="text-xs font-bold text-gray-600 dark:text-gray-400 uppercase">
                       Questions ({group.questions.length} questions):
                     </div>
 
                     {group.questions.map((q) => (
-                      <div key={q.id} className="border border-gray-200 rounded-lg p-3 bg-gray-50 space-y-2.5">
+                      <div key={q.id} className="border border-gray-200 dark:border-gray-700 rounded-lg p-3 bg-gray-50 dark:bg-gray-900 space-y-2.5">
                         <div className="flex items-center justify-between gap-3">
                           <div className="flex items-center gap-2">
                             <span className="text-xs font-bold bg-neutral-800 text-white px-2 py-0.5 rounded">
@@ -1115,7 +1144,7 @@ export const TestEditor: FC<TestEditorProps> = ({
                               onChange={(e) =>
                                 handleUpdateQuestion(group.id, q.id, 'type', e.target.value as QuestionType)
                               }
-                              className="text-xs border rounded-lg px-2 py-1 bg-white font-medium"
+                              className="text-xs border rounded-lg px-2 py-1 bg-white dark:bg-gray-800 font-medium"
                             >
                               <option value="FILL_IN_BLANK">Fill in Blank (Notes / Sentence Completion)</option>
                               <option value="MULTIPLE_CHOICE_SINGLE">Multiple Choice (Single: A, B, C, D)</option>
@@ -1143,7 +1172,7 @@ export const TestEditor: FC<TestEditorProps> = ({
                             value={q.prompt}
                             onChange={(e) => handleUpdateQuestion(group.id, q.id, 'prompt', e.target.value)}
                             placeholder="Question prompt or statement..."
-                            className="w-full px-2.5 py-1.5 text-xs border rounded-lg bg-white font-medium"
+                            className="w-full px-2.5 py-1.5 text-xs border rounded-lg bg-white dark:bg-gray-800 font-medium"
                           />
                         </div>
 
@@ -1152,7 +1181,7 @@ export const TestEditor: FC<TestEditorProps> = ({
                           q.type === 'MULTIPLE_CHOICE_MULTI' ||
                           q.type === 'MATCHING') && (
                           <div className="space-y-1.5 pl-2 border-l-2 border-blue-300">
-                            <span className="text-[11px] font-bold text-gray-600 block">Options:</span>
+                            <span className="text-[11px] font-bold text-gray-600 dark:text-gray-400 block">Options:</span>
                             {(Array.isArray(q.options) && q.options.length > 0
                               ? q.options
                               : [
@@ -1168,7 +1197,7 @@ export const TestEditor: FC<TestEditorProps> = ({
                                 typeof opt === 'object' && opt?.text !== undefined ? opt.text : String(opt || '');
                               return (
                                 <div key={optId || optIdx} className="flex items-center gap-2">
-                                  <span className="text-xs font-bold text-gray-700 w-4">{optId}.</span>
+                                  <span className="text-xs font-bold text-gray-700 dark:text-gray-300 w-4">{optId}.</span>
                                   <input
                                     type="text"
                                     value={optText}
@@ -1185,7 +1214,7 @@ export const TestEditor: FC<TestEditorProps> = ({
                                       handleUpdateQuestion(group.id, q.id, 'options', currentOpts);
                                     }}
                                     placeholder={`Option ${optId} text...`}
-                                    className="flex-1 px-2 py-1 text-xs border rounded-lg bg-white"
+                                    className="flex-1 px-2 py-1 text-xs border rounded-lg bg-white dark:bg-gray-800"
                                   />
                                 </div>
                               );
@@ -1231,7 +1260,7 @@ export const TestEditor: FC<TestEditorProps> = ({
                     <button
                       type="button"
                       onClick={() => handleAddQuestionToGroup(group.id)}
-                      className="w-full py-2 border-2 border-dashed border-gray-300 hover:border-blue-400 hover:bg-blue-50 rounded-lg text-xs font-bold text-gray-600 hover:text-blue-700 transition flex items-center justify-center gap-1.5"
+                      className="w-full py-2 border-2 border-dashed border-gray-300 dark:border-gray-600 hover:border-blue-400 hover:bg-blue-50 rounded-lg text-xs font-bold text-gray-600 dark:text-gray-400 hover:text-blue-700 transition flex items-center justify-center gap-1.5"
                     >
                       <Plus className="w-3.5 h-3.5" />
                       <span>+ Add Question to Group</span>
@@ -1247,18 +1276,18 @@ export const TestEditor: FC<TestEditorProps> = ({
       {/* Quick Answer & Explanation Modal */}
       {showQuickKeyModal && (
         <div className="fixed inset-0 z-60 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-xl shadow-2xl max-w-2xl w-full max-h-[88vh] flex flex-col overflow-hidden border border-gray-200 animate-in fade-in zoom-in-95">
+          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-2xl max-w-2xl w-full max-h-[88vh] flex flex-col overflow-hidden border border-gray-200 dark:border-gray-700 animate-in fade-in zoom-in-95">
             {/* Modal Header */}
-            <div className="p-4 border-b border-gray-200 flex items-center justify-between bg-slate-50">
+            <div className="p-4 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between bg-slate-50 dark:bg-gray-900">
               <div className="flex items-center gap-2.5">
                 <div className="w-8 h-8 rounded-lg bg-amber-100 text-amber-700 flex items-center justify-center">
                   <Sparkles className="w-4 h-4" />
                 </div>
                 <div>
-                  <h3 className="text-sm font-bold text-gray-900">
+                  <h3 className="text-sm font-bold text-gray-900 dark:text-gray-100">
                     Quick Answer Key & AI Explanations Matcher
                   </h3>
-                  <p className="text-[11px] text-gray-500">
+                  <p className="text-[11px] text-gray-500 dark:text-gray-400">
                     Paste raw answers from ChatGPT, Claude, Gemini, or an answer sheet to automatically populate all 40 questions
                   </p>
                 </div>
@@ -1272,14 +1301,14 @@ export const TestEditor: FC<TestEditorProps> = ({
             </div>
 
             {/* Modal Tabs */}
-            <div className="bg-gray-50 px-4 pt-2 border-b border-gray-200 flex gap-2">
+            <div className="bg-gray-50 dark:bg-gray-900 px-4 pt-2 border-b border-gray-200 dark:border-gray-700 flex gap-2">
               <button
                 type="button"
                 onClick={() => setQuickKeyTab('paste')}
                 className={`px-3 py-1.5 text-xs font-bold rounded-t-lg transition border-t border-x ${
                   quickKeyTab === 'paste'
-                    ? 'bg-white border-gray-200 text-blue-600'
-                    : 'border-transparent text-gray-500 hover:text-gray-800'
+                    ? 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-blue-600'
+                    : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-800'
                 }`}
               >
                 Paste Answer Key
@@ -1289,8 +1318,8 @@ export const TestEditor: FC<TestEditorProps> = ({
                 onClick={() => setQuickKeyTab('prompt')}
                 className={`px-3 py-1.5 text-xs font-bold rounded-t-lg transition border-t border-x ${
                   quickKeyTab === 'prompt'
-                    ? 'bg-white border-gray-200 text-blue-600'
-                    : 'border-transparent text-gray-500 hover:text-gray-800'
+                    ? 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-blue-600'
+                    : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-800'
                 }`}
               >
                 AI Prompt Template
@@ -1301,7 +1330,7 @@ export const TestEditor: FC<TestEditorProps> = ({
             {quickKeyTab === 'paste' && (
               <div className="p-5 space-y-4 flex-1 overflow-y-auto">
                 <div>
-                  <label className="block text-xs font-bold text-gray-700 mb-1">
+                  <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 mb-1">
                     Paste Answer Keys & Explanations:
                   </label>
                   <textarea
@@ -1309,7 +1338,7 @@ export const TestEditor: FC<TestEditorProps> = ({
                     onChange={(e) => setQuickKeyText(e.target.value)}
                     rows={12}
                     placeholder={`Example formats accepted:&#10;1. FALSE | Paragraph 2 states that...&#10;2. NOT GIVEN&#10;3. TRUE&#10;4. A&#10;5. C | According to the author...&#10;&#10;Or:&#10;Question 1: FALSE&#10;Question 2: TRUE`}
-                    className="w-full px-3 py-2 text-xs border rounded-lg border-gray-300 font-mono leading-relaxed focus:ring-2 focus:ring-amber-500 focus:outline-none"
+                    className="w-full px-3 py-2 text-xs border rounded-lg border-gray-300 dark:border-gray-600 font-mono leading-relaxed focus:ring-2 focus:ring-amber-500 focus:outline-none"
                   />
                 </div>
 
@@ -1329,7 +1358,7 @@ export const TestEditor: FC<TestEditorProps> = ({
             {quickKeyTab === 'prompt' && (
               <div className="p-5 space-y-4 flex-1 overflow-y-auto">
                 <div className="flex items-center justify-between">
-                  <span className="text-xs font-bold text-gray-700">
+                  <span className="text-xs font-bold text-gray-700 dark:text-gray-300">
                     Copy this prompt into ChatGPT / Gemini / Claude:
                   </span>
                   <button
@@ -1346,17 +1375,17 @@ export const TestEditor: FC<TestEditorProps> = ({
                   readOnly
                   value={AI_EXPLAIN_PROMPT_TEMPLATE}
                   rows={12}
-                  className="w-full px-3 py-2 text-xs border rounded-lg border-gray-300 font-mono leading-relaxed bg-gray-50 text-gray-800 select-all"
+                  className="w-full px-3 py-2 text-xs border rounded-lg border-gray-300 dark:border-gray-600 font-mono leading-relaxed bg-gray-50 dark:bg-gray-900 text-gray-800 dark:text-gray-100 select-all"
                 />
               </div>
             )}
 
             {/* Modal Footer */}
-            <div className="p-4 border-t border-gray-200 flex items-center justify-end gap-2 bg-slate-50">
+            <div className="p-4 border-t border-gray-200 dark:border-gray-700 flex items-center justify-end gap-2 bg-slate-50 dark:bg-gray-900">
               <button
                 type="button"
                 onClick={() => setShowQuickKeyModal(false)}
-                className="px-3.5 py-1.5 text-xs font-semibold text-gray-700 bg-white hover:bg-gray-100 rounded-lg border border-gray-300 transition"
+                className="px-3.5 py-1.5 text-xs font-semibold text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg border border-gray-300 dark:border-gray-600 transition"
               >
                 Close
               </button>

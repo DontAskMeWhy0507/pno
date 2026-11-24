@@ -13,30 +13,21 @@ import {
   Heading,
   Icon,
   IconButton,
-  Input,
   Menu,
   MenuButton,
   MenuList,
-  Modal,
-  ModalBody,
-  ModalCloseButton,
-  ModalContent,
-  ModalFooter,
-  ModalHeader,
-  ModalOverlay,
   Stack,
   Text,
-  Textarea,
   useColorModeValue,
   useToast,
 } from '@chakra-ui/react';
 import {
+  IconAdjustmentsHorizontal,
   IconArrowLeft,
   IconArrowRight,
   IconBook,
   IconCheck,
   IconDotsVertical,
-  IconEdit,
   IconFolder,
   IconHeadphones,
   IconHistory,
@@ -44,9 +35,7 @@ import {
   IconMicrophone,
   IconPencil,
   IconPlayerPlay,
-  IconPlus,
   IconRotateClockwise,
-  IconTrash,
   IconX,
 } from '@tabler/icons-react';
 
@@ -58,21 +47,16 @@ import type { SpeakingExam } from '../../types/speaking';
 import {
   getAllWritingExams,
   saveWritingExam,
-  deleteWritingExam,
 } from '../../data/writingExams';
 import {
   getAllSpeakingExams,
   saveSpeakingExam,
-  deleteSpeakingExam,
 } from '../../data/speakingExams';
 import {
-  deleteExam,
   getAllCollections,
   getExamCollection,
   getExamPartCount,
   getExamQuestionCount,
-  createCollection,
-  deleteCollection,
   isListeningExam,
 } from '../../utils/storage';
 import type { CloudAttemptRow, CloudIeltsSkill } from '../../utils/cloudSync';
@@ -91,6 +75,10 @@ import {
   type DetailTarget,
   type StartExamOptions,
 } from './TestDetailView';
+import {
+  IeltsManageTab,
+  type CloudExamPayload,
+} from '../admin/IeltsManageTab';
 
 const WritingEditorModal = dynamic(
   () =>
@@ -110,8 +98,11 @@ interface HomePageProps {
   recentAttempts?: CloudAttemptRow[];
   syncStatus?: 'synced' | 'saving' | 'offline';
   onSelectExam: (exam: Exam, options?: StartExamOptions) => void;
-  onOpenEditor: (exam?: Exam | null) => void;
-  onOpenTestManager: () => void;
+  onOpenEditor: (
+    exam?: Exam | null,
+    defaultCollection?: string,
+    defaultSkill?: 'reading' | 'listening'
+  ) => void;
   onOpenSmartImport: (
     collection?: string,
     skill?: 'reading' | 'listening' | 'writing' | 'speaking'
@@ -130,17 +121,31 @@ interface HomePageProps {
   ) => void;
   onCloudDeleteExam?: (skill: CloudIeltsSkill, examId: string) => void;
   onCloudCreateCollection?: (col: { name: string; description?: string }) => void;
+  onCloudRenameCollection?: (payload: {
+    oldName: string;
+    newName: string;
+    description?: string;
+    movedExams: CloudExamPayload[];
+  }) => void;
   onCloudDeleteCollection?: (
     name: string,
     examsToTombstone: Array<{ examId: string; skill: CloudIeltsSkill }>
   ) => void;
+  onCloudBulkDeleteExams?: (
+    items: Array<{ examId: string; skill: CloudIeltsSkill }>
+  ) => void;
+  onCloudBulkMoveExams?: (
+    targetCollection: string,
+    items: CloudExamPayload[]
+  ) => void;
+  onCloudRestoreDefaults?: () => void;
   onCloudClearProgress?: (skill: CloudIeltsSkill, examId: string) => void;
 }
 
-type PrimaryTab = 'collections' | 'history';
-type SkillTab = 'reading' | 'listening' | 'writing' | 'speaking';
+type PrimaryTab = 'collections' | 'history' | 'manage';
+type SkillTab = 'all' | 'reading' | 'listening' | 'writing' | 'speaking';
 type StatusFilter = 'all' | 'unstarted' | 'in_progress' | 'completed';
-type HistorySkillFilter = 'all' | SkillTab;
+type HistorySkillFilter = SkillTab;
 type HistoryStatusFilter = 'all' | 'in_progress' | 'completed';
 
 interface UnifiedIeltsCardProps {
@@ -155,11 +160,8 @@ interface UnifiedIeltsCardProps {
   statusBadgeLabel?: string;
   attemptCount?: number;
   bestBand?: number | null;
-  isCustom?: boolean;
   onOpenDetail: () => void;
   onQuickStart: () => void;
-  onEdit: () => void;
-  onDelete: () => void;
   onDiscardProgress?: () => void;
 }
 
@@ -175,11 +177,8 @@ const UnifiedIeltsCard: FC<UnifiedIeltsCardProps> = ({
   statusBadgeLabel,
   attemptCount = 0,
   bestBand,
-  isCustom,
   onOpenDetail,
   onQuickStart,
-  onEdit,
-  onDelete,
   onDiscardProgress,
 }) => {
   const [menuOpen, setMenuOpen] = useState(false);
@@ -237,7 +236,7 @@ const UnifiedIeltsCard: FC<UnifiedIeltsCardProps> = ({
                 rounded="md"
                 flexShrink={0}
               >
-                {statusBadgeLabel || 'Đang làm'}
+                {statusBadgeLabel || 'In Progress'}
               </Badge>
             ) : statusType === 'completed' ? (
               <Badge
@@ -250,18 +249,7 @@ const UnifiedIeltsCard: FC<UnifiedIeltsCardProps> = ({
               >
                 {bestBand !== null && bestBand !== undefined
                   ? `Band ${bestBand.toFixed(1)}`
-                  : `${attemptCount} lượt`}
-              </Badge>
-            ) : isCustom ? (
-              <Badge
-                colorScheme="purple"
-                fontSize="xs"
-                px={2}
-                py={0.5}
-                rounded="md"
-                flexShrink={0}
-              >
-                Custom
+                  : `${attemptCount} ${attemptCount === 1 ? 'attempt' : 'attempts'}`}
               </Badge>
             ) : null}
           </HStack>
@@ -313,7 +301,9 @@ const UnifiedIeltsCard: FC<UnifiedIeltsCardProps> = ({
               >
                 <HStack spacing={1}>
                   <Icon as={IconCheck} boxSize={3} />
-                  <Text>{attemptCount} lượt</Text>
+                  <Text>
+                    {attemptCount} {attemptCount === 1 ? 'attempt' : 'attempts'}
+                  </Text>
                 </HStack>
               </Badge>
             )}
@@ -342,34 +332,20 @@ const UnifiedIeltsCard: FC<UnifiedIeltsCardProps> = ({
               <MenuList overflow="hidden" minW="auto" w="48" zIndex={40}>
                 <MenuOption
                   icon={<IconPlayerPlay size={16} />}
-                  label={statusType === 'in_progress' ? 'Tiếp tục làm' : 'Xem chi tiết'}
+                  label={statusType === 'in_progress' ? 'Resume Test' : 'View Details'}
                   fontSize="sm"
                   py="6px"
                   onClick={statusType === 'in_progress' ? onQuickStart : onOpenDetail}
                 />
-                <MenuOption
-                  icon={<IconEdit size={16} />}
-                  label="Chỉnh sửa đề"
-                  fontSize="sm"
-                  py="6px"
-                  onClick={onEdit}
-                />
                 {onDiscardProgress && (
                   <MenuOption
                     icon={<IconRotateClockwise size={16} />}
-                    label="Bỏ bản đang làm"
+                    label="Discard Draft"
                     fontSize="sm"
                     py="6px"
                     onClick={onDiscardProgress}
                   />
                 )}
-                <MenuOption
-                  icon={<IconTrash size={16} />}
-                  label="Xoá bài thi"
-                  fontSize="sm"
-                  py="6px"
-                  onClick={onDelete}
-                />
               </MenuList>
             </Menu>
           </HStack>
@@ -384,7 +360,7 @@ interface HistoryEntry {
   examId: string;
   title: string;
   collection: string;
-  skill: SkillTab;
+  skill: 'reading' | 'listening' | 'writing' | 'speaking';
   skillLabel: CloudIeltsSkill;
   isInProgress: boolean;
   inProgressMeta?: string;
@@ -400,7 +376,6 @@ export const HomePage: FC<HomePageProps> = ({
   syncStatus = 'synced',
   onSelectExam,
   onOpenEditor,
-  onOpenTestManager,
   onOpenSmartImport,
   onRefreshExams,
   onStartWritingExam,
@@ -410,21 +385,22 @@ export const HomePage: FC<HomePageProps> = ({
   onCloudSaveExam,
   onCloudDeleteExam,
   onCloudCreateCollection,
+  onCloudRenameCollection,
   onCloudDeleteCollection,
+  onCloudBulkDeleteExams,
+  onCloudBulkMoveExams,
+  onCloudRestoreDefaults,
   onCloudClearProgress,
 }) => {
   const [primaryTab, setPrimaryTab] = useState<PrimaryTab>('collections');
   const [selectedCollectionName, setSelectedCollectionName] = useState<string | null>(null);
-  const [activeSkillTab, setActiveSkillTab] = useState<SkillTab>('reading');
+  const [activeSkillTab, setActiveSkillTab] = useState<SkillTab>('all');
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
   const [historySkillFilter, setHistorySkillFilter] = useState<HistorySkillFilter>('all');
   const [historyStatusFilter, setHistoryStatusFilter] = useState<HistoryStatusFilter>('all');
   const [selectedTestTarget, setSelectedTestTarget] = useState<DetailTarget | null>(null);
 
   const [searchQuery, setSearchQuery] = useState('');
-  const [showNewCollectionModal, setShowNewCollectionModal] = useState(false);
-  const [newCollectionName, setNewCollectionName] = useState('');
-  const [newCollectionDesc, setNewCollectionDesc] = useState('');
   const [progressVersion, setProgressVersion] = useState(0);
 
   const [writingExams, setWritingExams] = useState<WritingExam[]>(() =>
@@ -436,8 +412,10 @@ export const HomePage: FC<HomePageProps> = ({
 
   const [isWritingEditorOpen, setIsWritingEditorOpen] = useState(false);
   const [editingWritingExam, setEditingWritingExam] = useState<WritingExam | null>(null);
+  const [writingDefaultCol, setWritingDefaultCol] = useState<string | undefined>(undefined);
   const [isSpeakingEditorOpen, setIsSpeakingEditorOpen] = useState(false);
   const [editingSpeakingExam, setEditingSpeakingExam] = useState<SpeakingExam | null>(null);
+  const [speakingDefaultCol, setSpeakingDefaultCol] = useState<string | undefined>(undefined);
 
   const toast = useToast();
   const cardBg = useColorModeValue('white', 'gray.800');
@@ -452,27 +430,33 @@ export const HomePage: FC<HomePageProps> = ({
 
   // Listen to unified PNO Navbar events
   useEffect(() => {
-    const handleAddTest = () =>
-      onOpenSmartImport(selectedCollectionName ?? undefined, activeSkillTab);
-    const handleTestBank = () => onOpenTestManager();
-    const handleNewCol = () => setShowNewCollectionModal(true);
+    const handleOpenManage = () => {
+      setPrimaryTab('manage');
+      setSelectedTestTarget(null);
+    };
     const handleSearch = (q: string) => setSearchQuery(q);
 
-    menuEventChannel.on('openIeltsAddTest', handleAddTest);
-    menuEventChannel.on('openIeltsTestBank', handleTestBank);
-    menuEventChannel.on('openIeltsNewCollection', handleNewCol);
+    menuEventChannel.on('openIeltsManage', handleOpenManage);
+    menuEventChannel.on('openIeltsTestBank', handleOpenManage);
+    menuEventChannel.on('openIeltsAddTest', handleOpenManage);
+    menuEventChannel.on('openIeltsNewCollection', handleOpenManage);
     menuEventChannel.on('ieltsSearchChange', handleSearch);
 
     return () => {
-      menuEventChannel.off('openIeltsAddTest', handleAddTest);
-      menuEventChannel.off('openIeltsTestBank', handleTestBank);
-      menuEventChannel.off('openIeltsNewCollection', handleNewCol);
+      menuEventChannel.off('openIeltsManage', handleOpenManage);
+      menuEventChannel.off('openIeltsTestBank', handleOpenManage);
+      menuEventChannel.off('openIeltsAddTest', handleOpenManage);
+      menuEventChannel.off('openIeltsNewCollection', handleOpenManage);
       menuEventChannel.off('ieltsSearchChange', handleSearch);
     };
-  }, [activeSkillTab, onOpenSmartImport, onOpenTestManager, selectedCollectionName]);
+  }, []);
 
-  const refreshWriting = () => setWritingExams(getAllWritingExams());
-  const refreshSpeaking = () => setSpeakingExams(getAllSpeakingExams());
+  const refreshAll = useCallback(() => {
+    onRefreshExams();
+    setWritingExams(getAllWritingExams());
+    setSpeakingExams(getAllSpeakingExams());
+    setProgressVersion((v) => v + 1);
+  }, [onRefreshExams]);
 
   // Combine collections from Reading/Listening + Writing + Speaking
   const collections = useMemo(() => {
@@ -560,7 +544,8 @@ export const HomePage: FC<HomePageProps> = ({
     );
     setIsWritingEditorOpen(false);
     setEditingWritingExam(null);
-    refreshWriting();
+    setWritingDefaultCol(undefined);
+    refreshAll();
     toast({
       title: 'Writing test saved',
       status: 'success',
@@ -581,64 +566,11 @@ export const HomePage: FC<HomePageProps> = ({
     );
     setIsSpeakingEditorOpen(false);
     setEditingSpeakingExam(null);
-    refreshSpeaking();
+    setSpeakingDefaultCol(undefined);
+    refreshAll();
     toast({
       title: 'Speaking test saved',
       status: 'success',
-      duration: 2200,
-      isClosable: true,
-      position: 'bottom-right',
-    });
-  };
-
-  const handleDeleteExam = (exam: Exam) => {
-    deleteExam(exam.id);
-    onCloudDeleteExam?.(
-      isListeningExam(exam) ? 'Listening' : 'Reading',
-      exam.id
-    );
-    if (selectedTestTarget?.kind === 'exam' && selectedTestTarget.exam.id === exam.id) {
-      setSelectedTestTarget(null);
-    }
-    onRefreshExams();
-    toast({
-      title: 'Đã xoá bài thi',
-      description: `Đã xoá "${exam.title}".`,
-      status: 'info',
-      duration: 2200,
-      isClosable: true,
-      position: 'bottom-right',
-    });
-  };
-
-  const handleDeleteWritingExam = (id: string, title: string) => {
-    deleteWritingExam(id);
-    onCloudDeleteExam?.('Writing', id);
-    if (selectedTestTarget?.kind === 'writing' && selectedTestTarget.exam.id === id) {
-      setSelectedTestTarget(null);
-    }
-    refreshWriting();
-    toast({
-      title: 'Đã xoá bài Writing',
-      description: `Đã xoá "${title}".`,
-      status: 'info',
-      duration: 2200,
-      isClosable: true,
-      position: 'bottom-right',
-    });
-  };
-
-  const handleDeleteSpeakingExam = (id: string, title: string) => {
-    deleteSpeakingExam(id);
-    onCloudDeleteExam?.('Speaking', id);
-    if (selectedTestTarget?.kind === 'speaking' && selectedTestTarget.exam.id === id) {
-      setSelectedTestTarget(null);
-    }
-    refreshSpeaking();
-    toast({
-      title: 'Đã xoá bài Speaking',
-      description: `Đã xoá "${title}".`,
-      status: 'info',
       duration: 2200,
       isClosable: true,
       position: 'bottom-right',
@@ -653,8 +585,8 @@ export const HomePage: FC<HomePageProps> = ({
     );
     setProgressVersion((v) => v + 1);
     toast({
-      title: 'Đã bỏ bản làm dở',
-      description: `"${exam.title}" đã sẵn sàng làm mới.`,
+      title: 'Draft discarded',
+      description: `"${exam.title}" is ready for a fresh start.`,
       status: 'info',
       duration: 2000,
       isClosable: true,
@@ -667,8 +599,8 @@ export const HomePage: FC<HomePageProps> = ({
     onCloudClearProgress?.('Writing', examId);
     setProgressVersion((v) => v + 1);
     toast({
-      title: 'Đã bỏ bản nháp Writing',
-      description: `"${title}" đã được đặt lại.`,
+      title: 'Writing draft discarded',
+      description: `"${title}" has been reset.`,
       status: 'info',
       duration: 2000,
       isClosable: true,
@@ -681,53 +613,10 @@ export const HomePage: FC<HomePageProps> = ({
     onCloudClearProgress?.('Speaking', examId);
     setProgressVersion((v) => v + 1);
     toast({
-      title: 'Đã đặt lại phiên Speaking',
-      description: `"${title}" đã được đặt lại.`,
+      title: 'Speaking session reset',
+      description: `"${title}" has been reset.`,
       status: 'info',
       duration: 2000,
-      isClosable: true,
-      position: 'bottom-right',
-    });
-  };
-
-  const handleCreateCollection = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newCollectionName.trim()) return;
-    const created = createCollection(
-      newCollectionName.trim(),
-      newCollectionDesc.trim()
-    );
-    onCloudCreateCollection?.(created);
-    setNewCollectionName('');
-    setNewCollectionDesc('');
-    setShowNewCollectionModal(false);
-    onRefreshExams();
-    toast({
-      title: 'Đã tạo bộ đề mới',
-      status: 'success',
-      duration: 2200,
-      isClosable: true,
-      position: 'bottom-right',
-    });
-  };
-
-  const handleDeleteCollection = (e: React.MouseEvent, name: string) => {
-    e.stopPropagation();
-    const examsToTombstone = exams
-      .filter((ex) => getExamCollection(ex).toLowerCase() === name.trim().toLowerCase())
-      .map((ex) => ({
-        examId: ex.id,
-        skill: (isListeningExam(ex) ? 'Listening' : 'Reading') as CloudIeltsSkill,
-      }));
-    deleteCollection(name);
-    onCloudDeleteCollection?.(name, examsToTombstone);
-    if (selectedCollectionName === name) setSelectedCollectionName(null);
-    onRefreshExams();
-    toast({
-      title: 'Đã xoá bộ đề',
-      description: `Đã xoá "${name}".`,
-      status: 'info',
-      duration: 2200,
       isClosable: true,
       position: 'bottom-right',
     });
@@ -749,7 +638,7 @@ export const HomePage: FC<HomePageProps> = ({
 
     for (const exam of exams) {
       const isListen = isListeningExam(exam);
-      const skill: SkillTab = isListen ? 'listening' : 'reading';
+      const skill: 'reading' | 'listening' = isListen ? 'listening' : 'reading';
       const skillLabel: CloudIeltsSkill = isListen ? 'Listening' : 'Reading';
       const saved = getSavedExamSummary(exam.id);
       const attempts = getAttemptsFor(skillLabel, exam.id);
@@ -771,7 +660,7 @@ export const HomePage: FC<HomePageProps> = ({
         skillLabel,
         isInProgress: Boolean(saved),
         inProgressMeta: saved
-          ? `${saved.answeredCount}/${totalQ} câu • Còn ${Math.ceil(saved.timeRemaining / 60)} phút`
+          ? `${saved.answeredCount}/${totalQ} Qs • ${Math.ceil(saved.timeRemaining / 60)} min left`
           : undefined,
         attempts,
         bestBand: getBestBand(attempts),
@@ -799,7 +688,7 @@ export const HomePage: FC<HomePageProps> = ({
         skillLabel: 'Writing',
         isInProgress: Boolean(saved),
         inProgressMeta: saved
-          ? `Task 1: ${saved.task1Words} từ • Task 2: ${saved.task2Words} từ`
+          ? `Task 1: ${saved.task1Words}w • Task 2: ${saved.task2Words}w`
           : undefined,
         attempts,
         bestBand: null,
@@ -826,7 +715,7 @@ export const HomePage: FC<HomePageProps> = ({
         skill: 'speaking',
         skillLabel: 'Speaking',
         isInProgress: Boolean(saved),
-        inProgressMeta: saved ? `Đang ở Part ${saved.activePart}` : undefined,
+        inProgressMeta: saved ? `On Part ${saved.activePart}` : undefined,
         attempts,
         bestBand: null,
         latestActivityAt: Math.max(latestAttemptAt, latestSavedAt),
@@ -838,7 +727,7 @@ export const HomePage: FC<HomePageProps> = ({
     for (const [key, list] of attemptsMap.entries()) {
       if (entriesMap.has(key) || list.length === 0) continue;
       const first = list[0]!;
-      const skill = first.skill.toLowerCase() as SkillTab;
+      const skill = first.skill.toLowerCase() as 'reading' | 'listening' | 'writing' | 'speaking';
       entriesMap.set(key, {
         key,
         examId: first.examId,
@@ -861,30 +750,10 @@ export const HomePage: FC<HomePageProps> = ({
 
   const qLower = searchQuery.trim().toLowerCase();
 
-  // Helper to select a collection and pick its first non-empty skill tab
+  // Helper to open a collection defaulting to the "All" skill tab
   const handleOpenCollection = (colName: string) => {
-    const colLower = colName.toLowerCase();
-    const rCount = readingExams.filter(
-      (e) => getExamCollection(e).toLowerCase() === colLower
-    ).length;
-    const lCount = listeningExams.filter(
-      (e) => getExamCollection(e).toLowerCase() === colLower
-    ).length;
-    const wCount = writingExams.filter(
-      (w) => (w.collection || 'IELTS Writing').toLowerCase() === colLower
-    ).length;
-    const sCount = speakingExams.filter(
-      (s) => (s.collection || 'IELTS Speaking').toLowerCase() === colLower
-    ).length;
-
-    let initialSkill: SkillTab = 'reading';
-    if (rCount > 0) initialSkill = 'reading';
-    else if (lCount > 0) initialSkill = 'listening';
-    else if (wCount > 0) initialSkill = 'writing';
-    else if (sCount > 0) initialSkill = 'speaking';
-
     setSelectedCollectionName(colName);
-    setActiveSkillTab(initialSkill);
+    setActiveSkillTab('all');
     setStatusFilter('all');
     setSelectedTestTarget(null);
   };
@@ -916,8 +785,8 @@ export const HomePage: FC<HomePageProps> = ({
         ? 'completed'
         : 'unstarted';
     const mins = savedProgress
-      ? `Còn ${Math.ceil(savedProgress.timeRemaining / 60)} phút`
-      : `${test.durationMinutes || (isListen ? 30 : 60)} phút`;
+      ? `${Math.ceil(savedProgress.timeRemaining / 60)}m left`
+      : `${test.durationMinutes || (isListen ? 30 : 60)} min`;
 
     return (
       <GridItem key={`${test.id}-${progressVersion}`}>
@@ -926,23 +795,20 @@ export const HomePage: FC<HomePageProps> = ({
           collectionName={colName}
           metaText={`${mins} • ${totalParts} ${
             isListen ? 'Sections' : 'Parts'
-          } • ${totalQ} câu`}
+          } • ${totalQ} Qs`}
           skillColor={isListen ? 'purple.400' : 'blue.400'}
           skillBadgeLabel={skillLabel}
           skillIcon={isListen ? IconHeadphones : IconBook}
           statusType={statusType}
           statusBadgeLabel={
             savedProgress
-              ? `Đang làm (${savedProgress.answeredCount}/${totalQ})`
+              ? `In Progress (${savedProgress.answeredCount}/${totalQ})`
               : undefined
           }
           attemptCount={attempts.length}
           bestBand={bestBand}
-          isCustom={test.isBuiltin === false || colName === 'My Tests'}
           onOpenDetail={() => setSelectedTestTarget({ kind: 'exam', exam: test })}
           onQuickStart={() => onSelectExam(test)}
-          onEdit={() => onOpenEditor(test)}
-          onDelete={() => handleDeleteExam(test)}
           onDiscardProgress={
             savedProgress ? () => handleDiscardExam(test) : undefined
           }
@@ -967,23 +833,18 @@ export const HomePage: FC<HomePageProps> = ({
           collectionName={test.collection || 'IELTS Writing'}
           metaText={
             savedW
-              ? `Còn ${Math.ceil(savedW.timeRemaining / 60)} phút • T1: ${savedW.task1Words}w • T2: ${savedW.task2Words}w`
-              : `${test.durationMinutes} phút • Task 1 & Task 2`
+              ? `${Math.ceil(savedW.timeRemaining / 60)}m left • T1: ${savedW.task1Words}w • T2: ${savedW.task2Words}w`
+              : `${test.durationMinutes} min • Task 1 & Task 2`
           }
           subText={test.task2.prompt}
           skillColor="orange.400"
           skillBadgeLabel="Writing"
           skillIcon={IconPencil}
           statusType={statusType}
-          statusBadgeLabel="Đang làm"
+          statusBadgeLabel="In Progress"
           attemptCount={attempts.length}
           onOpenDetail={() => setSelectedTestTarget({ kind: 'writing', exam: test })}
           onQuickStart={() => onStartWritingExam(test)}
-          onEdit={() => {
-            setEditingWritingExam(test);
-            setIsWritingEditorOpen(true);
-          }}
-          onDelete={() => handleDeleteWritingExam(test.id, test.title)}
           onDiscardProgress={
             savedW ? () => handleDiscardWriting(test.id, test.title) : undefined
           }
@@ -1012,15 +873,10 @@ export const HomePage: FC<HomePageProps> = ({
           skillBadgeLabel="Speaking"
           skillIcon={IconMicrophone}
           statusType={statusType}
-          statusBadgeLabel="Đang làm"
+          statusBadgeLabel="In Progress"
           attemptCount={attempts.length}
           onOpenDetail={() => setSelectedTestTarget({ kind: 'speaking', exam: test })}
           onQuickStart={() => onStartSpeakingExam(test)}
-          onEdit={() => {
-            setEditingSpeakingExam(test);
-            setIsSpeakingEditorOpen(true);
-          }}
-          onDelete={() => handleDeleteSpeakingExam(test.id, test.title)}
           onDiscardProgress={
             savedS ? () => handleDiscardSpeaking(test.id, test.title) : undefined
           }
@@ -1117,11 +973,38 @@ export const HomePage: FC<HomePageProps> = ({
       };
     };
 
+    const readingStats = getCountsForRL(rAll, 'Reading');
+    const listeningStats = getCountsForRL(lAll, 'Listening');
+    const writingStats = getCountsForWriting(wAll);
+    const speakingStats = getCountsForSpeaking(sAll);
+
     return {
-      reading: getCountsForRL(rAll, 'Reading'),
-      listening: getCountsForRL(lAll, 'Listening'),
-      writing: getCountsForWriting(wAll),
-      speaking: getCountsForSpeaking(sAll),
+      all: {
+        allCount:
+          readingStats.allCount +
+          listeningStats.allCount +
+          writingStats.allCount +
+          speakingStats.allCount,
+        unstarted:
+          readingStats.unstarted +
+          listeningStats.unstarted +
+          writingStats.unstarted +
+          speakingStats.unstarted,
+        inProgress:
+          readingStats.inProgress +
+          listeningStats.inProgress +
+          writingStats.inProgress +
+          speakingStats.inProgress,
+        completed:
+          readingStats.completed +
+          listeningStats.completed +
+          writingStats.completed +
+          speakingStats.completed,
+      },
+      reading: readingStats,
+      listening: listeningStats,
+      writing: writingStats,
+      speaking: speakingStats,
     };
   }, [
     getAttemptsFor,
@@ -1158,7 +1041,7 @@ export const HomePage: FC<HomePageProps> = ({
     });
   }, [historyEntries, historySkillFilter, historyStatusFilter, qLower]);
 
-  // Global search results when on root Bộ đề view
+  // Global search results when on root Collections view
   const globalSearchExams = useMemo(() => {
     if (!qLower || selectedCollectionName || primaryTab !== 'collections') {
       return [];
@@ -1174,17 +1057,31 @@ export const HomePage: FC<HomePageProps> = ({
     ? collectionData[activeSkillTab]
     : { allCount: 0, unstarted: 0, inProgress: 0, completed: 0 };
 
+  const effectiveSelectedTarget = useMemo<DetailTarget | null>(() => {
+    if (!selectedTestTarget) return null;
+    if (selectedTestTarget.kind === 'exam') {
+      const fresh = exams.find((e) => e.id === selectedTestTarget.exam.id);
+      return fresh ? { kind: 'exam', exam: fresh } : null;
+    }
+    if (selectedTestTarget.kind === 'writing') {
+      const fresh = writingExams.find((w) => w.id === selectedTestTarget.exam.id);
+      return fresh ? { kind: 'writing', exam: fresh } : null;
+    }
+    const fresh = speakingExams.find((s) => s.id === selectedTestTarget.exam.id);
+    return fresh ? { kind: 'speaking', exam: fresh } : null;
+  }, [exams, selectedTestTarget, speakingExams, writingExams]);
+
   return (
     <Container maxW="7xl" py={{ base: 4, md: 6 }} flex="1">
       <Stack spacing={6}>
-        {/* TOP PRIMARY TABS: Bộ đề | History */}
+        {/* TOP PRIMARY TABS: Collections | History | Manage */}
         <Flex
           justify="space-between"
           align={{ base: 'stretch', sm: 'center' }}
           direction={{ base: 'column', sm: 'row' }}
           gap={3}
         >
-          <HStack spacing={2}>
+          <HStack spacing={2} flexWrap="wrap">
             <Button
               leftIcon={<IconLayoutGrid size={17} />}
               variant={primaryTab === 'collections' ? 'solid' : 'outline'}
@@ -1201,7 +1098,7 @@ export const HomePage: FC<HomePageProps> = ({
               }}
             >
               <HStack spacing={2}>
-                <Text>Bộ đề</Text>
+                <Text>Collections</Text>
                 <Badge
                   colorScheme={primaryTab === 'collections' ? 'blue' : 'gray'}
                   variant={primaryTab === 'collections' ? 'solid' : 'subtle'}
@@ -1240,6 +1137,24 @@ export const HomePage: FC<HomePageProps> = ({
                 </Badge>
               </HStack>
             </Button>
+
+            <Button
+              leftIcon={<IconAdjustmentsHorizontal size={17} />}
+              variant={primaryTab === 'manage' ? 'solid' : 'outline'}
+              colorScheme={primaryTab === 'manage' ? 'blue' : 'gray'}
+              bg={primaryTab === 'manage' ? undefined : cardBg}
+              borderColor={primaryTab === 'manage' ? undefined : cardBorder}
+              borderWidth="2px"
+              rounded="xl"
+              fontWeight={700}
+              size="md"
+              onClick={() => {
+                setPrimaryTab('manage');
+                setSelectedTestTarget(null);
+              }}
+            >
+              Manage
+            </Button>
           </HStack>
 
           <HStack spacing={2}>
@@ -1258,16 +1173,16 @@ export const HomePage: FC<HomePageProps> = ({
               fontSize="xs"
             >
               {syncStatus === 'saving'
-                ? 'Đang lưu nền...'
+                ? 'Saving...'
                 : syncStatus === 'offline'
-                  ? 'Lưu cục bộ (Offline)'
-                  : 'Tự động lưu nền'}
+                  ? 'Local only (Offline)'
+                  : 'Auto-saved'}
             </Badge>
           </HStack>
         </Flex>
 
         {/* Active Search Filter Notice */}
-        {searchQuery.trim() && !selectedTestTarget && (
+        {searchQuery.trim() && !effectiveSelectedTarget && primaryTab !== 'manage' && (
           <HStack
             justify="space-between"
             bg={cardBg}
@@ -1278,7 +1193,7 @@ export const HomePage: FC<HomePageProps> = ({
             py={2.5}
           >
             <Text fontSize="sm" fontWeight={600}>
-              Tìm kiếm: &ldquo;{searchQuery}&rdquo;
+              Search: &ldquo;{searchQuery}&rdquo;
             </Text>
             <Button
               size="xs"
@@ -1290,27 +1205,27 @@ export const HomePage: FC<HomePageProps> = ({
                 menuEventChannel.emit('ieltsSearchChange', '');
               }}
             >
-              Xoá bộ lọc
+              Clear filter
             </Button>
           </HStack>
         )}
 
-        {/* SCREEN 3: TEST DETAIL VIEW (Study4-inspired layout) */}
-        {selectedTestTarget ? (
+        {/* SCREEN 3: TEST DETAIL VIEW (Pure Study) */}
+        {effectiveSelectedTarget ? (
           <TestDetailView
-            target={selectedTestTarget}
+            target={effectiveSelectedTarget}
             progressVersion={progressVersion}
             attempts={
-              selectedTestTarget.kind === 'exam'
+              effectiveSelectedTarget.kind === 'exam'
                 ? getAttemptsFor(
-                    isListeningExam(selectedTestTarget.exam)
+                    isListeningExam(effectiveSelectedTarget.exam)
                       ? 'Listening'
                       : 'Reading',
-                    selectedTestTarget.exam.id
+                    effectiveSelectedTarget.exam.id
                   )
-                : selectedTestTarget.kind === 'writing'
-                  ? getAttemptsFor('Writing', selectedTestTarget.exam.id)
-                  : getAttemptsFor('Speaking', selectedTestTarget.exam.id)
+                : effectiveSelectedTarget.kind === 'writing'
+                  ? getAttemptsFor('Writing', effectiveSelectedTarget.exam.id)
+                  : getAttemptsFor('Speaking', effectiveSelectedTarget.exam.id)
             }
             onBack={() => setSelectedTestTarget(null)}
             onStartExam={(exam, options) => onSelectExam(exam, options)}
@@ -1324,22 +1239,11 @@ export const HomePage: FC<HomePageProps> = ({
               onViewAttemptDetail?.(attempt);
             }}
             onDeleteAttempt={onDeleteAttempt}
-            onOpenEditor={() => {
-              if (selectedTestTarget.kind === 'exam') {
-                onOpenEditor(selectedTestTarget.exam);
-              } else if (selectedTestTarget.kind === 'writing') {
-                setEditingWritingExam(selectedTestTarget.exam);
-                setIsWritingEditorOpen(true);
-              } else {
-                setEditingSpeakingExam(selectedTestTarget.exam);
-                setIsSpeakingEditorOpen(true);
-              }
-            }}
           />
         ) : primaryTab === 'collections' ? (
-          /* TAB 1: BỘ ĐỀ */
+          /* TAB 1: COLLECTIONS (Pure Study) */
           selectedCollectionName && collectionData ? (
-            /* SCREEN 2: INSIDE A COLLECTION (2 rows of tabs) */
+            /* SCREEN 2: INSIDE A COLLECTION (All | Reading | Listening | Writing | Speaking) */
             <Stack spacing={5}>
               <Flex
                 justify="space-between"
@@ -1358,38 +1262,24 @@ export const HomePage: FC<HomePageProps> = ({
                       setStatusFilter('all');
                     }}
                   >
-                    Tất cả bộ đề
+                    All Collections
                   </Button>
                   <Heading size="lg" fontFamily={outfit.style.fontFamily}>
                     {selectedCollectionName}
                   </Heading>
                 </HStack>
-
-                <Button
-                  size="sm"
-                  colorScheme="blue"
-                  rounded="xl"
-                  leftIcon={<IconPlus size={16} />}
-                  onClick={() => {
-                    if (activeSkillTab === 'writing') {
-                      setEditingWritingExam(null);
-                      setIsWritingEditorOpen(true);
-                    } else if (activeSkillTab === 'speaking') {
-                      setEditingSpeakingExam(null);
-                      setIsSpeakingEditorOpen(true);
-                    } else {
-                      onOpenSmartImport(selectedCollectionName, activeSkillTab);
-                    }
-                  }}
-                >
-                  Thêm đề vào {selectedCollectionName}
-                </Button>
               </Flex>
 
-              {/* Row 1: Reading | Listening | Writing | Speaking */}
+              {/* Row 1: All | Reading | Listening | Writing | Speaking */}
               <HStack spacing={2} overflowX="auto" pb={1} flexWrap="wrap">
                 {(
                   [
+                    {
+                      id: 'all',
+                      label: 'All',
+                      icon: IconLayoutGrid,
+                      count: collectionData.all.allCount,
+                    },
                     {
                       id: 'reading',
                       label: 'Reading',
@@ -1452,7 +1342,7 @@ export const HomePage: FC<HomePageProps> = ({
                 })}
               </HStack>
 
-              {/* Row 2: Tất cả | Chưa làm | Đang làm | Đã làm */}
+              {/* Row 2: All | Not Started | In Progress | Completed */}
               <HStack
                 bg={pillBg}
                 p={1}
@@ -1467,22 +1357,22 @@ export const HomePage: FC<HomePageProps> = ({
                   [
                     {
                       id: 'all',
-                      label: 'Tất cả',
+                      label: 'All',
                       count: activeStatusCounts.allCount,
                     },
                     {
                       id: 'unstarted',
-                      label: 'Chưa làm',
+                      label: 'Not Started',
                       count: activeStatusCounts.unstarted,
                     },
                     {
                       id: 'in_progress',
-                      label: 'Đang làm',
+                      label: 'In Progress',
                       count: activeStatusCounts.inProgress,
                     },
                     {
                       id: 'completed',
-                      label: 'Đã làm',
+                      label: 'Completed',
                       count: activeStatusCounts.completed,
                     },
                   ] as const
@@ -1502,6 +1392,44 @@ export const HomePage: FC<HomePageProps> = ({
               </HStack>
 
               {/* Filtered Test Cards Grid */}
+              {activeSkillTab === 'all' &&
+                (collectionData.reading.filtered.length +
+                  collectionData.listening.filtered.length +
+                  collectionData.writing.filtered.length +
+                  collectionData.speaking.filtered.length ===
+                0 ? (
+                  <Box
+                    p={8}
+                    bg={cardBg}
+                    borderWidth="2px"
+                    borderColor={cardBorder}
+                    rounded="xl"
+                    textAlign="center"
+                  >
+                    <Text fontSize="sm" color={secondaryColor}>
+                      No tests found in this collection.
+                    </Text>
+                  </Box>
+                ) : (
+                  <Grid
+                    templateColumns="repeat(auto-fill, minmax(min(100%, 280px), 1fr))"
+                    gap={4}
+                  >
+                    {collectionData.reading.filtered.map((test) =>
+                      renderExamCard(test)
+                    )}
+                    {collectionData.listening.filtered.map((test) =>
+                      renderExamCard(test)
+                    )}
+                    {collectionData.writing.filtered.map((test) =>
+                      renderWritingCard(test)
+                    )}
+                    {collectionData.speaking.filtered.map((test) =>
+                      renderSpeakingCard(test)
+                    )}
+                  </Grid>
+                ))}
+
               {activeSkillTab === 'reading' &&
                 (collectionData.reading.filtered.length === 0 ? (
                   <Box
@@ -1513,7 +1441,7 @@ export const HomePage: FC<HomePageProps> = ({
                     textAlign="center"
                   >
                     <Text fontSize="sm" color={secondaryColor}>
-                      Không có bài Reading nào trong mục này.
+                      No Reading tests found in this filter.
                     </Text>
                   </Box>
                 ) : (
@@ -1538,7 +1466,7 @@ export const HomePage: FC<HomePageProps> = ({
                     textAlign="center"
                   >
                     <Text fontSize="sm" color={secondaryColor}>
-                      Không có bài Listening nào trong mục này.
+                      No Listening tests found in this filter.
                     </Text>
                   </Box>
                 ) : (
@@ -1563,7 +1491,7 @@ export const HomePage: FC<HomePageProps> = ({
                     textAlign="center"
                   >
                     <Text fontSize="sm" color={secondaryColor}>
-                      Không có bài Writing nào trong mục này.
+                      No Writing tests found in this filter.
                     </Text>
                   </Box>
                 ) : (
@@ -1588,7 +1516,7 @@ export const HomePage: FC<HomePageProps> = ({
                     textAlign="center"
                   >
                     <Text fontSize="sm" color={secondaryColor}>
-                      Không có bài Speaking nào trong mục này.
+                      No Speaking tests found in this filter.
                     </Text>
                   </Box>
                 ) : (
@@ -1603,12 +1531,12 @@ export const HomePage: FC<HomePageProps> = ({
                 ))}
             </Stack>
           ) : (
-            /* SCREEN 1: COLLECTIONS FOLDER GRID */
+            /* SCREEN 1: COLLECTIONS FOLDER GRID (Pure Study) */
             <Stack spacing={6}>
               {qLower && globalSearchExams.length > 0 && (
                 <Stack spacing={3}>
                   <Heading size="md" fontFamily={outfit.style.fontFamily}>
-                    Kết quả tìm kiếm ({globalSearchExams.length})
+                    Search Results ({globalSearchExams.length})
                   </Heading>
                   <Grid
                     templateColumns="repeat(auto-fill, minmax(min(100%, 280px), 1fr))"
@@ -1619,26 +1547,14 @@ export const HomePage: FC<HomePageProps> = ({
                 </Stack>
               )}
 
-              <Flex justify="space-between" align="center" flexWrap="wrap" gap={3}>
-                <Stack spacing={0.5}>
-                  <Heading size="lg" fontFamily={outfit.style.fontFamily}>
-                    Bộ đề luyện thi IELTS
-                  </Heading>
-                  <Text fontSize="sm" color={secondaryColor}>
-                    Chọn một bộ đề để xem đầy đủ bài thi 4 kỹ năng và lọc theo trạng thái làm bài
-                  </Text>
-                </Stack>
-
-                <Button
-                  size="sm"
-                  variant="outline"
-                  rounded="xl"
-                  leftIcon={<IconPlus size={16} />}
-                  onClick={() => setShowNewCollectionModal(true)}
-                >
-                  Tạo bộ đề mới
-                </Button>
-              </Flex>
+              <Stack spacing={0.5}>
+                <Heading size="lg" fontFamily={outfit.style.fontFamily}>
+                  IELTS Practice Collections
+                </Heading>
+                <Text fontSize="sm" color={secondaryColor}>
+                  Choose a collection to browse all 4 skills and track your progress
+                </Text>
+              </Stack>
 
               <Grid
                 templateColumns="repeat(auto-fill, minmax(min(100%, 270px), 1fr))"
@@ -1720,32 +1636,19 @@ export const HomePage: FC<HomePageProps> = ({
                             gap={4}
                           >
                             <Stack spacing={2}>
-                              <HStack justify="space-between">
-                                <HStack spacing={2}>
-                                  <Icon
-                                    as={IconFolder}
-                                    boxSize={5}
-                                    color="blue.400"
-                                  />
-                                  <Heading
-                                    size="md"
-                                    fontFamily={outfit.style.fontFamily}
-                                    noOfLines={1}
-                                  >
-                                    {col.name}
-                                  </Heading>
-                                </HStack>
-                                {!col.isBuiltin && (
-                                  <IconButton
-                                    size="xs"
-                                    variant="ghost"
-                                    aria-label={`Delete ${col.name}`}
-                                    icon={<IconTrash size={14} />}
-                                    onClick={(e) =>
-                                      handleDeleteCollection(e, col.name)
-                                    }
-                                  />
-                                )}
+                              <HStack spacing={2}>
+                                <Icon
+                                  as={IconFolder}
+                                  boxSize={5}
+                                  color="blue.400"
+                                />
+                                <Heading
+                                  size="md"
+                                  fontFamily={outfit.style.fontFamily}
+                                  noOfLines={1}
+                                >
+                                  {col.name}
+                                </Heading>
                               </HStack>
                               <Text
                                 fontSize="sm"
@@ -1753,7 +1656,7 @@ export const HomePage: FC<HomePageProps> = ({
                                 noOfLines={2}
                               >
                                 {col.description ||
-                                  'Bộ đề luyện thi IELTS tổng hợp'}
+                                  'Official IELTS practice test collection'}
                               </Text>
                             </Stack>
 
@@ -1781,7 +1684,7 @@ export const HomePage: FC<HomePageProps> = ({
                                 )}
                                 {totalTests === 0 && (
                                   <Badge colorScheme="gray" variant="subtle" rounded="md">
-                                    Trống
+                                    Empty
                                   </Badge>
                                 )}
                               </HStack>
@@ -1790,16 +1693,18 @@ export const HomePage: FC<HomePageProps> = ({
                                 <HStack spacing={2} fontSize="xs" color={secondaryColor}>
                                   {doneCount > 0 && (
                                     <Text color="green.500" fontWeight={600}>
-                                      Đã làm: {doneCount}/{totalTests}
+                                      Completed: {doneCount}/{totalTests}
                                     </Text>
                                   )}
                                   {inProgCount > 0 && (
                                     <Text color="emerald.500" fontWeight={600}>
-                                      • Đang làm: {inProgCount}
+                                      • In progress: {inProgCount}
                                     </Text>
                                   )}
                                   {doneCount === 0 && inProgCount === 0 && (
-                                    <Text>{totalTests} bài thi</Text>
+                                    <Text>
+                                      {totalTests} {totalTests === 1 ? 'test' : 'tests'}
+                                    </Text>
                                   )}
                                 </HStack>
                                 <Icon
@@ -1817,8 +1722,8 @@ export const HomePage: FC<HomePageProps> = ({
               </Grid>
             </Stack>
           )
-        ) : (
-          /* SCREEN 4: TAB HISTORY (Đã làm & Đang làm, hỗ trợ nhiều lượt) */
+        ) : primaryTab === 'history' ? (
+          /* TAB 2: HISTORY */
           <Stack spacing={5}>
             <Flex
               justify="space-between"
@@ -1828,10 +1733,10 @@ export const HomePage: FC<HomePageProps> = ({
             >
               <Stack spacing={0.5}>
                 <Heading size="lg" fontFamily={outfit.style.fontFamily}>
-                  Lịch sử làm bài
+                  Practice History
                 </Heading>
                 <Text fontSize="sm" color={secondaryColor}>
-                  Các bài đã nộp và đang làm dở được tự động lưu nền. Một bài có thể xem nhiều lượt làm.
+                  Submitted attempts and in-progress drafts are auto-saved across devices.
                 </Text>
               </Stack>
             </Flex>
@@ -1846,7 +1751,7 @@ export const HomePage: FC<HomePageProps> = ({
               <HStack spacing={1.5} flexWrap="wrap">
                 {(
                   [
-                    { id: 'all', label: 'Tất cả kỹ năng' },
+                    { id: 'all', label: 'All Skills' },
                     { id: 'reading', label: 'Reading' },
                     { id: 'listening', label: 'Listening' },
                     { id: 'writing', label: 'Writing' },
@@ -1876,9 +1781,9 @@ export const HomePage: FC<HomePageProps> = ({
               >
                 {(
                   [
-                    { id: 'all', label: 'Tất cả' },
-                    { id: 'in_progress', label: 'Đang làm' },
-                    { id: 'completed', label: 'Đã làm' },
+                    { id: 'all', label: 'All' },
+                    { id: 'in_progress', label: 'In Progress' },
+                    { id: 'completed', label: 'Completed' },
                   ] as const
                 ).map((st) => (
                   <Button
@@ -1906,7 +1811,7 @@ export const HomePage: FC<HomePageProps> = ({
                 textAlign="center"
               >
                 <Text fontSize="sm" color={secondaryColor}>
-                  Chưa có bài thi nào đã làm hoặc đang làm dở phù hợp bộ lọc.
+                  No completed or in-progress tests match your current filter.
                 </Text>
               </Box>
             ) : (
@@ -1923,9 +1828,9 @@ export const HomePage: FC<HomePageProps> = ({
                   const latestAttempt = entry.attempts[0];
                   const dateLabel = new Date(
                     entry.latestActivityAt
-                  ).toLocaleDateString('vi-VN', {
+                  ).toLocaleDateString('en-US', {
+                    month: 'short',
                     day: '2-digit',
-                    month: '2-digit',
                     year: 'numeric',
                   });
 
@@ -1967,12 +1872,13 @@ export const HomePage: FC<HomePageProps> = ({
                             </Badge>
                             {entry.isInProgress && (
                               <Badge colorScheme="green" rounded="md" fontSize="xs">
-                                Đang làm dở
+                                In Progress
                               </Badge>
                             )}
                             {entry.attempts.length > 0 && (
                               <Badge colorScheme="blue" variant="subtle" rounded="md" fontSize="xs">
-                                {entry.attempts.length} lượt đã nộp
+                                {entry.attempts.length}{' '}
+                                {entry.attempts.length === 1 ? 'attempt' : 'attempts'}
                               </Badge>
                             )}
                           </HStack>
@@ -1989,16 +1895,16 @@ export const HomePage: FC<HomePageProps> = ({
                             )}
                             {latestAttempt && (
                               <Text>
-                                Gần nhất:{' '}
+                                Latest:{' '}
                                 {latestAttempt.skill === 'Writing'
                                   ? `Task 1 (${latestAttempt.details?.task1Words ?? 0}w) • Task 2 (${latestAttempt.details?.task2Words ?? 0}w)`
-                                  : `${latestAttempt.totalCorrect}/${latestAttempt.totalQuestions} câu`}
+                                  : `${latestAttempt.totalCorrect}/${latestAttempt.totalQuestions} Qs`}
                                 {entry.bestBand !== null
-                                  ? ` • Cao nhất: Band ${entry.bestBand.toFixed(1)}`
+                                  ? ` • Best: Band ${entry.bestBand.toFixed(1)}`
                                   : ''}
                               </Text>
                             )}
-                            <Text>• Cập nhật: {dateLabel}</Text>
+                            <Text>• Updated: {dateLabel}</Text>
                           </HStack>
                         </Stack>
 
@@ -2024,7 +1930,7 @@ export const HomePage: FC<HomePageProps> = ({
                                 }
                               }}
                             >
-                              Tiếp tục
+                              Resume
                             </Button>
                           )}
 
@@ -2036,7 +1942,7 @@ export const HomePage: FC<HomePageProps> = ({
                               rounded="xl"
                               onClick={() => setSelectedTestTarget(entry.target)}
                             >
-                              Xem chi tiết
+                              View Details
                             </Button>
                           )}
                         </HStack>
@@ -2047,73 +1953,64 @@ export const HomePage: FC<HomePageProps> = ({
               </Stack>
             )}
           </Stack>
+        ) : (
+          /* TAB 3: MANAGE (Dedicated CRUD Studio) */
+          <IeltsManageTab
+            exams={exams}
+            writingExams={writingExams}
+            speakingExams={speakingExams}
+            collections={collections}
+            searchQuery={searchQuery}
+            onSearchQueryChange={(q) => {
+              setSearchQuery(q);
+              menuEventChannel.emit('ieltsSearchChange', q);
+            }}
+            onCreateManualExam={(defaultCol, defaultSkill) =>
+              onOpenEditor(null, defaultCol, defaultSkill)
+            }
+            onOpenSmartImport={(col, skill) => onOpenSmartImport(col, skill)}
+            onEditExam={(exam) => onOpenEditor(exam)}
+            onEditWriting={(exam, defaultCol) => {
+              setEditingWritingExam(exam ?? null);
+              setWritingDefaultCol(defaultCol);
+              setIsWritingEditorOpen(true);
+            }}
+            onEditSpeaking={(exam, defaultCol) => {
+              setEditingSpeakingExam(exam ?? null);
+              setSpeakingDefaultCol(defaultCol);
+              setIsSpeakingEditorOpen(true);
+            }}
+            onRefreshAll={refreshAll}
+            onCloudSaveExam={(payload) =>
+              onCloudSaveExam?.(
+                payload.skill,
+                payload.examId,
+                payload.title,
+                payload.collection,
+                payload.data
+              )
+            }
+            onCloudDeleteExam={onCloudDeleteExam}
+            onCloudCreateCollection={onCloudCreateCollection}
+            onCloudRenameCollection={onCloudRenameCollection}
+            onCloudDeleteCollection={onCloudDeleteCollection}
+            onCloudBulkDeleteExams={onCloudBulkDeleteExams}
+            onCloudBulkMoveExams={onCloudBulkMoveExams}
+            onCloudRestoreDefaults={onCloudRestoreDefaults}
+          />
         )}
       </Stack>
-
-      {/* New Collection Modal (Chakra UI) */}
-      <Modal
-        isOpen={showNewCollectionModal}
-        onClose={() => setShowNewCollectionModal(false)}
-        isCentered
-      >
-        <ModalOverlay />
-        <ModalContent>
-          <form onSubmit={handleCreateCollection}>
-            <ModalHeader fontFamily={outfit.style.fontFamily}>
-              Tạo bộ đề mới
-            </ModalHeader>
-            <ModalCloseButton />
-            <ModalBody>
-              <Stack spacing={4}>
-                <Box>
-                  <Text fontSize="xs" fontWeight={700} mb={1}>
-                    Tên bộ đề (ví dụ: Cambridge 21, Cambridge 20...)
-                  </Text>
-                  <Input
-                    required
-                    value={newCollectionName}
-                    onChange={(e) => setNewCollectionName(e.target.value)}
-                    placeholder="Nhập tên bộ đề..."
-                    rounded="xl"
-                  />
-                </Box>
-                <Box>
-                  <Text fontSize="xs" fontWeight={700} mb={1}>
-                    Mô tả ngắn (Tuỳ chọn)
-                  </Text>
-                  <Textarea
-                    value={newCollectionDesc}
-                    onChange={(e) => setNewCollectionDesc(e.target.value)}
-                    placeholder="Ghi chú về bộ đề này..."
-                    rows={2}
-                    rounded="xl"
-                  />
-                </Box>
-              </Stack>
-            </ModalBody>
-            <ModalFooter gap={2}>
-              <Button
-                variant="ghost"
-                onClick={() => setShowNewCollectionModal(false)}
-              >
-                Huỷ
-              </Button>
-              <Button type="submit" colorScheme="blue" rounded="xl">
-                Tạo bộ đề
-              </Button>
-            </ModalFooter>
-          </form>
-        </ModalContent>
-      </Modal>
 
       {/* Writing & Speaking Editor Modals */}
       {isWritingEditorOpen && (
         <WritingEditorModal
           key={editingWritingExam?.id || 'new-writing'}
           isOpen={isWritingEditorOpen}
+          defaultCollection={writingDefaultCol}
           onClose={() => {
             setIsWritingEditorOpen(false);
             setEditingWritingExam(null);
+            setWritingDefaultCol(undefined);
           }}
           initialExam={editingWritingExam}
           onSave={handleSaveWriting}
@@ -2124,9 +2021,11 @@ export const HomePage: FC<HomePageProps> = ({
         <SpeakingEditorModal
           key={editingSpeakingExam?.id || 'new-speaking'}
           isOpen={isSpeakingEditorOpen}
+          defaultCollection={speakingDefaultCol}
           onClose={() => {
             setIsSpeakingEditorOpen(false);
             setEditingSpeakingExam(null);
+            setSpeakingDefaultCol(undefined);
           }}
           initialExam={editingSpeakingExam}
           onSave={handleSaveSpeaking}

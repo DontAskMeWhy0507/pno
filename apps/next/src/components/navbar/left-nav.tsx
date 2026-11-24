@@ -18,13 +18,12 @@ import {
 } from "@chakra-ui/react";
 
 import {
+  IconAdjustmentsHorizontal,
   IconBooks,
   IconBrain,
   IconChevronDown,
   IconCloudDownload,
-  IconDatabase,
   IconFolder,
-  IconFolderPlus,
   IconPlus,
   IconSearch,
 } from "@tabler/icons-react";
@@ -158,51 +157,14 @@ export const LeftNav: React.FC<LeftNavProps> = ({
 
       {isIelts && (
         <HStack display={["none", "none", "flex"]} spacing="3">
-          <Menu
-            placement="bottom-start"
-            isOpen={menuOpen}
-            onOpen={() => setMenuOpen(true)}
-            onClose={() => setMenuOpen(false)}
+          <Button
+            fontWeight={700}
+            fontSize="sm"
+            leftIcon={<IconAdjustmentsHorizontal size={17} />}
+            onClick={() => menuEventChannel.emit("openIeltsManage")}
           >
-            <MenuButton>
-              <Button
-                fontWeight={700}
-                fontSize="sm"
-                rightIcon={
-                  <IconChevronDown
-                    style={{
-                      transition: "rotate ease-in-out 200ms",
-                      rotate: menuOpen ? "180deg" : "0deg",
-                    }}
-                  />
-                }
-                as="div"
-              >
-                Create
-              </Button>
-            </MenuButton>
-            <CommandDropdownList minW="320px">
-              <CommandDropdownItem
-                icon={<IconPlus size={20} />}
-                label="Add IELTS Test (4 Skills)"
-                description="Create or import Reading, Listening, Writing & Speaking"
-                onClick={() => menuEventChannel.emit("openIeltsAddTest")}
-              />
-              <CommandDropdownItem
-                icon={<IconDatabase size={20} />}
-                label="Test Bank"
-                description="Manage & edit built-in and custom IELTS tests"
-                onClick={() => menuEventChannel.emit("openIeltsTestBank")}
-              />
-              <CommandDropdownDivider />
-              <CommandDropdownItem
-                icon={<IconFolderPlus size={20} />}
-                label="New Collection"
-                description="Group IELTS tests into a custom collection"
-                onClick={() => menuEventChannel.emit("openIeltsNewCollection")}
-              />
-            </CommandDropdownList>
-          </Menu>
+            Manage
+          </Button>
 
           <InputGroup size="sm" w={{ md: "220px", lg: "260px" }}>
             <InputLeftElement pointerEvents="none" color="gray.400">

@@ -135,3 +135,11 @@ export function deleteWritingExam(id: string): boolean {
     return false;
   }
 }
+
+export function restoreDefaultWritingExams(): void {
+  try {
+    localStorage.removeItem('ielts_writing_exams_deleted');
+  } catch (err) {
+    console.error('Failed to restore default writing exams', err);
+  }
+}

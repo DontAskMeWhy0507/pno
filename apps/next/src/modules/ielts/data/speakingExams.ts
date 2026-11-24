@@ -135,3 +135,11 @@ export function deleteSpeakingExam(id: string): boolean {
     return false;
   }
 }
+
+export function restoreDefaultSpeakingExams(): void {
+  try {
+    localStorage.removeItem('ielts_speaking_exams_deleted');
+  } catch (err) {
+    console.error('Failed to restore default speaking exams', err);
+  }
+}

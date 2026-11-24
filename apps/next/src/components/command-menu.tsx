@@ -210,6 +210,7 @@ export const CommandMenu: React.FC<CommandMenuProps> = ({
     (
       actionName: "add_test" | "test_bank" | "new_collection",
       eventName:
+        | "openIeltsManage"
         | "openIeltsAddTest"
         | "openIeltsTestBank"
         | "openIeltsNewCollection",
@@ -641,9 +642,9 @@ export const CommandMenu: React.FC<CommandMenuProps> = ({
       {
         id: "action:ielts-bank",
         icon: <IconDatabase />,
-        name: "IELTS Test Bank",
-        label: "Browse, export, clone & organize IELTS tests",
-        action: () => triggerIeltsAction("test_bank", "openIeltsTestBank"),
+        name: "Manage IELTS Library (CRUD)",
+        label: "Create, edit, rename, move & delete IELTS tests and collections",
+        action: () => triggerIeltsAction("test_bank", "openIeltsManage"),
       },
       {
         id: "action:ielts-col",

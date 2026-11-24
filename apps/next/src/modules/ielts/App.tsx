@@ -46,10 +46,6 @@ const ResultModal = dynamic(
   () => import('./components/exam/ResultModal').then((m) => m.ResultModal),
   { ssr: false }
 );
-const TestManager = dynamic(
-  () => import('./components/admin/TestManager').then((m) => m.TestManager),
-  { ssr: false }
-);
 const TestEditor = dynamic(
   () => import('./components/admin/TestEditor').then((m) => m.TestEditor),
   { ssr: false }
@@ -155,12 +151,13 @@ export function App() {
   const [isSubmitConfirmOpen, setIsSubmitConfirmOpen] = useState<boolean>(false);
   const [isLeaveExamModalOpen, setIsLeaveExamModalOpen] = useState<boolean>(false);
   const [isResultModalOpen, setIsResultModalOpen] = useState<boolean>(false);
-  const [isTestManagerOpen, setIsTestManagerOpen] = useState<boolean>(false);
   const [isSmartImportOpen, setIsSmartImportOpen] = useState<boolean>(false);
   const [smartImportCollection, setSmartImportCollection] = useState<string | undefined>(undefined);
   const [smartImportSkill, setSmartImportSkill] = useState<'reading' | 'listening' | 'writing' | 'speaking' | undefined>(undefined);
   const [isEditorOpen, setIsEditorOpen] = useState<boolean>(false);
   const [editingExam, setEditingExam] = useState<Exam | null>(null);
+  const [editorDefaultCollection, setEditorDefaultCollection] = useState<string | undefined>(undefined);
+  const [editorDefaultSkill, setEditorDefaultSkill] = useState<'reading' | 'listening' | undefined>(undefined);
 
   const [isWritingEditorOpen, setIsWritingEditorOpen] = useState(false);
   const [editingWritingExam, setEditingWritingExam] = useState<WritingExam | null>(null);
@@ -177,7 +174,11 @@ export function App() {
   const upsertExamMutation = api.ielts.upsertExam.useMutation();
   const deleteExamMutation = api.ielts.deleteExam.useMutation();
   const upsertCollectionMutation = api.ielts.upsertCollection.useMutation();
+  const renameCollectionMutation = api.ielts.renameCollection.useMutation();
   const deleteCollectionMutation = api.ielts.deleteCollection.useMutation();
+  const bulkDeleteExamsMutation = api.ielts.bulkDeleteExams.useMutation();
+  const bulkMoveExamsMutation = api.ielts.bulkMoveExams.useMutation();
+  const restoreDefaultsMutation = api.ielts.restoreDefaults.useMutation();
   const saveProgressMutation = api.ielts.saveProgress.useMutation();
   const clearProgressMutation = api.ielts.clearProgress.useMutation();
   const recordAttemptMutation = api.ielts.recordAttempt.useMutation();
@@ -374,8 +375,8 @@ export function App() {
       setCurrentView('home');
       if (wasInExamRoom && !s.isCompleted && !s.isReviewMode) {
         toast({
-          title: 'Đã lưu tiến độ làm bài',
-          description: 'Bài làm của bạn được lưu nền và có thể xem lại trong tab History.',
+          title: 'Progress saved',
+          description: 'Your session is auto-saved and can be resumed in the History tab.',
           status: 'success',
           duration: 2800,
           isClosable: true,
@@ -500,13 +501,9 @@ export function App() {
       const pending = sessionStorage.getItem('pno_pending_ielts_action');
       if (!pending) return;
       sessionStorage.removeItem('pno_pending_ielts_action');
-      if (pending === 'add_test') {
-        setIsSmartImportOpen(true);
-      } else if (pending === 'test_bank') {
-        setIsTestManagerOpen(true);
-      } else if (pending === 'new_collection') {
+      if (pending === 'add_test' || pending === 'test_bank' || pending === 'new_collection') {
         window.setTimeout(() => {
-          menuEventChannel.emit('openIeltsNewCollection');
+          menuEventChannel.emit('openIeltsManage');
         }, 100);
       }
     } catch {}
@@ -878,7 +875,7 @@ export function App() {
     const candidate = getAllExams().find((ex) => ex.id === attempt.examId);
     if (!candidate) {
       toast({
-        title: 'Không tìm thấy đề thi này',
+        title: 'Test not found',
         status: 'error',
         duration: 2500,
         isClosable: true,
@@ -915,8 +912,8 @@ export function App() {
       navigateExam(slicedExam, partNumber);
     } catch (err) {
       toast({
-        title: 'Không thể mở chi tiết lượt làm',
-        description: err instanceof Error ? err.message : 'Vui lòng thử lại.',
+        title: 'Unable to open attempt review',
+        description: err instanceof Error ? err.message : 'Please try again.',
         status: 'error',
         duration: 3000,
         isClosable: true,
@@ -926,9 +923,15 @@ export function App() {
     }
   };
 
-  const handleOpenExamEditor = async (examToEdit?: Exam | null) => {
+  const handleOpenExamEditor = async (
+    examToEdit?: Exam | null,
+    defaultCollection?: string,
+    defaultSkill?: 'reading' | 'listening'
+  ) => {
     if (!examToEdit) {
       setEditingExam(null);
+      setEditorDefaultCollection(defaultCollection);
+      setEditorDefaultSkill(defaultSkill);
       setIsEditorOpen(true);
       return;
     }
@@ -936,6 +939,8 @@ export function App() {
     try {
       const fullExam = (await loadFullExam(examToEdit)) ?? examToEdit;
       setEditingExam(fullExam);
+      setEditorDefaultCollection(undefined);
+      setEditorDefaultSkill(undefined);
       setIsEditorOpen(true);
     } catch {
       toast({
@@ -960,6 +965,8 @@ export function App() {
     );
     setIsEditorOpen(false);
     setEditingExam(null);
+    setEditorDefaultCollection(undefined);
+    setEditorDefaultSkill(undefined);
     handleRefreshExams();
     if (savedExam.id === currentExam.id) {
       setCurrentExam(savedExam);
@@ -1031,8 +1038,9 @@ export function App() {
                 recentAttempts={recentAttempts}
                 syncStatus={syncStatus}
                 onSelectExam={(exam, options) => void handleStartExam(exam, options)}
-                onOpenEditor={(examToEdit) => void handleOpenExamEditor(examToEdit)}
-                onOpenTestManager={() => setIsTestManagerOpen(true)}
+                onOpenEditor={(examToEdit, defaultCol, defaultSkill) =>
+                  void handleOpenExamEditor(examToEdit, defaultCol, defaultSkill)
+                }
                 onOpenSmartImport={(collection, skill) => {
                   setSmartImportCollection(collection);
                   setSmartImportSkill(skill);
@@ -1054,8 +1062,20 @@ export function App() {
                     description: col.description,
                   });
                 }}
+                onCloudRenameCollection={(payload) => {
+                  renameCollectionMutation.mutate(payload);
+                }}
                 onCloudDeleteCollection={(name, examsToTombstone) => {
                   deleteCollectionMutation.mutate({ name, examsToTombstone });
+                }}
+                onCloudBulkDeleteExams={(items) => {
+                  bulkDeleteExamsMutation.mutate({ items });
+                }}
+                onCloudBulkMoveExams={(targetCollection, items) => {
+                  bulkMoveExamsMutation.mutate({ targetCollection, items });
+                }}
+                onCloudRestoreDefaults={() => {
+                  restoreDefaultsMutation.mutate();
                 }}
                 onCloudClearProgress={cloudClearProgress}
               />
@@ -1139,7 +1159,10 @@ export function App() {
             elapsedSeconds={elapsedSeconds}
             isPaused={isPaused}
             onTogglePause={() => setIsPaused((prev) => !prev)}
-            onOpenTestManager={() => setIsTestManagerOpen(true)}
+            onOpenTestManager={() => {
+              navigateHome();
+              window.setTimeout(() => menuEventChannel.emit('openIeltsManage'), 50);
+            }}
             onBackToHome={navigateHome}
             fontSize={fontSize}
             onChangeFontSize={handleUpdateFontSize}
@@ -1442,7 +1465,7 @@ export function App() {
           onOpenTestManager={() => {
             setIsResultModalOpen(false);
             navigateHome();
-            setIsTestManagerOpen(true);
+            window.setTimeout(() => menuEventChannel.emit('openIeltsManage'), 50);
           }}
         />
       )}
@@ -1530,47 +1553,18 @@ export function App() {
         />
       )}
 
-      {isTestManagerOpen && (
-        <TestManager
-          isOpen={isTestManagerOpen}
-          onClose={() => setIsTestManagerOpen(false)}
-          onSelectExam={(exam) => {
-            void handleStartExam(exam);
-            setIsTestManagerOpen(false);
-          }}
-          onOpenEditor={(examToEdit) => void handleOpenExamEditor(examToEdit)}
-          onOpenSmartImport={() => {
-            setIsTestManagerOpen(false);
-            setIsSmartImportOpen(true);
-          }}
-          onExamsMutated={handleRefreshExams}
-          onCloudSaveExam={(ex) =>
-            cloudSyncExam(
-              getExamSkillLabel(ex),
-              ex.id,
-              ex.title,
-              ex.collection || 'My Tests',
-              ex as unknown as Record<string, unknown>
-            )
-          }
-          onCloudDeleteExam={(ex) => cloudDeleteExam(getExamSkillLabel(ex), ex.id)}
-          onCloudCreateCollection={(col) =>
-            upsertCollectionMutation.mutate({
-              name: col.name,
-              description: col.description,
-            })
-          }
-        />
-      )}
-
       {isEditorOpen && (
         <TestEditor
-          key={editingExam?.id || 'new-exam'}
+          key={editingExam?.id || `new-exam-${editorDefaultSkill || 'reading'}`}
           initialExam={editingExam}
+          defaultCollection={editorDefaultCollection}
+          defaultSkill={editorDefaultSkill}
           onSave={handleSaveExamFromEditor}
           onCancel={() => {
             setIsEditorOpen(false);
             setEditingExam(null);
+            setEditorDefaultCollection(undefined);
+            setEditorDefaultSkill(undefined);
           }}
         />
       )}

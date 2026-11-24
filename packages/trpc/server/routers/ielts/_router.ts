@@ -234,6 +234,216 @@ export const ieltsRouter = createTRPCRouter({
       return { success: true };
     }),
 
+  renameCollection: protectedProcedure
+    .input(
+      z.object({
+        oldName: z.string().min(1).max(120),
+        newName: z.string().min(1).max(120),
+        description: z.string().max(500).optional(),
+        movedExams: z.array(ZExamInput).max(200).default([]),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const userId = ctx.session.user.id;
+      const oldTrim = input.oldName.trim();
+      const newTrim = input.newName.trim();
+
+      await ctx.prisma.$transaction(async (tx) => {
+        if (oldTrim.toLowerCase() !== newTrim.toLowerCase()) {
+          await tx.ieltsCollection.upsert({
+            where: {
+              userId_name: {
+                userId,
+                name: oldTrim,
+              },
+            },
+            create: {
+              userId,
+              name: oldTrim,
+              deleted: true,
+            },
+            update: {
+              deleted: true,
+            },
+          });
+        }
+
+        await tx.ieltsCollection.upsert({
+          where: {
+            userId_name: {
+              userId,
+              name: newTrim,
+            },
+          },
+          create: {
+            userId,
+            name: newTrim,
+            description: input.description,
+            deleted: false,
+          },
+          update: {
+            description: input.description,
+            deleted: false,
+          },
+        });
+
+        for (const ex of input.movedExams) {
+          await tx.ieltsCustomExam.upsert({
+            where: {
+              userId_examId_skill: {
+                userId,
+                examId: ex.examId,
+                skill: ex.skill,
+              },
+            },
+            create: {
+              userId,
+              examId: ex.examId,
+              skill: ex.skill,
+              title: ex.title,
+              collection: newTrim,
+              data: ex.data as Prisma.InputJsonValue,
+              deleted: false,
+            },
+            update: {
+              title: ex.title,
+              collection: newTrim,
+              data: ex.data as Prisma.InputJsonValue,
+              deleted: false,
+            },
+          });
+        }
+      });
+
+      return { success: true };
+    }),
+
+  bulkDeleteExams: protectedProcedure
+    .input(
+      z.object({
+        items: z
+          .array(
+            z.object({
+              examId: z.string().min(1).max(191),
+              skill: ZSkill,
+            }),
+          )
+          .min(1)
+          .max(200),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const userId = ctx.session.user.id;
+
+      await ctx.prisma.$transaction(async (tx) => {
+        for (const item of input.items) {
+          await tx.ieltsCustomExam.upsert({
+            where: {
+              userId_examId_skill: {
+                userId,
+                examId: item.examId,
+                skill: item.skill,
+              },
+            },
+            create: {
+              userId,
+              examId: item.examId,
+              skill: item.skill,
+              title: item.examId,
+              collection: "Deleted",
+              data: {},
+              deleted: true,
+            },
+            update: {
+              deleted: true,
+            },
+          });
+          await tx.ieltsProgress.deleteMany({
+            where: {
+              userId,
+              examId: item.examId,
+              skill: item.skill,
+            },
+          });
+        }
+      });
+
+      return { success: true };
+    }),
+
+  bulkMoveExams: protectedProcedure
+    .input(
+      z.object({
+        targetCollection: z.string().min(1).max(120),
+        items: z.array(ZExamInput).min(1).max(200),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const userId = ctx.session.user.id;
+      const targetCol = input.targetCollection.trim();
+
+      await ctx.prisma.$transaction(async (tx) => {
+        await tx.ieltsCollection.upsert({
+          where: {
+            userId_name: {
+              userId,
+              name: targetCol,
+            },
+          },
+          create: {
+            userId,
+            name: targetCol,
+            deleted: false,
+          },
+          update: {
+            deleted: false,
+          },
+        });
+
+        for (const ex of input.items) {
+          await tx.ieltsCustomExam.upsert({
+            where: {
+              userId_examId_skill: {
+                userId,
+                examId: ex.examId,
+                skill: ex.skill,
+              },
+            },
+            create: {
+              userId,
+              examId: ex.examId,
+              skill: ex.skill,
+              title: ex.title,
+              collection: targetCol,
+              data: ex.data as Prisma.InputJsonValue,
+              deleted: false,
+            },
+            update: {
+              title: ex.title,
+              collection: targetCol,
+              data: ex.data as Prisma.InputJsonValue,
+              deleted: false,
+            },
+          });
+        }
+      });
+
+      return { success: true };
+    }),
+
+  restoreDefaults: protectedProcedure.mutation(async ({ ctx }) => {
+    const userId = ctx.session.user.id;
+    await ctx.prisma.$transaction(async (tx) => {
+      await tx.ieltsCollection.deleteMany({
+        where: { userId, deleted: true },
+      });
+      await tx.ieltsCustomExam.deleteMany({
+        where: { userId, deleted: true },
+      });
+    });
+    return { success: true };
+  }),
+
   saveProgress: protectedProcedure
     .input(ZProgressInput)
     .mutation(async ({ ctx, input }) => {

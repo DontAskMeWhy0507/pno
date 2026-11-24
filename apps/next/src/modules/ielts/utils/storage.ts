@@ -404,6 +404,53 @@ export function deleteCollection(collectionName: string, deleteContainedExams = 
   }
 }
 
+export function renameCollection(
+  oldName: string,
+  newName: string,
+  description?: string
+): { id: string; name: string; description?: string } {
+  const oldTrim = oldName.trim();
+  const newTrim = newName.trim();
+  if (!newTrim) throw new Error('Collection name cannot be empty.');
+
+  const deletedSet = getDeletedCollections();
+  if (oldTrim.toLowerCase() !== newTrim.toLowerCase()) {
+    deletedSet.add(oldTrim.toLowerCase());
+  }
+  deletedSet.delete(newTrim.toLowerCase());
+  saveDeletedCollections(deletedSet);
+
+  const id = 'col_' + newTrim.replace(/[^a-z0-9]/gi, '_').toLowerCase();
+  const updatedCol = {
+    id,
+    name: newTrim,
+    description: description?.trim() || `${newTrim} Collection`,
+  };
+
+  try {
+    const list = getCustomCollections().filter(
+      (c) =>
+        c.name.toLowerCase() !== oldTrim.toLowerCase() &&
+        c.name.toLowerCase() !== newTrim.toLowerCase()
+    );
+    list.push(updatedCol);
+    localStorage.setItem(STORAGE_KEY_COLLECTIONS, JSON.stringify(list));
+  } catch (err) {
+    console.error('Failed to rename collection', err);
+  }
+
+  return updatedCol;
+}
+
+export function restoreDefaultExamsAndCollections(): void {
+  try {
+    localStorage.removeItem(STORAGE_KEY_DELETED);
+    localStorage.removeItem(STORAGE_KEY_DELETED_COLLECTIONS);
+  } catch (err) {
+    console.error('Failed to restore default exams and collections', err);
+  }
+}
+
 export function replaceLocalExamsAndCollections(params: {
   customExams: Exam[];
   deletedExamIds: string[];

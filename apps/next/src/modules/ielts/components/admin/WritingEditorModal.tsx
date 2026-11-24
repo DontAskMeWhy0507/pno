@@ -19,6 +19,7 @@ import { uploadMediaFile } from '../../utils/mediaUploader';
 interface WritingEditorModalProps {
   isOpen: boolean;
   initialExam?: WritingExam | null;
+  defaultCollection?: string;
   onClose: () => void;
   onSave: (exam: WritingExam) => void;
 }
@@ -26,6 +27,7 @@ interface WritingEditorModalProps {
 export const WritingEditorModal: FC<WritingEditorModalProps> = ({
   isOpen,
   initialExam,
+  defaultCollection,
   onClose,
   onSave,
 }) => {
@@ -36,7 +38,7 @@ export const WritingEditorModal: FC<WritingEditorModalProps> = ({
   const [isUploadingImage, setIsUploadingImage] = useState(false);
 
   const [title, setTitle] = useState(initialExam?.title || 'NEW IELTS WRITING TEST');
-  const [collection, setCollection] = useState(initialExam?.collection || 'My Tests');
+  const [collection, setCollection] = useState(initialExam?.collection || defaultCollection || 'My Tests');
   const [durationMinutes, setDurationMinutes] = useState(initialExam?.durationMinutes || 60);
 
   // Task 1 State
@@ -163,21 +165,21 @@ export const WritingEditorModal: FC<WritingEditorModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4 select-text font-sans">
-      <div className="bg-white rounded-2xl shadow-2xl max-w-4xl w-full max-h-[90vh] flex flex-col overflow-hidden border-2 border-gray-200 animate-in fade-in zoom-in-95">
+      <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl max-w-4xl w-full max-h-[90vh] flex flex-col overflow-hidden border-2 border-gray-200 dark:border-gray-700 animate-in fade-in zoom-in-95">
         {/* Header — PNO Quiz Modal Header Style */}
-        <div className="min-h-16 py-3 bg-white border-b-2 border-gray-200 px-6 flex items-center justify-between shrink-0">
+        <div className="min-h-16 py-3 bg-white dark:bg-gray-800 border-b-2 border-gray-200 dark:border-gray-700 px-6 flex items-center justify-between shrink-0">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-blue-600 text-white flex items-center justify-center shadow-xs">
               <PenTool className="w-5 h-5" />
             </div>
             <div>
               <h2
-                className="text-lg font-extrabold text-gray-900 leading-tight"
+                className="text-lg font-extrabold text-gray-900 dark:text-gray-100 leading-tight"
                 style={{ fontFamily: outfit.style.fontFamily }}
               >
                 {initialExam ? 'Edit Writing Test' : 'Create Writing Practice Test'}
               </h2>
-              <span className="text-xs font-medium text-gray-500">
+              <span className="text-xs font-medium text-gray-500 dark:text-gray-400">
                 Official 2-Task Academic Writing Room (60 Mins)
               </span>
             </div>
@@ -186,7 +188,7 @@ export const WritingEditorModal: FC<WritingEditorModalProps> = ({
           <div className="flex items-center gap-2">
             <button
               onClick={onClose}
-              className="px-4 py-2 text-xs font-bold text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-xl border-2 border-gray-200 transition"
+              className="px-4 py-2 text-xs font-bold text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-xl border-2 border-gray-200 dark:border-gray-700 transition"
             >
               Cancel
             </button>
@@ -201,14 +203,14 @@ export const WritingEditorModal: FC<WritingEditorModalProps> = ({
         </div>
 
         {/* Tabs — PNO Soft-Rounded Pill Tabs */}
-        <div className="bg-slate-50/70 border-b-2 border-gray-200 px-6 py-2.5 flex items-center shrink-0 select-none">
-          <div className="flex items-center gap-1 bg-gray-100 p-1 rounded-xl border-2 border-gray-200">
+        <div className="bg-slate-50/70 border-b-2 border-gray-200 dark:border-gray-700 px-6 py-2.5 flex items-center shrink-0 select-none">
+          <div className="flex items-center gap-1 bg-gray-100 dark:bg-gray-700 p-1 rounded-xl border-2 border-gray-200 dark:border-gray-700">
             <button
               onClick={() => setActiveTab('info')}
               className={`py-1.5 px-3.5 text-xs font-bold rounded-lg transition ${
                 activeTab === 'info'
                   ? 'bg-blue-600 text-white shadow-2xs'
-                  : 'text-gray-600 hover:text-gray-900'
+                  : 'text-gray-600 dark:text-gray-400 hover:text-gray-900'
               }`}
             >
               General Info
@@ -218,7 +220,7 @@ export const WritingEditorModal: FC<WritingEditorModalProps> = ({
               className={`py-1.5 px-3.5 text-xs font-bold rounded-lg transition flex items-center gap-1.5 ${
                 activeTab === 'task1'
                   ? 'bg-blue-600 text-white shadow-2xs'
-                  : 'text-gray-600 hover:text-gray-900'
+                  : 'text-gray-600 dark:text-gray-400 hover:text-gray-900'
               }`}
             >
               <PenTool className="w-3.5 h-3.5" />
@@ -229,7 +231,7 @@ export const WritingEditorModal: FC<WritingEditorModalProps> = ({
               className={`py-1.5 px-3.5 text-xs font-bold rounded-lg transition flex items-center gap-1.5 ${
                 activeTab === 'task2'
                   ? 'bg-blue-600 text-white shadow-2xs'
-                  : 'text-gray-600 hover:text-gray-900'
+                  : 'text-gray-600 dark:text-gray-400 hover:text-gray-900'
               }`}
             >
               <PenTool className="w-3.5 h-3.5" />
@@ -242,9 +244,9 @@ export const WritingEditorModal: FC<WritingEditorModalProps> = ({
         <div className="flex-1 overflow-y-auto p-6 space-y-6">
           {/* TAB 1: General Info */}
           {activeTab === 'info' && (
-            <div className="bg-white rounded-xl border border-gray-200 p-6 space-y-5 shadow-xs">
+            <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-6 space-y-5 shadow-xs">
               <div>
-                <label className="block text-xs font-bold text-gray-700 uppercase mb-1">
+                <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 uppercase mb-1">
                   Test Title *
                 </label>
                 <input
@@ -252,20 +254,20 @@ export const WritingEditorModal: FC<WritingEditorModalProps> = ({
                   value={title}
                   onChange={(e) => setTitle(e.target.value)}
                   placeholder="e.g. CAMBRIDGE 18 ACADEMIC WRITING TEST 1"
-                  className="w-full px-3 py-2 text-sm border rounded-lg border-gray-300 focus:outline-none focus:ring-2 focus:ring-emerald-600 font-medium"
+                  className="w-full px-3 py-2 text-sm border rounded-lg border-gray-300 dark:border-gray-600 focus:outline-none focus:ring-2 focus:ring-emerald-600 font-medium"
                 />
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-xs font-bold text-gray-700 uppercase mb-1 flex items-center gap-1">
+                  <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 uppercase mb-1 flex items-center gap-1">
                     <Folder className="w-3.5 h-3.5 text-emerald-600" />
                     <span>Collection Folder</span>
                   </label>
                   <select
                     value={collection}
                     onChange={(e) => setCollection(e.target.value)}
-                    className="w-full px-3 py-2 text-sm border rounded-lg border-gray-300 focus:outline-none focus:ring-2 focus:ring-emerald-600 bg-white font-medium"
+                    className="w-full px-3 py-2 text-sm border rounded-lg border-gray-300 dark:border-gray-600 focus:outline-none focus:ring-2 focus:ring-emerald-600 bg-white dark:bg-gray-800 font-medium"
                   >
                     {collections.map((c) => (
                       <option key={c.id} value={c.name}>
@@ -276,7 +278,7 @@ export const WritingEditorModal: FC<WritingEditorModalProps> = ({
                 </div>
 
                 <div>
-                  <label className="block text-xs font-bold text-gray-700 uppercase mb-1 flex items-center gap-1">
+                  <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 uppercase mb-1 flex items-center gap-1">
                     <Clock className="w-3.5 h-3.5 text-emerald-600" />
                     <span>Total Duration (Minutes)</span>
                   </label>
@@ -284,7 +286,7 @@ export const WritingEditorModal: FC<WritingEditorModalProps> = ({
                     type="number"
                     value={durationMinutes}
                     onChange={(e) => setDurationMinutes(parseInt(e.target.value) || 60)}
-                    className="w-full px-3 py-2 text-sm border rounded-lg border-gray-300 focus:outline-none focus:ring-2 focus:ring-emerald-600 font-medium"
+                    className="w-full px-3 py-2 text-sm border rounded-lg border-gray-300 dark:border-gray-600 focus:outline-none focus:ring-2 focus:ring-emerald-600 font-medium"
                   />
                 </div>
               </div>
@@ -293,10 +295,10 @@ export const WritingEditorModal: FC<WritingEditorModalProps> = ({
 
           {/* TAB 2: Task 1 */}
           {activeTab === 'task1' && (
-            <div className="bg-white rounded-xl border border-gray-200 p-6 space-y-5 shadow-xs">
+            <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-6 space-y-5 shadow-xs">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-xs font-bold text-gray-700 uppercase mb-1">
+                  <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 uppercase mb-1">
                     Task 1 Subtitle / Header
                   </label>
                   <input
@@ -304,18 +306,18 @@ export const WritingEditorModal: FC<WritingEditorModalProps> = ({
                     value={task1Title}
                     onChange={(e) => setTask1Title(e.target.value)}
                     placeholder="e.g. Academic Task 1: Bar Chart"
-                    className="w-full px-3 py-2 text-sm border rounded-lg border-gray-300 focus:ring-2 focus:ring-emerald-600 font-medium"
+                    className="w-full px-3 py-2 text-sm border rounded-lg border-gray-300 dark:border-gray-600 focus:ring-2 focus:ring-emerald-600 font-medium"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-xs font-bold text-gray-700 uppercase mb-1">
+                  <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 uppercase mb-1">
                     Visual Diagram Type
                   </label>
                   <select
                     value={task1ChartType}
                     onChange={(e) => setTask1ChartType(e.target.value as any)}
-                    className="w-full px-3 py-2 text-sm border rounded-lg border-gray-300 focus:ring-2 focus:ring-emerald-600 bg-white font-medium"
+                    className="w-full px-3 py-2 text-sm border rounded-lg border-gray-300 dark:border-gray-600 focus:ring-2 focus:ring-emerald-600 bg-white dark:bg-gray-800 font-medium"
                   >
                     <option value="bar">Bar Chart</option>
                     <option value="line">Line Graph</option>
@@ -330,8 +332,8 @@ export const WritingEditorModal: FC<WritingEditorModalProps> = ({
 
               {/* Chart / Graph Image Uploader */}
               {task1ChartType !== 'none' && (
-                <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl space-y-3">
-                  <span className="text-xs font-bold text-gray-700 uppercase flex items-center gap-1.5">
+                <div className="p-4 bg-slate-50 dark:bg-gray-900 border border-slate-200 dark:border-gray-700 rounded-xl space-y-3">
+                  <span className="text-xs font-bold text-gray-700 dark:text-gray-300 uppercase flex items-center gap-1.5">
                     <ImageIcon className="w-4 h-4 text-emerald-600" />
                     <span>Task 1 Visual Image (Graph / Chart / Diagram)</span>
                   </span>
@@ -342,7 +344,7 @@ export const WritingEditorModal: FC<WritingEditorModalProps> = ({
                       value={task1ImageUrl}
                       onChange={(e) => setTask1ImageUrl(e.target.value)}
                       placeholder="Paste image URL or choose file from your device..."
-                      className="flex-1 px-3 py-2 text-xs border rounded-lg border-gray-300 focus:ring-2 focus:ring-emerald-600 font-mono"
+                      className="flex-1 px-3 py-2 text-xs border rounded-lg border-gray-300 dark:border-gray-600 focus:ring-2 focus:ring-emerald-600 font-mono"
                     />
 
                     <input
@@ -356,7 +358,7 @@ export const WritingEditorModal: FC<WritingEditorModalProps> = ({
                       type="button"
                       disabled={isUploadingImage}
                       onClick={() => fileInputRef.current?.click()}
-                      className="px-3.5 py-2 text-xs font-bold text-slate-700 bg-white hover:bg-slate-100 disabled:opacity-50 rounded-lg border border-slate-300 transition flex items-center justify-center gap-1.5 shrink-0 shadow-2xs"
+                      className="px-3.5 py-2 text-xs font-bold text-slate-700 bg-white dark:bg-gray-800 hover:bg-slate-100 dark:hover:bg-gray-700 disabled:opacity-50 rounded-lg border border-slate-300 transition flex items-center justify-center gap-1.5 shrink-0 shadow-2xs"
                     >
                       {isUploadingImage ? (
                         <>
@@ -373,8 +375,8 @@ export const WritingEditorModal: FC<WritingEditorModalProps> = ({
                   </div>
 
                   {task1ImageUrl && (
-                    <div className="p-3 bg-white border border-gray-200 rounded-lg space-y-2">
-                      <div className="flex items-center justify-between text-xs font-bold text-gray-700">
+                    <div className="p-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg space-y-2">
+                      <div className="flex items-center justify-between text-xs font-bold text-gray-700 dark:text-gray-300">
                         <span>Image Preview</span>
                         <button
                           type="button"
@@ -385,7 +387,7 @@ export const WritingEditorModal: FC<WritingEditorModalProps> = ({
                           <span>Remove image</span>
                         </button>
                       </div>
-                      <div className="max-h-60 overflow-auto border rounded bg-slate-100 p-2 flex justify-center">
+                      <div className="max-h-60 overflow-auto border rounded bg-slate-100 dark:bg-gray-800 p-2 flex justify-center">
                         <img
                           src={task1ImageUrl}
                           alt="Task 1 preview"
@@ -398,7 +400,7 @@ export const WritingEditorModal: FC<WritingEditorModalProps> = ({
               )}
 
               <div>
-                <label className="block text-xs font-bold text-gray-700 uppercase mb-1">
+                <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 uppercase mb-1">
                   Task 1 Prompt & Instructions *
                 </label>
                 <textarea
@@ -406,12 +408,12 @@ export const WritingEditorModal: FC<WritingEditorModalProps> = ({
                   onChange={(e) => setTask1Prompt(e.target.value)}
                   rows={6}
                   placeholder="Enter the official Task 1 prompt and instructions..."
-                  className="w-full px-3 py-2 text-sm border rounded-lg border-gray-300 focus:ring-2 focus:ring-emerald-600 font-normal leading-relaxed"
+                  className="w-full px-3 py-2 text-sm border rounded-lg border-gray-300 dark:border-gray-600 focus:ring-2 focus:ring-emerald-600 font-normal leading-relaxed"
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-gray-700 uppercase mb-1 flex items-center gap-1">
+                <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 uppercase mb-1 flex items-center gap-1">
                   <Sparkles className="w-3.5 h-3.5 text-amber-600" />
                   <span>Band 8.5–9.0 Model Sample Answer (Optional)</span>
                 </label>
@@ -420,7 +422,7 @@ export const WritingEditorModal: FC<WritingEditorModalProps> = ({
                   onChange={(e) => setTask1SampleAnswer(e.target.value)}
                   rows={6}
                   placeholder="Optional: Provide a high-band sample report so test takers can learn and compare..."
-                  className="w-full px-3 py-2 text-xs border rounded-lg border-gray-300 focus:ring-2 focus:ring-emerald-600 font-mono leading-relaxed"
+                  className="w-full px-3 py-2 text-xs border rounded-lg border-gray-300 dark:border-gray-600 focus:ring-2 focus:ring-emerald-600 font-mono leading-relaxed"
                 />
               </div>
             </div>
@@ -428,9 +430,9 @@ export const WritingEditorModal: FC<WritingEditorModalProps> = ({
 
           {/* TAB 3: Task 2 */}
           {activeTab === 'task2' && (
-            <div className="bg-white rounded-xl border border-gray-200 p-6 space-y-5 shadow-xs">
+            <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-6 space-y-5 shadow-xs">
               <div>
-                <label className="block text-xs font-bold text-gray-700 uppercase mb-1">
+                <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 uppercase mb-1">
                   Task 2 Subtitle / Topic
                 </label>
                 <input
@@ -438,12 +440,12 @@ export const WritingEditorModal: FC<WritingEditorModalProps> = ({
                   value={task2Title}
                   onChange={(e) => setTask2Title(e.target.value)}
                   placeholder="e.g. Academic Task 2: Higher Education Tuition"
-                  className="w-full px-3 py-2 text-sm border rounded-lg border-gray-300 focus:ring-2 focus:ring-emerald-600 font-medium"
+                  className="w-full px-3 py-2 text-sm border rounded-lg border-gray-300 dark:border-gray-600 focus:ring-2 focus:ring-emerald-600 font-medium"
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-gray-700 uppercase mb-1">
+                <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 uppercase mb-1">
                   Task 2 Prompt & Essay Question *
                 </label>
                 <textarea
@@ -451,12 +453,12 @@ export const WritingEditorModal: FC<WritingEditorModalProps> = ({
                   onChange={(e) => setTask2Prompt(e.target.value)}
                   rows={8}
                   placeholder="Enter the full essay prompt and instructions..."
-                  className="w-full px-3 py-2 text-sm border rounded-lg border-gray-300 focus:ring-2 focus:ring-emerald-600 font-normal leading-relaxed"
+                  className="w-full px-3 py-2 text-sm border rounded-lg border-gray-300 dark:border-gray-600 focus:ring-2 focus:ring-emerald-600 font-normal leading-relaxed"
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-gray-700 uppercase mb-1 flex items-center gap-1">
+                <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 uppercase mb-1 flex items-center gap-1">
                   <Sparkles className="w-3.5 h-3.5 text-amber-600" />
                   <span>Band 8.5–9.0 Model Essay (Optional)</span>
                 </label>
@@ -465,7 +467,7 @@ export const WritingEditorModal: FC<WritingEditorModalProps> = ({
                   onChange={(e) => setTask2SampleAnswer(e.target.value)}
                   rows={8}
                   placeholder="Optional: Provide a high-scoring sample essay..."
-                  className="w-full px-3 py-2 text-xs border rounded-lg border-gray-300 focus:ring-2 focus:ring-emerald-600 font-mono leading-relaxed"
+                  className="w-full px-3 py-2 text-xs border rounded-lg border-gray-300 dark:border-gray-600 focus:ring-2 focus:ring-emerald-600 font-mono leading-relaxed"
                 />
               </div>
             </div>

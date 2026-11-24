@@ -35,7 +35,6 @@ import {
   IconBulb,
   IconCheck,
   IconClock,
-  IconEdit,
   IconEye,
   IconHeadphones,
   IconListDetails,
@@ -85,7 +84,6 @@ interface TestDetailViewProps {
   onDiscardSpeaking: (examId: string, title: string) => void;
   onViewAttemptDetail: (attempt: CloudAttemptRow, examTarget: DetailTarget) => void;
   onDeleteAttempt?: (attemptId: string) => void;
-  onOpenEditor?: () => void;
 }
 
 const QUESTION_TYPE_LABELS: Record<QuestionType, string> = {
@@ -105,12 +103,12 @@ function formatDurationClock(totalSeconds: number): string {
   return `${hrs}:${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
 }
 
-function formatDateVi(dateValue: Date | string): string {
+function formatDateEn(dateValue: Date | string): string {
   const d = new Date(dateValue);
   if (Number.isNaN(d.getTime())) return '';
-  return d.toLocaleDateString('vi-VN', {
+  return d.toLocaleDateString('en-US', {
+    month: 'short',
     day: '2-digit',
-    month: '2-digit',
     year: 'numeric',
   });
 }
@@ -129,7 +127,6 @@ export const TestDetailView: FC<TestDetailViewProps> = ({
   onDiscardSpeaking,
   onViewAttemptDetail,
   onDeleteAttempt,
-  onOpenEditor,
 }) => {
   const [fullExam, setFullExam] = useState<Exam | null>(
     target.kind === 'exam' && target.exam.parts?.length ? target.exam : null
@@ -274,7 +271,7 @@ export const TestDetailView: FC<TestDetailViewProps> = ({
       if (
         hasInProgress &&
         !window.confirm(
-          'Bạn đang có bài làm dở chưa nộp. Bắt đầu làm Full Test mới sẽ thay thế bản lưu dở hiện tại. Tiếp tục?'
+          'You have an unfinished session in progress. Starting a new Full Test will overwrite your saved draft. Continue?'
         )
       ) {
         return;
@@ -284,7 +281,7 @@ export const TestDetailView: FC<TestDetailViewProps> = ({
       if (
         hasInProgress &&
         !window.confirm(
-          'Bạn đang có bản nháp Writing dở. Bắt đầu lượt mới sẽ xoá bản nháp hiện tại. Tiếp tục?'
+          'You have an unfinished Writing draft. Starting a new attempt will clear your current draft. Continue?'
         )
       ) {
         return;
@@ -309,7 +306,7 @@ export const TestDetailView: FC<TestDetailViewProps> = ({
 
   return (
     <Stack spacing={5}>
-      {/* Top Back & Edit Row */}
+      {/* Top Back Row */}
       <Flex justify="space-between" align="center" flexWrap="wrap" gap={3}>
         <Button
           size="sm"
@@ -318,20 +315,8 @@ export const TestDetailView: FC<TestDetailViewProps> = ({
           leftIcon={<IconArrowLeft size={16} />}
           onClick={onBack}
         >
-          Quay lại
+          Back
         </Button>
-
-        {onOpenEditor && (
-          <Button
-            size="sm"
-            variant="outline"
-            rounded="xl"
-            leftIcon={<IconEdit size={16} />}
-            onClick={onOpenEditor}
-          >
-            Chỉnh sửa đề
-          </Button>
-        )}
       </Flex>
 
       {/* Main Study4-inspired Detail Card */}
@@ -378,14 +363,14 @@ export const TestDetailView: FC<TestDetailViewProps> = ({
                   rounded="full"
                   bg="green.500"
                   color="white"
-                  title={`Đã hoàn thành (${sortedAttempts.length} lượt)`}
+                  title={`Completed (${sortedAttempts.length} attempts)`}
                 >
                   <IconCheck size={14} stroke={3} />
                 </Flex>
               )}
             </HStack>
 
-            {/* Sub-tabs: Thông tin đề thi | Đáp án / Transcript */}
+            {/* Sub-tabs: Test Overview | Answers / Transcript */}
             {isExam && (
               <HStack spacing={2} pt={1}>
                 <Button
@@ -395,7 +380,7 @@ export const TestDetailView: FC<TestDetailViewProps> = ({
                   colorScheme={infoTab === 'info' ? 'blue' : 'gray'}
                   onClick={() => setInfoTab('info')}
                 >
-                  Thông tin đề thi
+                  Test Overview
                 </Button>
                 <Button
                   size="xs"
@@ -404,7 +389,7 @@ export const TestDetailView: FC<TestDetailViewProps> = ({
                   colorScheme={infoTab === 'answers' ? 'blue' : 'gray'}
                   onClick={() => setInfoTab('answers')}
                 >
-                  {isListen ? 'Đáp án / Transcript' : 'Đáp án đề thi'}
+                  {isListen ? 'Answer Key / Transcript' : 'Answer Key'}
                 </Button>
               </HStack>
             )}
@@ -415,23 +400,23 @@ export const TestDetailView: FC<TestDetailViewProps> = ({
                 <IconClock size={16} />
                 {isExam ? (
                   <Text>
-                    Thời gian làm bài: <strong>{durationMinutes} phút</strong> |{' '}
-                    <strong>{totalParts}</strong> {isListen ? 'phần thi' : 'bài đọc'} |{' '}
-                    <strong>{totalQuestions}</strong> câu hỏi
+                    Duration: <strong>{durationMinutes} min</strong> |{' '}
+                    <strong>{totalParts}</strong> {isListen ? 'sections' : 'passages'} |{' '}
+                    <strong>{totalQuestions}</strong> questions
                   </Text>
                 ) : target.kind === 'writing' ? (
                   <Text>
-                    Thời gian làm bài: <strong>{durationMinutes} phút</strong> | Task 1 (150+ từ) &amp; Task 2 (250+ từ)
+                    Duration: <strong>{durationMinutes} min</strong> | Task 1 (150+ words) &amp; Task 2 (250+ words)
                   </Text>
                 ) : (
                   <Text>
-                    3 Parts: Part 1 ({target.exam.part1Questions.length} câu) • Part 2 Cue Card • Part 3 ({target.exam.part3Questions.length} câu)
+                    3 Parts: Part 1 ({target.exam.part1Questions.length} Qs) • Part 2 Cue Card • Part 3 ({target.exam.part3Questions.length} Qs)
                   </Text>
                 )}
               </HStack>
               {isExam && (
                 <Text fontSize="xs" color="red.400" fontStyle="italic">
-                  Chú ý: để được quy đổi sang band điểm IELTS (thang 9.0), vui lòng chọn chế độ Làm Full Test.
+                  Note: To receive an official IELTS Band Score (0–9.0), please choose Full Test mode.
                 </Text>
               )}
             </Stack>
@@ -519,16 +504,16 @@ export const TestDetailView: FC<TestDetailViewProps> = ({
                       <HStack spacing={2}>
                         <Box w={2.5} h={2.5} rounded="full" bg="emerald.500" />
                         <Text fontWeight={700} fontSize="sm">
-                          Bạn đang làm dở bài này
+                          You have a session in progress
                         </Text>
                       </HStack>
                       <Text fontSize="xs" color={secondaryColor}>
                         {savedExam
-                          ? `Đã trả lời ${savedExam.answeredCount}/${totalQuestions} câu • Còn ${Math.ceil(savedExam.timeRemaining / 60)} phút`
+                          ? `Answered ${savedExam.answeredCount}/${totalQuestions} questions • ${Math.ceil(savedExam.timeRemaining / 60)} min left`
                           : savedWriting
-                            ? `Task 1: ${savedWriting.task1Words} từ • Task 2: ${savedWriting.task2Words} từ • Còn ${Math.ceil(savedWriting.timeRemaining / 60)} phút`
+                            ? `Task 1: ${savedWriting.task1Words} words • Task 2: ${savedWriting.task2Words} words • ${Math.ceil(savedWriting.timeRemaining / 60)} min left`
                             : savedSpeaking
-                              ? `Đang ở Part ${savedSpeaking.activePart}`
+                              ? `Currently on Part ${savedSpeaking.activePart}`
                               : ''}
                       </Text>
                     </Stack>
@@ -545,7 +530,7 @@ export const TestDetailView: FC<TestDetailViewProps> = ({
                           else onStartSpeaking(target.exam);
                         }}
                       >
-                        Tiếp tục làm bài
+                        Resume Test
                       </Button>
                       <Button
                         size="sm"
@@ -560,7 +545,7 @@ export const TestDetailView: FC<TestDetailViewProps> = ({
                           else onDiscardSpeaking(target.exam.id, target.exam.title);
                         }}
                       >
-                        Bỏ bản dở
+                        Discard Draft
                       </Button>
                     </HStack>
                   </Flex>
@@ -570,7 +555,7 @@ export const TestDetailView: FC<TestDetailViewProps> = ({
               {/* Results Table (Multiple Attempts) */}
               <Stack spacing={2.5}>
                 <Text fontWeight={700} fontSize="sm">
-                  Kết quả làm bài của bạn ({sortedAttempts.length} lượt):
+                  Your Attempt History ({sortedAttempts.length} {sortedAttempts.length === 1 ? 'attempt' : 'attempts'}):
                 </Text>
 
                 {sortedAttempts.length === 0 ? (
@@ -582,7 +567,7 @@ export const TestDetailView: FC<TestDetailViewProps> = ({
                     rounded="xl"
                   >
                     <Text fontSize="xs" color={secondaryColor}>
-                      Bạn chưa hoàn thành lượt nào cho đề này. Chọn chế độ bên dưới để bắt đầu.
+                      You have not completed any attempts for this test yet. Choose a mode below to begin.
                     </Text>
                   </Box>
                 ) : (
@@ -595,9 +580,9 @@ export const TestDetailView: FC<TestDetailViewProps> = ({
                     <Table size="sm" variant="simple">
                       <Thead bg={tableHeadBg}>
                         <Tr>
-                          <Th>Ngày làm</Th>
-                          <Th>Kết quả</Th>
-                          <Th>Thời gian làm bài</Th>
+                          <Th>Date</Th>
+                          <Th>Result</Th>
+                          <Th>Time Spent</Th>
                           <Th isNumeric></Th>
                         </Tr>
                       </Thead>
@@ -609,7 +594,7 @@ export const TestDetailView: FC<TestDetailViewProps> = ({
                               <Td>
                                 <Stack spacing={1} align="start">
                                   <Text fontSize="sm" fontWeight={500}>
-                                    {formatDateVi(attempt.completedAt)}
+                                    {formatDateEn(attempt.completedAt)}
                                   </Text>
                                   <Badge
                                     colorScheme={isPractice ? 'orange' : 'green'}
@@ -617,7 +602,7 @@ export const TestDetailView: FC<TestDetailViewProps> = ({
                                     rounded="md"
                                     px={1.5}
                                   >
-                                    {isPractice ? 'Luyện tập' : 'Full test'}
+                                    {isPractice ? 'Practice' : 'Full test'}
                                   </Badge>
                                 </Stack>
                               </Td>
@@ -652,11 +637,11 @@ export const TestDetailView: FC<TestDetailViewProps> = ({
                                     leftIcon={<IconEye size={14} />}
                                     onClick={() => handleAttemptAction(attempt)}
                                   >
-                                    Xem chi tiết
+                                    View Details
                                   </Button>
                                   {onDeleteAttempt && (
                                     <IconButton
-                                      aria-label="Xoá lượt làm này"
+                                      aria-label="Delete attempt"
                                       icon={<IconTrash size={14} />}
                                       size="xs"
                                       variant="ghost"
@@ -692,7 +677,7 @@ export const TestDetailView: FC<TestDetailViewProps> = ({
                       rounded="none"
                       onClick={() => setModeTab('full')}
                     >
-                      Làm full test
+                      Full Test
                     </Button>
                     <Button
                       variant="unstyled"
@@ -705,7 +690,7 @@ export const TestDetailView: FC<TestDetailViewProps> = ({
                       rounded="none"
                       onClick={() => setModeTab('practice')}
                     >
-                      Luyện tập
+                      Practice Mode
                     </Button>
                   </HStack>
 
@@ -721,8 +706,8 @@ export const TestDetailView: FC<TestDetailViewProps> = ({
                         <HStack align="start" spacing={2}>
                           <Icon as={IconBulb} boxSize={4} color="green.500" mt={0.5} flexShrink={0} />
                           <Text fontSize="xs" color={tipText}>
-                            Chế độ Full Test áp dụng đủ <strong>{totalParts} phần thi</strong> với giới hạn{' '}
-                            <strong>{durationMinutes} phút</strong> để quy đổi chính xác sang Band điểm IELTS 9.0.
+                            Full Test mode includes all <strong>{totalParts} sections</strong> with a{' '}
+                            <strong>{durationMinutes}-minute</strong> timer to calculate an accurate IELTS 9.0 Band Score.
                           </Text>
                         </HStack>
                       </Box>
@@ -735,7 +720,7 @@ export const TestDetailView: FC<TestDetailViewProps> = ({
                           leftIcon={<IconPlayerPlay size={16} />}
                           onClick={handleStartFull}
                         >
-                          {hasInProgress ? 'Bắt đầu lượt Full Test mới' : 'Bắt đầu làm Full Test'}
+                          {hasInProgress ? 'Start New Full Test' : 'Start Full Test'}
                         </Button>
                       </Box>
                     </Stack>
@@ -751,14 +736,14 @@ export const TestDetailView: FC<TestDetailViewProps> = ({
                         <HStack align="start" spacing={2}>
                           <Icon as={IconBulb} boxSize={4} color="green.500" mt={0.5} flexShrink={0} />
                           <Text fontSize="xs" color={tipText}>
-                            Pro tips: Hình thức luyện tập từng phần và chọn mức thời gian phù hợp sẽ giúp bạn tập trung vào giải đúng các câu hỏi thay vì chịu áp lực hoàn thành bài thi.
+                            Pro tip: Practicing individual sections with a flexible time limit lets you focus on accuracy without full-exam time pressure.
                           </Text>
                         </HStack>
                       </Box>
 
                       <Stack spacing={3}>
                         <Text fontSize="sm" fontWeight={700}>
-                          Chọn phần thi bạn muốn làm
+                          Select sections to practice
                         </Text>
 
                         {effectiveExam?.parts && effectiveExam.parts.length > 0 ? (
@@ -790,7 +775,7 @@ export const TestDetailView: FC<TestDetailViewProps> = ({
                                 >
                                   <Text fontSize="sm" fontWeight={600}>
                                     {isListen ? `Recording ${part.partNumber}` : `Part ${part.partNumber}`}
-                                    {part.title ? `: ${part.title}` : ''} ({partQCount} câu hỏi)
+                                    {part.title ? `: ${part.title}` : ''} ({partQCount} questions)
                                   </Text>
                                 </Checkbox>
                                 {types.length > 0 && (
@@ -840,22 +825,22 @@ export const TestDetailView: FC<TestDetailViewProps> = ({
 
                       <Box maxW="360px">
                         <Text fontSize="sm" fontWeight={600} mb={1.5}>
-                          Giới hạn thời gian (Để trống để làm không giới hạn)
+                          Time Limit (Leave empty for untimed practice)
                         </Text>
                         <Select
                           size="sm"
                           rounded="xl"
                           value={practiceMinutes}
                           onChange={(e) => setPracticeMinutes(e.target.value)}
-                          placeholder="-- Không giới hạn thời gian --"
+                          placeholder="-- No Time Limit --"
                         >
-                          <option value="10">10 phút</option>
-                          <option value="15">15 phút</option>
-                          <option value="20">20 phút</option>
-                          <option value="30">30 phút</option>
-                          <option value="40">40 phút</option>
-                          <option value="45">45 phút</option>
-                          <option value="60">60 phút</option>
+                          <option value="10">10 minutes</option>
+                          <option value="15">15 minutes</option>
+                          <option value="20">20 minutes</option>
+                          <option value="30">30 minutes</option>
+                          <option value="40">40 minutes</option>
+                          <option value="45">45 minutes</option>
+                          <option value="60">60 minutes</option>
                         </Select>
                       </Box>
 
@@ -868,7 +853,7 @@ export const TestDetailView: FC<TestDetailViewProps> = ({
                           leftIcon={<IconPlayerPlay size={16} />}
                           onClick={handleStartPractice}
                         >
-                          LUYỆN TẬP ({selectedParts.length} phần)
+                          START PRACTICE ({selectedParts.length} {selectedParts.length === 1 ? 'part' : 'parts'})
                         </Button>
                       </Box>
                     </Stack>
@@ -893,7 +878,7 @@ export const TestDetailView: FC<TestDetailViewProps> = ({
                       leftIcon={<IconPlayerPlay size={16} />}
                       onClick={handleStartFull}
                     >
-                      {hasInProgress ? 'Bắt đầu bản viết mới' : 'Bắt đầu làm Writing'}
+                      {hasInProgress ? 'Start New Writing Draft' : 'Start Writing Test'}
                     </Button>
                   </Box>
                 </Stack>
@@ -902,13 +887,13 @@ export const TestDetailView: FC<TestDetailViewProps> = ({
                   <Box p={4} bg={subtleBg} borderWidth="1px" borderColor={cardBorder} rounded="xl">
                     <Stack spacing={1.5} fontSize="xs" color={secondaryColor}>
                       <Text>
-                        <strong>Part 1:</strong> {target.exam.part1Questions.length} câu hỏi phỏng vấn
+                        <strong>Part 1:</strong> {target.exam.part1Questions.length} interview questions
                       </Text>
                       <Text>
                         <strong>Part 2 Cue Card:</strong> {target.exam.part2Question.questionText}
                       </Text>
                       <Text>
-                        <strong>Part 3:</strong> {target.exam.part3Questions.length} câu hỏi thảo luận
+                        <strong>Part 3:</strong> {target.exam.part3Questions.length} discussion questions
                       </Text>
                     </Stack>
                   </Box>
@@ -919,7 +904,7 @@ export const TestDetailView: FC<TestDetailViewProps> = ({
                       leftIcon={<IconMicrophone size={16} />}
                       onClick={() => onStartSpeaking(target.exam, true)}
                     >
-                      Bắt đầu luyện Speaking
+                      Start Speaking Practice
                     </Button>
                   </Box>
                 </Stack>
@@ -941,7 +926,7 @@ export const TestDetailView: FC<TestDetailViewProps> = ({
           <ModalHeader fontFamily={outfit.style.fontFamily}>
             <HStack spacing={2}>
               <Icon as={IconListDetails} color="blue.500" />
-              <Text>Tóm tắt kết quả lượt làm</Text>
+              <Text>Attempt Result Summary</Text>
             </HStack>
           </ModalHeader>
           <ModalCloseButton />
@@ -949,7 +934,7 @@ export const TestDetailView: FC<TestDetailViewProps> = ({
             {legacySummaryAttempt && (
               <Stack spacing={4}>
                 <Text fontSize="sm" color={secondaryColor}>
-                  {legacySummaryAttempt.examTitle} • {formatDateVi(legacySummaryAttempt.completedAt)}
+                  {legacySummaryAttempt.examTitle} • {formatDateEn(legacySummaryAttempt.completedAt)}
                 </Text>
                 <Flex gap={3} flexWrap="wrap">
                   {legacySummaryAttempt.bandScore !== null &&
@@ -965,7 +950,7 @@ export const TestDetailView: FC<TestDetailViewProps> = ({
                     )}
                   <Box flex={1} minW="120px" p={3} bg={subtleBg} rounded="xl" borderWidth="1px">
                     <Text fontSize="xs" color={secondaryColor}>
-                      Số câu đúng
+                      Correct Answers
                     </Text>
                     <Text fontSize="2xl" fontWeight={800}>
                       {legacySummaryAttempt.totalCorrect}/{legacySummaryAttempt.totalQuestions}
@@ -973,7 +958,7 @@ export const TestDetailView: FC<TestDetailViewProps> = ({
                   </Box>
                   <Box flex={1} minW="120px" p={3} bg={subtleBg} rounded="xl" borderWidth="1px">
                     <Text fontSize="xs" color={secondaryColor}>
-                      Thời gian
+                      Time Spent
                     </Text>
                     <Text fontSize="2xl" fontWeight={800}>
                       {formatDurationClock(legacySummaryAttempt.timeSpentSeconds)}
@@ -984,7 +969,7 @@ export const TestDetailView: FC<TestDetailViewProps> = ({
                 {legacySummaryAttempt.details?.partScores && (
                   <Stack spacing={2}>
                     <Text fontSize="xs" fontWeight={700}>
-                      Điểm từng phần:
+                      Score by Section:
                     </Text>
                     <Flex gap={2} flexWrap="wrap">
                       {Object.entries(legacySummaryAttempt.details.partScores).map(
@@ -999,14 +984,14 @@ export const TestDetailView: FC<TestDetailViewProps> = ({
                 )}
 
                 <Text fontSize="xs" color={secondaryColor} fontStyle="italic">
-                  Lượt làm này được lưu trước khi hỗ trợ xem lại chi tiết từng câu. Các lượt làm mới từ bây giờ sẽ lưu đầy đủ bài làm để mở lại Review Mode.
+                  This attempt was saved before per-question review details were enabled. Newer attempts record full answers for Review Mode.
                 </Text>
               </Stack>
             )}
           </ModalBody>
           <ModalFooter>
             <Button onClick={() => setLegacySummaryAttempt(null)} rounded="xl">
-              Đóng
+              Close
             </Button>
           </ModalFooter>
         </ModalContent>
@@ -1023,7 +1008,7 @@ export const TestDetailView: FC<TestDetailViewProps> = ({
         <ModalOverlay />
         <ModalContent rounded="2xl">
           <ModalHeader fontFamily={outfit.style.fontFamily}>
-            Chi tiết bài viết Writing
+            Writing Submission Details
           </ModalHeader>
           <ModalCloseButton />
           <ModalBody>
@@ -1031,22 +1016,22 @@ export const TestDetailView: FC<TestDetailViewProps> = ({
               <Stack spacing={4}>
                 <HStack justify="space-between" flexWrap="wrap">
                   <Text fontSize="sm" color={secondaryColor}>
-                    Ngày nộp: {formatDateVi(writingAttemptDetail.completedAt)} • Thời gian:{' '}
+                    Submitted: {formatDateEn(writingAttemptDetail.completedAt)} • Time:{' '}
                     {formatDurationClock(writingAttemptDetail.timeSpentSeconds)}
                   </Text>
                   <HStack spacing={2}>
                     <Badge colorScheme="orange">
-                      Task 1: {writingAttemptDetail.details?.task1Words ?? 0} từ
+                      Task 1: {writingAttemptDetail.details?.task1Words ?? 0} words
                     </Badge>
                     <Badge colorScheme="purple">
-                      Task 2: {writingAttemptDetail.details?.task2Words ?? 0} từ
+                      Task 2: {writingAttemptDetail.details?.task2Words ?? 0} words
                     </Badge>
                   </HStack>
                 </HStack>
 
                 <Box p={4} bg={subtleBg} rounded="xl" borderWidth="1px" borderColor={cardBorder}>
                   <Text fontSize="xs" fontWeight={700} color="blue.500" mb={1}>
-                    TASK 1 ({writingAttemptDetail.details?.task1Words ?? 0} từ)
+                    TASK 1 ({writingAttemptDetail.details?.task1Words ?? 0} words)
                   </Text>
                   <Text fontSize="xs" color={secondaryColor} mb={2}>
                     {target.exam.task1.prompt}
@@ -1060,13 +1045,13 @@ export const TestDetailView: FC<TestDetailViewProps> = ({
                     whiteSpace="pre-wrap"
                     fontSize="sm"
                   >
-                    {writingAttemptDetail.details?.task1Text || '(Chưa có nội dung)'}
+                    {writingAttemptDetail.details?.task1Text || '(No response)'}
                   </Box>
                 </Box>
 
                 <Box p={4} bg={subtleBg} rounded="xl" borderWidth="1px" borderColor={cardBorder}>
                   <Text fontSize="xs" fontWeight={700} color="blue.500" mb={1}>
-                    TASK 2 ({writingAttemptDetail.details?.task2Words ?? 0} từ)
+                    TASK 2 ({writingAttemptDetail.details?.task2Words ?? 0} words)
                   </Text>
                   <Text fontSize="xs" color={secondaryColor} mb={2}>
                     {target.exam.task2.prompt}
@@ -1080,7 +1065,7 @@ export const TestDetailView: FC<TestDetailViewProps> = ({
                     whiteSpace="pre-wrap"
                     fontSize="sm"
                   >
-                    {writingAttemptDetail.details?.task2Text || '(Chưa có nội dung)'}
+                    {writingAttemptDetail.details?.task2Text || '(No response)'}
                   </Box>
                 </Box>
               </Stack>
@@ -1088,7 +1073,7 @@ export const TestDetailView: FC<TestDetailViewProps> = ({
           </ModalBody>
           <ModalFooter>
             <Button onClick={() => setWritingAttemptDetail(null)} rounded="xl">
-              Đóng
+              Close
             </Button>
           </ModalFooter>
         </ModalContent>

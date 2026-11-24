@@ -16,6 +16,7 @@ import {
 interface SpeakingEditorModalProps {
   isOpen: boolean;
   initialExam?: SpeakingExam | null;
+  defaultCollection?: string;
   onClose: () => void;
   onSave: (exam: SpeakingExam) => void;
 }
@@ -23,6 +24,7 @@ interface SpeakingEditorModalProps {
 export const SpeakingEditorModal: FC<SpeakingEditorModalProps> = ({
   isOpen,
   initialExam,
+  defaultCollection,
   onClose,
   onSave,
 }) => {
@@ -31,7 +33,7 @@ export const SpeakingEditorModal: FC<SpeakingEditorModalProps> = ({
   const [activeTab, setActiveTab] = useState<'info' | 'part1' | 'part2' | 'part3'>('info');
 
   const [title, setTitle] = useState(initialExam?.title || 'NEW IELTS SPEAKING TEST');
-  const [collection, setCollection] = useState(initialExam?.collection || 'My Tests');
+  const [collection, setCollection] = useState(initialExam?.collection || defaultCollection || 'My Tests');
   const [description, setDescription] = useState(initialExam?.description || 'IELTS Speaking practice test with Parts 1, 2, and 3');
 
   // Part 1 Questions
@@ -216,21 +218,21 @@ export const SpeakingEditorModal: FC<SpeakingEditorModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4 select-text font-sans">
-      <div className="bg-white rounded-2xl shadow-2xl max-w-4xl w-full max-h-[90vh] flex flex-col overflow-hidden border-2 border-gray-200 animate-in fade-in zoom-in-95">
+      <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl max-w-4xl w-full max-h-[90vh] flex flex-col overflow-hidden border-2 border-gray-200 dark:border-gray-700 animate-in fade-in zoom-in-95">
         {/* Header — PNO Quiz Modal Header Style */}
-        <div className="min-h-16 py-3 bg-white border-b-2 border-gray-200 px-6 flex items-center justify-between shrink-0">
+        <div className="min-h-16 py-3 bg-white dark:bg-gray-800 border-b-2 border-gray-200 dark:border-gray-700 px-6 flex items-center justify-between shrink-0">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-blue-600 text-white flex items-center justify-center shadow-xs">
               <Mic className="w-5 h-5" />
             </div>
             <div>
               <h2
-                className="text-lg font-extrabold text-gray-900 leading-tight"
+                className="text-lg font-extrabold text-gray-900 dark:text-gray-100 leading-tight"
                 style={{ fontFamily: outfit.style.fontFamily }}
               >
                 {initialExam ? 'Edit Speaking Test' : 'Create Speaking Practice Test'}
               </h2>
-              <span className="text-xs font-medium text-gray-500">
+              <span className="text-xs font-medium text-gray-500 dark:text-gray-400">
                 Official 3-Part Speaking Room (Parts 1, 2, 3)
               </span>
             </div>
@@ -239,7 +241,7 @@ export const SpeakingEditorModal: FC<SpeakingEditorModalProps> = ({
           <div className="flex items-center gap-2">
             <button
               onClick={onClose}
-              className="px-4 py-2 text-xs font-bold text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-xl border-2 border-gray-200 transition"
+              className="px-4 py-2 text-xs font-bold text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-xl border-2 border-gray-200 dark:border-gray-700 transition"
             >
               Cancel
             </button>
@@ -254,14 +256,14 @@ export const SpeakingEditorModal: FC<SpeakingEditorModalProps> = ({
         </div>
 
         {/* Tabs — PNO Soft-Rounded Pill Tabs */}
-        <div className="bg-slate-50/70 border-b-2 border-gray-200 px-6 py-2.5 flex items-center shrink-0 select-none overflow-x-auto">
-          <div className="flex items-center gap-1 bg-gray-100 p-1 rounded-xl border-2 border-gray-200">
+        <div className="bg-slate-50/70 border-b-2 border-gray-200 dark:border-gray-700 px-6 py-2.5 flex items-center shrink-0 select-none overflow-x-auto">
+          <div className="flex items-center gap-1 bg-gray-100 dark:bg-gray-700 p-1 rounded-xl border-2 border-gray-200 dark:border-gray-700">
             <button
               onClick={() => setActiveTab('info')}
               className={`py-1.5 px-3.5 text-xs font-bold rounded-lg transition ${
                 activeTab === 'info'
                   ? 'bg-blue-600 text-white shadow-2xs'
-                  : 'text-gray-600 hover:text-gray-900'
+                  : 'text-gray-600 dark:text-gray-400 hover:text-gray-900'
               }`}
             >
               General Info
@@ -271,7 +273,7 @@ export const SpeakingEditorModal: FC<SpeakingEditorModalProps> = ({
               className={`py-1.5 px-3.5 text-xs font-bold rounded-lg transition flex items-center gap-1.5 ${
                 activeTab === 'part1'
                   ? 'bg-blue-600 text-white shadow-2xs'
-                  : 'text-gray-600 hover:text-gray-900'
+                  : 'text-gray-600 dark:text-gray-400 hover:text-gray-900'
               }`}
             >
               <Mic className="w-3.5 h-3.5" />
@@ -282,7 +284,7 @@ export const SpeakingEditorModal: FC<SpeakingEditorModalProps> = ({
               className={`py-1.5 px-3.5 text-xs font-bold rounded-lg transition flex items-center gap-1.5 ${
                 activeTab === 'part2'
                   ? 'bg-blue-600 text-white shadow-2xs'
-                  : 'text-gray-600 hover:text-gray-900'
+                  : 'text-gray-600 dark:text-gray-400 hover:text-gray-900'
               }`}
             >
               <Mic className="w-3.5 h-3.5" />
@@ -293,7 +295,7 @@ export const SpeakingEditorModal: FC<SpeakingEditorModalProps> = ({
               className={`py-1.5 px-3.5 text-xs font-bold rounded-lg transition flex items-center gap-1.5 ${
                 activeTab === 'part3'
                   ? 'bg-blue-600 text-white shadow-2xs'
-                  : 'text-gray-600 hover:text-gray-900'
+                  : 'text-gray-600 dark:text-gray-400 hover:text-gray-900'
               }`}
             >
               <Mic className="w-3.5 h-3.5" />
@@ -306,9 +308,9 @@ export const SpeakingEditorModal: FC<SpeakingEditorModalProps> = ({
         <div className="flex-1 overflow-y-auto p-6 space-y-6">
           {/* TAB 1: General Info */}
           {activeTab === 'info' && (
-            <div className="bg-white rounded-xl border border-gray-200 p-6 space-y-5 shadow-xs">
+            <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-6 space-y-5 shadow-xs">
               <div>
-                <label className="block text-xs font-bold text-gray-700 uppercase mb-1">
+                <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 uppercase mb-1">
                   Test Title *
                 </label>
                 <input
@@ -316,20 +318,20 @@ export const SpeakingEditorModal: FC<SpeakingEditorModalProps> = ({
                   value={title}
                   onChange={(e) => setTitle(e.target.value)}
                   placeholder="e.g. IELTS SPEAKING PRACTICE: ENVIRONMENT & SOCIETY"
-                  className="w-full px-3 py-2 text-sm border rounded-lg border-gray-300 focus:outline-none focus:ring-2 focus:ring-indigo-600 font-medium"
+                  className="w-full px-3 py-2 text-sm border rounded-lg border-gray-300 dark:border-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-600 font-medium"
                 />
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-xs font-bold text-gray-700 uppercase mb-1 flex items-center gap-1">
+                  <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 uppercase mb-1 flex items-center gap-1">
                     <Folder className="w-3.5 h-3.5 text-indigo-600" />
                     <span>Collection Folder</span>
                   </label>
                   <select
                     value={collection}
                     onChange={(e) => setCollection(e.target.value)}
-                    className="w-full px-3 py-2 text-sm border rounded-lg border-gray-300 focus:outline-none focus:ring-2 focus:ring-indigo-600 bg-white font-medium"
+                    className="w-full px-3 py-2 text-sm border rounded-lg border-gray-300 dark:border-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-600 bg-white dark:bg-gray-800 font-medium"
                   >
                     {collections.map((c) => (
                       <option key={c.id} value={c.name}>
@@ -340,7 +342,7 @@ export const SpeakingEditorModal: FC<SpeakingEditorModalProps> = ({
                 </div>
 
                 <div>
-                  <label className="block text-xs font-bold text-gray-700 uppercase mb-1">
+                  <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 uppercase mb-1">
                     Topic Theme / Description
                   </label>
                   <input
@@ -348,7 +350,7 @@ export const SpeakingEditorModal: FC<SpeakingEditorModalProps> = ({
                     value={description}
                     onChange={(e) => setDescription(e.target.value)}
                     placeholder="e.g. Technology, Daily Life, Global Issues"
-                    className="w-full px-3 py-2 text-sm border rounded-lg border-gray-300 focus:outline-none focus:ring-2 focus:ring-indigo-600 font-medium"
+                    className="w-full px-3 py-2 text-sm border rounded-lg border-gray-300 dark:border-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-600 font-medium"
                   />
                 </div>
               </div>
@@ -358,10 +360,10 @@ export const SpeakingEditorModal: FC<SpeakingEditorModalProps> = ({
           {/* TAB 2: Part 1 */}
           {activeTab === 'part1' && (
             <div className="space-y-4">
-              <div className="flex items-center justify-between bg-white px-5 py-3 rounded-xl border border-gray-200 shadow-2xs">
+              <div className="flex items-center justify-between bg-white dark:bg-gray-800 px-5 py-3 rounded-xl border border-gray-200 dark:border-gray-700 shadow-2xs">
                 <div>
-                  <h3 className="text-sm font-bold text-gray-900">Part 1: Introduction & Interview</h3>
-                  <p className="text-xs text-gray-500">Short conversational questions on familiar topics (4–5 minutes)</p>
+                  <h3 className="text-sm font-bold text-gray-900 dark:text-gray-100">Part 1: Introduction & Interview</h3>
+                  <p className="text-xs text-gray-500 dark:text-gray-400">Short conversational questions on familiar topics (4–5 minutes)</p>
                 </div>
                 <button
                   type="button"
@@ -374,7 +376,7 @@ export const SpeakingEditorModal: FC<SpeakingEditorModalProps> = ({
               </div>
 
               {part1Questions.map((q, idx) => (
-                <div key={q.id} className="bg-white rounded-xl border border-gray-200 p-5 space-y-3 shadow-xs">
+                <div key={q.id} className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-5 space-y-3 shadow-xs">
                   <div className="flex items-center justify-between border-b pb-2">
                     <span className="text-xs font-bold text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded">
                       Question {idx + 1}
@@ -392,7 +394,7 @@ export const SpeakingEditorModal: FC<SpeakingEditorModalProps> = ({
                   </div>
 
                   <div>
-                    <label className="block text-xs font-bold text-gray-700 mb-1">
+                    <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 mb-1">
                       Question Text *
                     </label>
                     <input
@@ -400,12 +402,12 @@ export const SpeakingEditorModal: FC<SpeakingEditorModalProps> = ({
                       value={q.questionText}
                       onChange={(e) => handleUpdatePart1Question(q.id, 'questionText', e.target.value)}
                       placeholder="e.g. What do you usually do in your leisure time?"
-                      className="w-full px-3 py-1.5 text-sm border rounded-lg border-gray-300 focus:ring-2 focus:ring-indigo-600 font-medium"
+                      className="w-full px-3 py-1.5 text-sm border rounded-lg border-gray-300 dark:border-gray-600 focus:ring-2 focus:ring-indigo-600 font-medium"
                     />
                   </div>
 
                   <div>
-                    <label className="block text-xs font-bold text-gray-700 mb-1 flex items-center gap-1">
+                    <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 mb-1 flex items-center gap-1">
                       <Sparkles className="w-3.5 h-3.5 text-amber-600" />
                       <span>Band 8.0+ Model Answer (Optional):</span>
                     </label>
@@ -414,7 +416,7 @@ export const SpeakingEditorModal: FC<SpeakingEditorModalProps> = ({
                       onChange={(e) => handleUpdatePart1Question(q.id, 'sampleAnswer', e.target.value)}
                       rows={2}
                       placeholder="Optional: Provide high-scoring sample response..."
-                      className="w-full px-3 py-1.5 text-xs border rounded-lg border-gray-300 focus:ring-2 focus:ring-indigo-600 font-mono"
+                      className="w-full px-3 py-1.5 text-xs border rounded-lg border-gray-300 dark:border-gray-600 focus:ring-2 focus:ring-indigo-600 font-mono"
                     />
                   </div>
                 </div>
@@ -424,14 +426,14 @@ export const SpeakingEditorModal: FC<SpeakingEditorModalProps> = ({
 
           {/* TAB 3: Part 2 */}
           {activeTab === 'part2' && (
-            <div className="bg-white rounded-xl border border-gray-200 p-6 space-y-5 shadow-xs">
+            <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-6 space-y-5 shadow-xs">
               <div className="border-b pb-2">
-                <h3 className="text-sm font-bold text-gray-900">Part 2: Individual Long Turn (Cue Card)</h3>
-                <p className="text-xs text-gray-500">Candidate receives a task card, has 1 minute to prepare notes, then speaks for up to 2 minutes</p>
+                <h3 className="text-sm font-bold text-gray-900 dark:text-gray-100">Part 2: Individual Long Turn (Cue Card)</h3>
+                <p className="text-xs text-gray-500 dark:text-gray-400">Candidate receives a task card, has 1 minute to prepare notes, then speaks for up to 2 minutes</p>
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-gray-700 uppercase mb-1">
+                <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 uppercase mb-1">
                   Cue Card Topic Title
                 </label>
                 <input
@@ -439,12 +441,12 @@ export const SpeakingEditorModal: FC<SpeakingEditorModalProps> = ({
                   value={part2Topic}
                   onChange={(e) => setPart2Topic(e.target.value)}
                   placeholder="e.g. Technology & Innovation"
-                  className="w-full px-3 py-1.5 text-sm border rounded-lg border-gray-300 focus:ring-2 focus:ring-indigo-600 font-medium"
+                  className="w-full px-3 py-1.5 text-sm border rounded-lg border-gray-300 dark:border-gray-600 focus:ring-2 focus:ring-indigo-600 font-medium"
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-gray-700 uppercase mb-1">
+                <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 uppercase mb-1">
                   Cue Card Topic Prompt *
                 </label>
                 <textarea
@@ -452,29 +454,29 @@ export const SpeakingEditorModal: FC<SpeakingEditorModalProps> = ({
                   onChange={(e) => setPart2QuestionText(e.target.value)}
                   rows={2}
                   placeholder="e.g. Describe a person who has greatly inspired you in your life."
-                  className="w-full px-3 py-2 text-sm border rounded-lg border-gray-300 focus:ring-2 focus:ring-indigo-600 font-medium"
+                  className="w-full px-3 py-2 text-sm border rounded-lg border-gray-300 dark:border-gray-600 focus:ring-2 focus:ring-indigo-600 font-medium"
                 />
               </div>
 
               <div>
                 <div className="flex items-center justify-between mb-1">
-                  <label className="block text-xs font-bold text-gray-700 uppercase">
+                  <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 uppercase">
                     Bullet Points (You should say: ...)
                   </label>
-                  <span className="text-[11px] text-gray-500">One bullet prompt per line</span>
+                  <span className="text-[11px] text-gray-500 dark:text-gray-400">One bullet prompt per line</span>
                 </div>
                 <textarea
                   value={part2Bullets}
                   onChange={(e) => setPart2Bullets(e.target.value)}
                   rows={5}
                   placeholder="Who this person is&#10;How you first met them&#10;What remarkable qualities they have&#10;And explain why they inspire you so deeply"
-                  className="w-full px-3 py-2 text-xs border rounded-lg border-gray-300 font-mono leading-relaxed focus:ring-2 focus:ring-indigo-600"
+                  className="w-full px-3 py-2 text-xs border rounded-lg border-gray-300 dark:border-gray-600 font-mono leading-relaxed focus:ring-2 focus:ring-indigo-600"
                 />
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-xs font-bold text-gray-700 uppercase mb-1 flex items-center gap-1">
+                  <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 uppercase mb-1 flex items-center gap-1">
                     <Clock className="w-3.5 h-3.5 text-indigo-600" />
                     <span>Preparation Timer (Seconds)</span>
                   </label>
@@ -482,12 +484,12 @@ export const SpeakingEditorModal: FC<SpeakingEditorModalProps> = ({
                     type="number"
                     value={part2PrepTime}
                     onChange={(e) => setPart2PrepTime(parseInt(e.target.value) || 60)}
-                    className="w-full px-3 py-1.5 text-sm border rounded-lg border-gray-300 focus:ring-2 focus:ring-indigo-600 font-medium"
+                    className="w-full px-3 py-1.5 text-sm border rounded-lg border-gray-300 dark:border-gray-600 focus:ring-2 focus:ring-indigo-600 font-medium"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-xs font-bold text-gray-700 uppercase mb-1 flex items-center gap-1">
+                  <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 uppercase mb-1 flex items-center gap-1">
                     <Clock className="w-3.5 h-3.5 text-indigo-600" />
                     <span>Speaking Timer (Seconds)</span>
                   </label>
@@ -495,13 +497,13 @@ export const SpeakingEditorModal: FC<SpeakingEditorModalProps> = ({
                     type="number"
                     value={part2SpeakTime}
                     onChange={(e) => setPart2SpeakTime(parseInt(e.target.value) || 120)}
-                    className="w-full px-3 py-1.5 text-sm border rounded-lg border-gray-300 focus:ring-2 focus:ring-indigo-600 font-medium"
+                    className="w-full px-3 py-1.5 text-sm border rounded-lg border-gray-300 dark:border-gray-600 focus:ring-2 focus:ring-indigo-600 font-medium"
                   />
                 </div>
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-gray-700 uppercase mb-1 flex items-center gap-1">
+                <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 uppercase mb-1 flex items-center gap-1">
                   <Sparkles className="w-3.5 h-3.5 text-amber-600" />
                   <span>Band 8.0+ Model Cue Card Speech (Optional)</span>
                 </label>
@@ -510,7 +512,7 @@ export const SpeakingEditorModal: FC<SpeakingEditorModalProps> = ({
                   onChange={(e) => setPart2SampleAnswer(e.target.value)}
                   rows={6}
                   placeholder="Optional: Provide full model monologue demonstrating cohesive devices and varied vocabulary..."
-                  className="w-full px-3 py-2 text-xs border rounded-lg border-gray-300 focus:ring-2 focus:ring-indigo-600 font-mono leading-relaxed"
+                  className="w-full px-3 py-2 text-xs border rounded-lg border-gray-300 dark:border-gray-600 focus:ring-2 focus:ring-indigo-600 font-mono leading-relaxed"
                 />
               </div>
             </div>
@@ -519,10 +521,10 @@ export const SpeakingEditorModal: FC<SpeakingEditorModalProps> = ({
           {/* TAB 4: Part 3 */}
           {activeTab === 'part3' && (
             <div className="space-y-4">
-              <div className="flex items-center justify-between bg-white px-5 py-3 rounded-xl border border-gray-200 shadow-2xs">
+              <div className="flex items-center justify-between bg-white dark:bg-gray-800 px-5 py-3 rounded-xl border border-gray-200 dark:border-gray-700 shadow-2xs">
                 <div>
-                  <h3 className="text-sm font-bold text-gray-900">Part 3: Two-Way Discussion</h3>
-                  <p className="text-xs text-gray-500">Abstract, in-depth questions expanding on the Part 2 theme (4–5 minutes)</p>
+                  <h3 className="text-sm font-bold text-gray-900 dark:text-gray-100">Part 3: Two-Way Discussion</h3>
+                  <p className="text-xs text-gray-500 dark:text-gray-400">Abstract, in-depth questions expanding on the Part 2 theme (4–5 minutes)</p>
                 </div>
                 <button
                   type="button"
@@ -535,7 +537,7 @@ export const SpeakingEditorModal: FC<SpeakingEditorModalProps> = ({
               </div>
 
               {part3Questions.map((q, idx) => (
-                <div key={q.id} className="bg-white rounded-xl border border-gray-200 p-5 space-y-3 shadow-xs">
+                <div key={q.id} className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-5 space-y-3 shadow-xs">
                   <div className="flex items-center justify-between border-b pb-2">
                     <span className="text-xs font-bold text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded">
                       Discussion Question {idx + 1}
@@ -553,7 +555,7 @@ export const SpeakingEditorModal: FC<SpeakingEditorModalProps> = ({
                   </div>
 
                   <div>
-                    <label className="block text-xs font-bold text-gray-700 mb-1">
+                    <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 mb-1">
                       Question Text *
                     </label>
                     <input
@@ -561,12 +563,12 @@ export const SpeakingEditorModal: FC<SpeakingEditorModalProps> = ({
                       value={q.questionText}
                       onChange={(e) => handleUpdatePart3Question(q.id, 'questionText', e.target.value)}
                       placeholder="e.g. To what extent should role models be held responsible for their actions?"
-                      className="w-full px-3 py-1.5 text-sm border rounded-lg border-gray-300 focus:ring-2 focus:ring-indigo-600 font-medium"
+                      className="w-full px-3 py-1.5 text-sm border rounded-lg border-gray-300 dark:border-gray-600 focus:ring-2 focus:ring-indigo-600 font-medium"
                     />
                   </div>
 
                   <div>
-                    <label className="block text-xs font-bold text-gray-700 mb-1 flex items-center gap-1">
+                    <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 mb-1 flex items-center gap-1">
                       <Sparkles className="w-3.5 h-3.5 text-amber-600" />
                       <span>Band 8.5 Model Answer (Optional):</span>
                     </label>
@@ -575,7 +577,7 @@ export const SpeakingEditorModal: FC<SpeakingEditorModalProps> = ({
                       onChange={(e) => handleUpdatePart3Question(q.id, 'sampleAnswer', e.target.value)}
                       rows={3}
                       placeholder="Optional: High-level analytical response demonstrating nuance..."
-                      className="w-full px-3 py-1.5 text-xs border rounded-lg border-gray-300 focus:ring-2 focus:ring-indigo-600 font-mono"
+                      className="w-full px-3 py-1.5 text-xs border rounded-lg border-gray-300 dark:border-gray-600 focus:ring-2 focus:ring-indigo-600 font-mono"
                     />
                   </div>
                 </div>
