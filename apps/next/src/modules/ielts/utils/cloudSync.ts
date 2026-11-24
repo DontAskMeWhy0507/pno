@@ -34,6 +34,18 @@ export interface CloudProgressRow {
   state: unknown;
 }
 
+export interface CloudAttemptDetails {
+  mode?: 'full' | 'practice';
+  selectedParts?: number[];
+  timeLimitMinutes?: number | null;
+  answers?: Record<string, string | string[]>;
+  partScores?: Record<string, { correct: number; total: number }>;
+  task1Words?: number;
+  task2Words?: number;
+  task1Text?: string;
+  task2Text?: string;
+}
+
 export interface CloudAttemptRow {
   id: string;
   examId: string;
@@ -43,6 +55,7 @@ export interface CloudAttemptRow {
   totalCorrect: number;
   totalQuestions: number;
   timeSpentSeconds: number;
+  details?: CloudAttemptDetails | null;
   completedAt: Date | string;
 }
 

@@ -45,7 +45,7 @@ export const ieltsRouter = createTRPCRouter({
         ctx.prisma.ieltsAttempt.findMany({
           where: { userId },
           orderBy: { completedAt: "desc" },
-          take: 50,
+          take: 200,
           select: {
             id: true,
             examId: true,
@@ -55,6 +55,7 @@ export const ieltsRouter = createTRPCRouter({
             totalCorrect: true,
             totalQuestions: true,
             timeSpentSeconds: true,
+            details: true,
             completedAt: true,
           },
         }),
@@ -462,7 +463,7 @@ export const ieltsRouter = createTRPCRouter({
           ctx.prisma.ieltsAttempt.findMany({
             where: { userId },
             orderBy: { completedAt: "desc" },
-            take: 50,
+            take: 200,
             select: {
               id: true,
               examId: true,
@@ -472,6 +473,7 @@ export const ieltsRouter = createTRPCRouter({
               totalCorrect: true,
               totalQuestions: true,
               timeSpentSeconds: true,
+              details: true,
               completedAt: true,
             },
           }),

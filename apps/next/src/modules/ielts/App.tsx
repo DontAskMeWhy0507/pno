@@ -11,12 +11,14 @@ import { QuestionGroupRenderer } from './components/exam/QuestionGroupRenderer';
 import { SplitPane } from './components/exam/SplitPane';
 import { BottomBar } from './components/exam/BottomBar';
 import { HomePage } from './components/home/HomePage';
+import type { StartExamOptions } from './components/home/TestDetailView';
 import type { WritingExam } from './types/writing';
 import type { SpeakingExam } from './types/speaking';
 import { getAllWritingExams, sampleWritingExams, saveWritingExam } from './data/writingExams';
 import { getAllSpeakingExams, sampleSpeakingExams, saveSpeakingExam } from './data/speakingExams';
 import { ChevronLeft, ChevronRight, FileText, Headphones } from 'lucide-react';
 import { clearExamProgress, loadExamProgress, saveExamProgress } from './utils/examProgress';
+import { clearSpeakingProgress, clearWritingProgress } from './utils/writingProgress';
 import {
   buildLocalSyncPayload,
   CLOUD_MIGRATION_FLAG,
@@ -80,6 +82,25 @@ function getExamPath(exam: Exam, partNumber: number): string {
   return `/ielts/${skill}/${encodeURIComponent(exam.id)}/part/${partNumber}`;
 }
 
+function sliceExamParts(exam: Exam, selectedParts?: number[]): Exam {
+  if (!selectedParts || selectedParts.length === 0) return exam;
+  const filtered = exam.parts.filter((p) => selectedParts.includes(p.partNumber));
+  if (filtered.length === 0) return exam;
+  return { ...exam, parts: filtered };
+}
+
+function normalizeAnswersRecord(raw?: Record<string, string | string[]>): UserAnswerRecord {
+  if (!raw) return {};
+  const result: UserAnswerRecord = {};
+  for (const [k, v] of Object.entries(raw)) {
+    const num = Number(k);
+    if (!Number.isNaN(num)) {
+      result[num] = v;
+    }
+  }
+  return result;
+}
+
 export function App() {
   const { colorMode } = useColorMode();
   const toast = useToast();
@@ -111,7 +132,14 @@ export function App() {
   const [answers, setAnswers] = useState<UserAnswerRecord>({});
   const [flaggedQuestions, setFlaggedQuestions] = useState<number[]>([]);
 
-  // Timer state
+  // Timer & session mode state
+  const [sessionMode, setSessionMode] = useState<'full' | 'practice'>('full');
+  const [selectedParts, setSelectedParts] = useState<number[] | undefined>(undefined);
+  const [isUntimed, setIsUntimed] = useState<boolean>(false);
+  const [elapsedSeconds, setElapsedSeconds] = useState<number>(0);
+  const [sessionDurationSeconds, setSessionDurationSeconds] = useState<number>(
+    () => (currentExam.durationMinutes || 60) * 60
+  );
   const [timeRemaining, setTimeRemaining] = useState<number>(
     () => (currentExam.durationMinutes || 60) * 60
   );
@@ -289,6 +317,11 @@ export function App() {
     activePartNumber,
     currentQuestionNumber,
     timeRemaining,
+    sessionMode,
+    selectedParts,
+    isUntimed,
+    elapsedSeconds,
+    sessionDurationSeconds,
     isCompleted,
     isReviewMode,
   });
@@ -300,6 +333,11 @@ export function App() {
     activePartNumber,
     currentQuestionNumber,
     timeRemaining,
+    sessionMode,
+    selectedParts,
+    isUntimed,
+    elapsedSeconds,
+    sessionDurationSeconds,
     isCompleted,
     isReviewMode,
   };
@@ -320,6 +358,11 @@ export function App() {
           activePartNumber: s.activePartNumber,
           currentQuestionNumber: s.currentQuestionNumber,
           timeRemaining: s.timeRemaining,
+          mode: s.sessionMode,
+          selectedParts: s.selectedParts,
+          isUntimed: s.isUntimed,
+          elapsedSeconds: s.elapsedSeconds,
+          sessionDurationSeconds: s.sessionDurationSeconds,
         };
         saveExamProgress(s.currentExam.id, snapshot);
         cloudSaveProgress(getExamSkillLabel(s.currentExam), s.currentExam.id, {
@@ -331,10 +374,10 @@ export function App() {
       setCurrentView('home');
       if (wasInExamRoom && !s.isCompleted && !s.isReviewMode) {
         toast({
-          title: 'Progress auto-saved',
-          description: 'Synced locally & to cloud. Resume anytime from In Progress.',
+          title: 'Đã lưu tiến độ làm bài',
+          description: 'Bài làm của bạn được lưu nền và có thể xem lại trong tab History.',
           status: 'success',
-          duration: 3000,
+          duration: 2800,
           isClosable: true,
           position: 'bottom-right',
         });
@@ -373,15 +416,22 @@ export function App() {
           try {
             const fullExam = (await loadFullExam(candidate)) ?? candidate;
             if (cancelled || !fullExam.parts?.length) return;
-            const requestedPart = Number(parts[3]);
-            const partNumber = fullExam.parts.some((p) => p.partNumber === requestedPart)
-              ? requestedPart
-              : fullExam.parts[0]?.partNumber ?? 1;
             const savedProgress = loadExamProgress(fullExam.id);
-            setCurrentExam(fullExam);
+            const slicedExam = sliceExamParts(fullExam, savedProgress?.selectedParts);
+            const requestedPart = Number(parts[3]);
+            const partNumber = slicedExam.parts.some((p) => p.partNumber === requestedPart)
+              ? requestedPart
+              : slicedExam.parts[0]?.partNumber ?? 1;
+            const defaultSecs = (fullExam.durationMinutes || 60) * 60;
+            setCurrentExam(slicedExam);
+            setSessionMode(savedProgress?.mode ?? 'full');
+            setSelectedParts(savedProgress?.selectedParts);
+            setIsUntimed(Boolean(savedProgress?.isUntimed));
+            setElapsedSeconds(savedProgress?.elapsedSeconds ?? 0);
+            setSessionDurationSeconds(savedProgress?.sessionDurationSeconds ?? defaultSecs);
             setAnswers(savedProgress?.answers ?? {});
             setFlaggedQuestions(savedProgress?.flaggedQuestions ?? []);
-            setTimeRemaining(savedProgress?.timeRemaining ?? (fullExam.durationMinutes || 60) * 60);
+            setTimeRemaining(savedProgress?.timeRemaining ?? defaultSecs);
             setIsPaused(false);
             setIsCompleted(false);
             setIsReviewMode(false);
@@ -389,7 +439,7 @@ export function App() {
             setActivePartNumber(partNumber);
             setCurrentQuestionNumber(
               savedProgress?.currentQuestionNumber ??
-                fullExam.parts
+                slicedExam.parts
                   .find((p) => p.partNumber === partNumber)
                   ?.questionGroups.flatMap((g) => g.questions)[0]?.orderNumber ??
                 1
@@ -465,23 +515,25 @@ export function App() {
   // Debounced save ONLY when answers, flags, part, or question changes (NOT on 1s timer ticks)
   useEffect(() => {
     if (currentView !== 'exam' || isCompleted || isReviewMode) return;
+    const buildSnapshot = () => ({
+      answers,
+      flaggedQuestions,
+      activePartNumber,
+      currentQuestionNumber,
+      timeRemaining: latestExamStateRef.current.timeRemaining,
+      mode: latestExamStateRef.current.sessionMode,
+      selectedParts: latestExamStateRef.current.selectedParts,
+      isUntimed: latestExamStateRef.current.isUntimed,
+      elapsedSeconds: latestExamStateRef.current.elapsedSeconds,
+      sessionDurationSeconds: latestExamStateRef.current.sessionDurationSeconds,
+    });
     const localTimer = window.setTimeout(() => {
-      saveExamProgress(currentExam.id, {
-        answers,
-        flaggedQuestions,
-        activePartNumber,
-        currentQuestionNumber,
-        timeRemaining: latestExamStateRef.current.timeRemaining,
-      });
+      saveExamProgress(currentExam.id, buildSnapshot());
     }, 400);
 
     const cloudTimer = window.setTimeout(() => {
       cloudSaveProgress(getExamSkillLabel(currentExam), currentExam.id, {
-        answers,
-        flaggedQuestions,
-        activePartNumber,
-        currentQuestionNumber,
-        timeRemaining: latestExamStateRef.current.timeRemaining,
+        ...buildSnapshot(),
         lastSavedAt: Date.now(),
       });
     }, 2000);
@@ -505,6 +557,11 @@ export function App() {
         activePartNumber: s.activePartNumber,
         currentQuestionNumber: s.currentQuestionNumber,
         timeRemaining: s.timeRemaining,
+        mode: s.sessionMode,
+        selectedParts: s.selectedParts,
+        isUntimed: s.isUntimed,
+        elapsedSeconds: s.elapsedSeconds,
+        sessionDurationSeconds: s.sessionDurationSeconds,
       };
       saveExamProgress(s.currentExam.id, snapshot);
       cloudSaveProgress(getExamSkillLabel(s.currentExam), s.currentExam.id, {
@@ -526,6 +583,11 @@ export function App() {
           activePartNumber: s.activePartNumber,
           currentQuestionNumber: s.currentQuestionNumber,
           timeRemaining: s.timeRemaining,
+          mode: s.sessionMode,
+          selectedParts: s.selectedParts,
+          isUntimed: s.isUntimed,
+          elapsedSeconds: s.elapsedSeconds,
+          sessionDurationSeconds: s.sessionDurationSeconds,
         });
       }
     };
@@ -536,10 +598,21 @@ export function App() {
   const completeExam = useCallback(() => {
     const s = latestExamStateRef.current;
     const report = gradeExam(s.currentExam, s.answers);
-    const timeSpentSeconds = Math.max(
-      0,
-      (s.currentExam.durationMinutes || 60) * 60 - s.timeRemaining
-    );
+    const timeSpentSeconds = s.isUntimed
+      ? s.elapsedSeconds
+      : Math.max(0, s.sessionDurationSeconds - s.timeRemaining);
+    const attemptDetails = {
+      mode: s.sessionMode,
+      selectedParts: s.selectedParts,
+      answers: Object.fromEntries(
+        Object.entries(s.answers).map(([k, v]) => [String(k), v])
+      ),
+      partScores: Object.fromEntries(
+        Object.entries(report.partScores).map(([k, v]) => [String(k), v])
+      ),
+    };
+    const bandToSave = s.sessionMode === 'practice' ? null : report.bandScore;
+
     setScoreReport(report);
     setIsCompleted(true);
     setIsResultModalOpen(true);
@@ -550,11 +623,11 @@ export function App() {
         examId: s.currentExam.id,
         examTitle: s.currentExam.title,
         skill: getExamSkillLabel(s.currentExam),
-        bandScore: report.bandScore,
+        bandScore: bandToSave,
         totalCorrect: report.totalCorrect,
         totalQuestions: report.totalQuestions,
         timeSpentSeconds,
-        details: { partScores: report.partScores },
+        details: attemptDetails,
       },
       {
         onSuccess: (created) => {
@@ -568,9 +641,10 @@ export function App() {
               totalCorrect: created.totalCorrect,
               totalQuestions: created.totalQuestions,
               timeSpentSeconds: created.timeSpentSeconds,
+              details: attemptDetails,
               completedAt: created.completedAt,
             },
-            ...prev.slice(0, 49),
+            ...prev.slice(0, 199),
           ]);
         },
       }
@@ -582,23 +656,27 @@ export function App() {
     if (currentView !== 'exam' || isCompleted || isPaused) return;
 
     const timer = window.setInterval(() => {
-      setTimeRemaining((previous) => {
-        if (previous <= 1) {
-          window.clearInterval(timer);
-          return 0;
-        }
-        return previous - 1;
-      });
+      if (latestExamStateRef.current.isUntimed) {
+        setElapsedSeconds((prev) => prev + 1);
+      } else {
+        setTimeRemaining((previous) => {
+          if (previous <= 1) {
+            window.clearInterval(timer);
+            return 0;
+          }
+          return previous - 1;
+        });
+      }
     }, 1000);
 
     return () => window.clearInterval(timer);
   }, [currentView, isCompleted, isPaused]);
 
   useEffect(() => {
-    if (currentView === 'exam' && !isCompleted && timeRemaining === 0) {
+    if (currentView === 'exam' && !isCompleted && !isUntimed && timeRemaining === 0) {
       completeExam();
     }
-  }, [completeExam, currentView, isCompleted, timeRemaining]);
+  }, [completeExam, currentView, isCompleted, isUntimed, timeRemaining]);
 
   const activePart: Part | undefined =
     currentExam.parts.find((p) => p.partNumber === activePartNumber) || currentExam.parts[0];
@@ -671,17 +749,22 @@ export function App() {
     cloudClearProgress(getExamSkillLabel(currentExam), currentExam.id);
     setAnswers({});
     setFlaggedQuestions([]);
-    setTimeRemaining((currentExam.durationMinutes || 60) * 60);
+    const resetSecs = isUntimed ? 0 : sessionDurationSeconds || (currentExam.durationMinutes || 60) * 60;
+    setElapsedSeconds(0);
+    setTimeRemaining(resetSecs);
     setIsPaused(false);
     setIsCompleted(false);
     setIsReviewMode(false);
     setScoreReport(null);
     setIsResultModalOpen(false);
-    setActivePartNumber(1);
-    setCurrentQuestionNumber(1);
+    const firstPart = currentExam.parts[0];
+    setActivePartNumber(firstPart?.partNumber ?? 1);
+    setCurrentQuestionNumber(
+      firstPart?.questionGroups.flatMap((g) => g.questions)[0]?.orderNumber ?? 1
+    );
   };
 
-  const handleStartExam = async (examOrSummary: Exam) => {
+  const handleStartExam = async (examOrSummary: Exam, options?: StartExamOptions) => {
     setIsLoadingExamData(true);
     try {
       const fullExam = (await loadFullExam(examOrSummary)) ?? examOrSummary;
@@ -696,20 +779,61 @@ export function App() {
         return;
       }
 
-      const savedProgress = loadExamProgress(fullExam.id);
+      const isFresh = Boolean(options?.fresh);
+      if (isFresh) {
+        clearExamProgress(fullExam.id);
+        cloudClearProgress(getExamSkillLabel(fullExam), fullExam.id);
+      }
+
+      const savedProgress = isFresh ? null : loadExamProgress(fullExam.id);
+      const nextMode: 'full' | 'practice' =
+        options?.mode ?? savedProgress?.mode ?? 'full';
+      const nextSelectedParts =
+        options?.selectedParts ?? savedProgress?.selectedParts;
+      const slicedExam = sliceExamParts(fullExam, nextSelectedParts);
+
+      const defaultSecs = (fullExam.durationMinutes || 60) * 60;
+      let nextUntimed = false;
+      let nextDurationSecs = defaultSecs;
+      let nextTime = defaultSecs;
+      let nextElapsed = 0;
+
+      if (options) {
+        if (options.mode === 'practice') {
+          if (options.timeLimitMinutes && options.timeLimitMinutes > 0) {
+            nextUntimed = false;
+            nextDurationSecs = options.timeLimitMinutes * 60;
+            nextTime = nextDurationSecs;
+          } else {
+            nextUntimed = true;
+            nextDurationSecs = 0;
+            nextTime = 0;
+          }
+        }
+      } else if (savedProgress) {
+        nextUntimed = Boolean(savedProgress.isUntimed);
+        nextDurationSecs = savedProgress.sessionDurationSeconds ?? defaultSecs;
+        nextTime = savedProgress.timeRemaining;
+        nextElapsed = savedProgress.elapsedSeconds ?? 0;
+      }
+
       const nextAnswers = savedProgress?.answers ?? {};
       const nextFlags = savedProgress?.flaggedQuestions ?? [];
-      const nextTime = savedProgress?.timeRemaining ?? (fullExam.durationMinutes || 60) * 60;
       const savedPart = savedProgress?.activePartNumber;
-      const partNumber = fullExam.parts.some((part) => part.partNumber === savedPart)
+      const partNumber = slicedExam.parts.some((part) => part.partNumber === savedPart)
         ? savedPart!
-        : fullExam.parts[0]?.partNumber ?? 1;
+        : slicedExam.parts[0]?.partNumber ?? 1;
       const nextQNum =
         savedProgress?.currentQuestionNumber ??
-        fullExam.parts[0]?.questionGroups.flatMap((group) => group.questions)[0]?.orderNumber ??
+        slicedExam.parts[0]?.questionGroups.flatMap((group) => group.questions)[0]?.orderNumber ??
         1;
 
-      setCurrentExam(fullExam);
+      setCurrentExam(slicedExam);
+      setSessionMode(nextMode);
+      setSelectedParts(nextSelectedParts);
+      setIsUntimed(nextUntimed);
+      setElapsedSeconds(nextElapsed);
+      setSessionDurationSeconds(nextDurationSecs);
       setAnswers(nextAnswers);
       setFlaggedQuestions(nextFlags);
       setTimeRemaining(nextTime);
@@ -725,17 +849,74 @@ export function App() {
         activePartNumber: partNumber,
         currentQuestionNumber: nextQNum,
         timeRemaining: nextTime,
+        mode: nextMode,
+        selectedParts: nextSelectedParts,
+        isUntimed: nextUntimed,
+        elapsedSeconds: nextElapsed,
+        sessionDurationSeconds: nextDurationSecs,
       };
       saveExamProgress(fullExam.id, snapshot);
       cloudSaveProgress(getExamSkillLabel(fullExam), fullExam.id, {
         ...snapshot,
         lastSavedAt: Date.now(),
       });
-      navigateExam(fullExam, partNumber);
+      navigateExam(slicedExam, partNumber);
     } catch (err) {
       toast({
         title: 'Failed to load test',
         description: err instanceof Error ? err.message : 'Please try again.',
+        status: 'error',
+        duration: 3000,
+        isClosable: true,
+      });
+    } finally {
+      setIsLoadingExamData(false);
+    }
+  };
+
+  const handleViewAttemptDetail = async (attempt: CloudAttemptRow) => {
+    const candidate = getAllExams().find((ex) => ex.id === attempt.examId);
+    if (!candidate) {
+      toast({
+        title: 'Không tìm thấy đề thi này',
+        status: 'error',
+        duration: 2500,
+        isClosable: true,
+      });
+      return;
+    }
+
+    setIsLoadingExamData(true);
+    try {
+      const fullExam = (await loadFullExam(candidate)) ?? candidate;
+      const slicedExam = sliceExamParts(fullExam, attempt.details?.selectedParts);
+      const restoredAnswers = normalizeAnswersRecord(attempt.details?.answers);
+      const report = gradeExam(slicedExam, restoredAnswers);
+      const firstPart = slicedExam.parts[0];
+      const partNumber = firstPart?.partNumber ?? 1;
+      const firstQ = firstPart?.questionGroups.flatMap((g) => g.questions)[0]?.orderNumber ?? 1;
+
+      setCurrentExam(slicedExam);
+      setSessionMode(attempt.details?.mode === 'practice' ? 'practice' : 'full');
+      setSelectedParts(attempt.details?.selectedParts);
+      setIsUntimed(true);
+      setElapsedSeconds(attempt.timeSpentSeconds);
+      setSessionDurationSeconds(0);
+      setAnswers(restoredAnswers);
+      setFlaggedQuestions([]);
+      setTimeRemaining(0);
+      setIsPaused(true);
+      setIsCompleted(true);
+      setIsReviewMode(true);
+      setScoreReport(report);
+      setIsResultModalOpen(true);
+      setActivePartNumber(partNumber);
+      setCurrentQuestionNumber(firstQ);
+      navigateExam(slicedExam, partNumber);
+    } catch (err) {
+      toast({
+        title: 'Không thể mở chi tiết lượt làm',
+        description: err instanceof Error ? err.message : 'Vui lòng thử lại.',
         status: 'error',
         duration: 3000,
         isClosable: true,
@@ -785,12 +966,20 @@ export function App() {
     }
   };
 
-  const handleStartWritingExam = (exam: WritingExam) => {
+  const handleStartWritingExam = (exam: WritingExam, fresh = false) => {
+    if (fresh) {
+      clearWritingProgress(exam.id);
+      cloudClearProgress('Writing', exam.id);
+    }
     setCurrentWritingExam(exam);
     navigateSkill('writing', exam.id);
   };
 
-  const handleStartSpeakingExam = (exam: SpeakingExam) => {
+  const handleStartSpeakingExam = (exam: SpeakingExam, fresh = false) => {
+    if (fresh) {
+      clearSpeakingProgress(exam.id);
+      cloudClearProgress('Speaking', exam.id);
+    }
     setCurrentSpeakingExam(exam);
     navigateSkill('speaking', exam.id);
   };
@@ -841,7 +1030,7 @@ export function App() {
                 exams={allExams}
                 recentAttempts={recentAttempts}
                 syncStatus={syncStatus}
-                onSelectExam={(exam) => void handleStartExam(exam)}
+                onSelectExam={(exam, options) => void handleStartExam(exam, options)}
                 onOpenEditor={(examToEdit) => void handleOpenExamEditor(examToEdit)}
                 onOpenTestManager={() => setIsTestManagerOpen(true)}
                 onOpenSmartImport={(collection, skill) => {
@@ -852,6 +1041,7 @@ export function App() {
                 onRefreshExams={handleRefreshExams}
                 onStartWritingExam={handleStartWritingExam}
                 onStartSpeakingExam={handleStartSpeakingExam}
+                onViewAttemptDetail={(attempt) => void handleViewAttemptDetail(attempt)}
                 onDeleteAttempt={(attemptId) => {
                   setRecentAttempts((prev) => prev.filter((a) => a.id !== attemptId));
                   deleteAttemptMutation.mutate({ id: attemptId });
@@ -911,9 +1101,15 @@ export function App() {
                       totalCorrect: created.totalCorrect,
                       totalQuestions: created.totalQuestions,
                       timeSpentSeconds: created.timeSpentSeconds,
+                      details: {
+                        task1Words: payload.task1Words,
+                        task2Words: payload.task2Words,
+                        task1Text: payload.task1Text,
+                        task2Text: payload.task2Text,
+                      },
                       completedAt: created.completedAt,
                     },
-                    ...prev.slice(0, 49),
+                    ...prev.slice(0, 199),
                   ]);
                 },
               }
@@ -939,6 +1135,8 @@ export function App() {
             examTitle={currentExam.title}
             durationMinutes={currentExam.durationMinutes}
             timeRemaining={timeRemaining}
+            isUntimed={isUntimed}
+            elapsedSeconds={elapsedSeconds}
             isPaused={isPaused}
             onTogglePause={() => setIsPaused((prev) => !prev)}
             onOpenTestManager={() => setIsTestManagerOpen(true)}
@@ -1228,10 +1426,11 @@ export function App() {
           onClose={() => setIsResultModalOpen(false)}
           exam={currentExam}
           scoreReport={scoreReport}
-          timeSpentSeconds={Math.max(
-            0,
-            (currentExam.durationMinutes || 60) * 60 - timeRemaining
-          )}
+          timeSpentSeconds={
+            isUntimed
+              ? elapsedSeconds
+              : Math.max(0, sessionDurationSeconds - timeRemaining)
+          }
           onEnterReviewMode={(targetQuestionNumber) => {
             setIsReviewMode(true);
             setIsResultModalOpen(false);

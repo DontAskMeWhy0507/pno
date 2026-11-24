@@ -6,6 +6,11 @@ export interface ExamProgress {
   activePartNumber: number;
   currentQuestionNumber: number;
   timeRemaining: number;
+  mode?: 'full' | 'practice';
+  selectedParts?: number[];
+  isUntimed?: boolean;
+  elapsedSeconds?: number;
+  sessionDurationSeconds?: number;
   lastSavedAt?: number;
 }
 
@@ -23,6 +28,13 @@ export function loadExamProgress(examId: string): ExamProgress | null {
       activePartNumber: typeof value.activePartNumber === 'number' && Number.isInteger(value.activePartNumber) ? value.activePartNumber : 1,
       currentQuestionNumber: typeof value.currentQuestionNumber === 'number' && Number.isInteger(value.currentQuestionNumber) ? value.currentQuestionNumber : 1,
       timeRemaining: typeof value.timeRemaining === 'number' && Number.isFinite(value.timeRemaining) ? Math.max(0, value.timeRemaining) : 0,
+      mode: value.mode === 'practice' ? 'practice' : 'full',
+      selectedParts: Array.isArray(value.selectedParts)
+        ? value.selectedParts.filter((n): n is number => typeof n === 'number' && Number.isInteger(n))
+        : undefined,
+      isUntimed: Boolean(value.isUntimed),
+      elapsedSeconds: typeof value.elapsedSeconds === 'number' && Number.isFinite(value.elapsedSeconds) ? Math.max(0, value.elapsedSeconds) : 0,
+      sessionDurationSeconds: typeof value.sessionDurationSeconds === 'number' && Number.isFinite(value.sessionDurationSeconds) ? Math.max(0, value.sessionDurationSeconds) : undefined,
       lastSavedAt: typeof value.lastSavedAt === 'number' ? value.lastSavedAt : undefined,
     };
   } catch (error) {

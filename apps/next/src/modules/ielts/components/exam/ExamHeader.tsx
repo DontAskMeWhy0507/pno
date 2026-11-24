@@ -6,6 +6,8 @@ interface ExamHeaderProps {
   examTitle: string;
   durationMinutes: number;
   timeRemaining: number;
+  isUntimed?: boolean;
+  elapsedSeconds?: number;
   isPaused: boolean;
   onTogglePause: () => void;
   onOpenTestManager: () => void;
@@ -18,6 +20,8 @@ interface ExamHeaderProps {
 export const ExamHeader: FC<ExamHeaderProps> = ({
   examTitle,
   timeRemaining,
+  isUntimed = false,
+  elapsedSeconds = 0,
   isPaused,
   onTogglePause,
   onOpenTestManager,
@@ -45,9 +49,10 @@ export const ExamHeader: FC<ExamHeaderProps> = ({
     }
   };
 
-  const minutes = Math.floor(timeRemaining / 60);
-  const seconds = timeRemaining % 60;
-  const isTimeCritical = timeRemaining <= 300; // Under 5 minutes
+  const displaySeconds = isUntimed ? elapsedSeconds : timeRemaining;
+  const minutes = Math.floor(displaySeconds / 60);
+  const seconds = displaySeconds % 60;
+  const isTimeCritical = !isUntimed && timeRemaining <= 300; // Under 5 minutes
 
   const handleHomeClick = () => {
     if (onOpenLeaveModal) {
@@ -88,7 +93,7 @@ export const ExamHeader: FC<ExamHeaderProps> = ({
               <Clock className="w-3 h-3 sm:w-3.5 sm:h-3.5 shrink-0" />
               <span>
                 {minutes}m {seconds < 10 ? `0${seconds}` : seconds}s
-                <span className="hidden sm:inline"> left</span>
+                <span className="hidden sm:inline">{isUntimed ? ' elapsed' : ' left'}</span>
               </span>
             </span>
             <button
