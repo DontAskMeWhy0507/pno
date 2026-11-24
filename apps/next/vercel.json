@@ -1,4 +1,15 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "regions": ["sin1"]
+  "regions": ["sin1"],
+  "functions": {
+    "src/pages/api/anki/upload-media-batch.ts": {
+      "maxDuration": 60
+    },
+    "src/pages/api/anki/presign-media.ts": {
+      "maxDuration": 60
+    },
+    "src/pages/api/trpc/[trpc].ts": {
+      "maxDuration": 60
+    }
+  }
 }

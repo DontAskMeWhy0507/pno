@@ -3,6 +3,7 @@ import {
   PutObjectCommand,
   S3Client,
 } from "@aws-sdk/client-s3";
+import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 
 export interface MediaFileInput {
   name: string;
@@ -93,6 +94,26 @@ export function detectMediaContentType(filename: string): string {
     default:
       return "application/octet-stream";
   }
+}
+
+export function formatSafeStorageError(err: unknown): string {
+  if (!err || typeof err !== "object") {
+    return typeof err === "string" ? err.slice(0, 200) : "Unknown storage error";
+  }
+  const e = err as {
+    name?: string;
+    message?: string;
+    $metadata?: { httpStatusCode?: number };
+  };
+  const status = e.$metadata?.httpStatusCode
+    ? ` [HTTP ${e.$metadata.httpStatusCode}]`
+    : "";
+  const raw = `${e.name ?? "Error"}: ${e.message ?? "Storage request failed"}${status}`;
+  // Strip signed query parameters or credential-like substrings if present
+  return raw
+    .replace(/X-Amz-[A-Za-z0-9-]+=[A-Za-z0-9%._~/-]+/g, "X-Amz-*=[redacted]")
+    .replace(/Bearer\s+\S+/gi, "Bearer [redacted]")
+    .slice(0, 300);
 }
 
 export function evaluateS3QuotaHeadroom(params: {
@@ -270,38 +291,53 @@ function recordS3UsageDelta(
   }
 }
 
+export interface UploadFilesToS3Options {
+  estimatedTotalBytes?: number;
+  estimatedTotalObjects?: number;
+  skipQuotaCheck?: boolean;
+}
+
 export async function uploadFilesToS3(
   files: MediaFileInput[],
   prefix: string,
-  estimatedTotalBytes?: number,
+  optionsOrBytes?: number | UploadFilesToS3Options,
 ): Promise<{
   mediaBase: string;
   blockedReason?: QuotaCheckResult["reason"];
+  errorMessage?: string;
 } | null> {
   const cfg = getMediaS3Config();
   if (!cfg || files.length === 0) return null;
 
+  const opts: UploadFilesToS3Options =
+    typeof optionsOrBytes === "number"
+      ? { estimatedTotalBytes: optionsOrBytes }
+      : optionsOrBytes ?? {};
+
   const client = getS3Client(cfg);
   const cleanPrefix = prefix.replace(/^\/+|\/+$/g, "");
   const batchBytes = files.reduce((sum, f) => sum + f.content.length, 0);
-  const incomingBytes = Math.max(batchBytes, estimatedTotalBytes ?? 0);
+  const incomingBytes = Math.max(batchBytes, opts.estimatedTotalBytes ?? 0);
+  const incomingObjects = Math.max(files.length, opts.estimatedTotalObjects ?? 0);
 
   try {
-    const usage = await getBucketUsage(cfg, client);
-    const headroom = evaluateS3QuotaHeadroom({
-      currentBytes: usage.totalBytes,
-      currentObjects: usage.objectCount,
-      incomingBytes,
-      incomingObjects: files.length,
-      maxBytes: cfg.maxBytes,
-      maxObjects: cfg.maxObjects,
-    });
+    if (!opts.skipQuotaCheck) {
+      const usage = await getBucketUsage(cfg, client);
+      const headroom = evaluateS3QuotaHeadroom({
+        currentBytes: usage.totalBytes,
+        currentObjects: usage.objectCount,
+        incomingBytes,
+        incomingObjects,
+        maxBytes: cfg.maxBytes,
+        maxObjects: cfg.maxObjects,
+      });
 
-    if (!headroom.allowed) {
-      console.warn(
-        `[MediaStorage] S3 hard quota guard triggered (${headroom.reason}): ${headroom.projectedBytes}/${cfg.maxBytes} bytes, ${headroom.projectedObjects}/${cfg.maxObjects} objects. Failing over to backup storage.`,
-      );
-      return { mediaBase: "", blockedReason: headroom.reason };
+      if (!headroom.allowed) {
+        console.warn(
+          `[MediaStorage] S3 hard quota guard triggered (${headroom.reason}): ${headroom.projectedBytes}/${cfg.maxBytes} bytes, ${headroom.projectedObjects}/${cfg.maxObjects} objects. Failing over to backup storage.`,
+        );
+        return { mediaBase: "", blockedReason: headroom.reason };
+      }
     }
 
     for (let i = 0; i < files.length; i += S3_CONCURRENCY) {
@@ -328,17 +364,21 @@ export async function uploadFilesToS3(
       mediaBase: cleanPrefix ? `${cfg.publicUrl}/${cleanPrefix}` : cfg.publicUrl,
     };
   } catch (err) {
-    console.warn("[MediaStorage] S3 upload failed, triggering failover:", err);
-    return null;
+    const safeErr = formatSafeStorageError(err);
+    console.warn("[MediaStorage] S3 upload failed, triggering failover:", safeErr);
+    return { mediaBase: "", errorMessage: safeErr };
   }
 }
 
-export async function uploadFilesToGithubMedia(
+export async function uploadFilesToGithubMediaWithDiagnostics(
   files: MediaFileInput[],
   prefix: string,
-): Promise<string | null> {
+): Promise<{ mediaBase: string | null; errorMessage?: string }> {
   const ghToken = process.env.GITHUB_MEDIA_TOKEN?.trim();
-  if (!ghToken || files.length === 0) return null;
+  if (!ghToken) {
+    return { mediaBase: null, errorMessage: "GITHUB_MEDIA_TOKEN not configured" };
+  }
+  if (files.length === 0) return { mediaBase: null };
 
   const owner = process.env.GITHUB_MEDIA_OWNER?.trim() || "DontAskMeWhy0507";
   const repo = process.env.GITHUB_MEDIA_REPO?.trim() || "quenti-media";
@@ -392,7 +432,9 @@ export async function uploadFilesToGithubMedia(
       }
     }
 
-    if (blobs.length === 0) return null;
+    if (blobs.length === 0) {
+      return { mediaBase: null, errorMessage: "GitHub blob creation returned 0 blobs" };
+    }
 
     // 2. Attach blobs onto latest HEAD without force-overwriting concurrent batches
     for (let attempt = 0; attempt < 4; attempt++) {
@@ -464,9 +506,11 @@ export async function uploadFilesToGithubMedia(
       );
 
       if (updateRefRes.ok) {
-        return cleanPrefix
-          ? `https://cdn.jsdelivr.net/gh/${owner}/${repo}@main/${cleanPrefix}`
-          : `https://cdn.jsdelivr.net/gh/${owner}/${repo}@main`;
+        return {
+          mediaBase: cleanPrefix
+            ? `https://cdn.jsdelivr.net/gh/${owner}/${repo}@main/${cleanPrefix}`
+            : `https://cdn.jsdelivr.net/gh/${owner}/${repo}@main`,
+        };
       }
 
       if (updateRefRes.status === 409 || updateRefRes.status === 422) {
@@ -478,48 +522,197 @@ export async function uploadFilesToGithubMedia(
 
     throw new Error("GitHub ref update conflicted after retries");
   } catch (err) {
-    console.warn("[MediaStorage] GitHub backup batch upload warning:", err);
-    return null;
+    const safeErr = formatSafeStorageError(err);
+    console.warn("[MediaStorage] GitHub backup batch upload warning:", safeErr);
+    return { mediaBase: null, errorMessage: safeErr };
   }
+}
+
+export async function uploadFilesToGithubMedia(
+  files: MediaFileInput[],
+  prefix: string,
+): Promise<string | null> {
+  const res = await uploadFilesToGithubMediaWithDiagnostics(files, prefix);
+  return res.mediaBase;
+}
+
+export interface MediaBatchDiagnostics {
+  result: MediaBatchUploadResult | null;
+  s3Configured: boolean;
+  githubConfigured: boolean;
+  s3Error?: string;
+  githubError?: string;
+}
+
+export async function uploadMediaBatchWithDiagnostics(
+  files: MediaFileInput[],
+  prefix: string,
+  options?: UploadFilesToS3Options,
+): Promise<MediaBatchDiagnostics> {
+  const s3Configured = Boolean(getMediaS3Config());
+  const githubConfigured = Boolean(process.env.GITHUB_MEDIA_TOKEN?.trim());
+
+  if (files.length === 0) {
+    return { result: null, s3Configured, githubConfigured };
+  }
+
+  let failoverReason: string | undefined;
+  let s3Error: string | undefined;
+
+  if (s3Configured) {
+    const s3Res = await uploadFilesToS3(files, prefix, options);
+    if (s3Res && s3Res.mediaBase && !s3Res.blockedReason) {
+      return {
+        result: {
+          mediaBase: s3Res.mediaBase,
+          provider: "s3",
+          fallbackUsed: false,
+        },
+        s3Configured,
+        githubConfigured,
+      };
+    }
+    failoverReason = s3Res?.blockedReason ?? "S3_UPLOAD_FAILED";
+    s3Error = s3Res?.errorMessage ?? s3Res?.blockedReason;
+  }
+
+  const ghRes = await uploadFilesToGithubMediaWithDiagnostics(files, prefix);
+  if (ghRes.mediaBase) {
+    return {
+      result: {
+        mediaBase: ghRes.mediaBase,
+        provider: "github",
+        fallbackUsed: s3Configured,
+        reason: failoverReason,
+      },
+      s3Configured,
+      githubConfigured,
+      s3Error,
+    };
+  }
+
+  return {
+    result: null,
+    s3Configured,
+    githubConfigured,
+    s3Error,
+    githubError: ghRes.errorMessage,
+  };
 }
 
 export async function uploadMediaBatchWithFailover(
   files: MediaFileInput[],
   prefix: string,
-  options?: { estimatedTotalBytes?: number },
+  options?: UploadFilesToS3Options,
 ): Promise<MediaBatchUploadResult | null> {
-  if (files.length === 0) return null;
+  const outcome = await uploadMediaBatchWithDiagnostics(files, prefix, options);
+  return outcome.result;
+}
 
-  const s3ConfigExists = Boolean(getMediaS3Config());
-  let failoverReason: string | undefined;
-
-  if (s3ConfigExists) {
-    const s3Res = await uploadFilesToS3(
-      files,
-      prefix,
-      options?.estimatedTotalBytes,
-    );
-    if (s3Res && s3Res.mediaBase && !s3Res.blockedReason) {
-      return {
-        mediaBase: s3Res.mediaBase,
-        provider: "s3",
-        fallbackUsed: false,
-      };
+export type PresignedMediaUploadResult =
+  | {
+      mode: "presigned";
+      mediaBase: string;
+      uploads: {
+        name: string;
+        safeName: string;
+        url: string;
+        contentType: string;
+      }[];
     }
-    failoverReason = s3Res?.blockedReason ?? "S3_UPLOAD_FAILED";
-  }
+  | {
+      mode: "batch";
+      forceBackup: boolean;
+      reason: string;
+      errorMessage?: string;
+    };
 
-  const ghMediaBase = await uploadFilesToGithubMedia(files, prefix);
-  if (ghMediaBase) {
+export async function createPresignedMediaUploads(params: {
+  filenames: string[];
+  prefix: string;
+  estimatedTotalBytes?: number;
+  estimatedTotalObjects?: number;
+  skipQuotaCheck?: boolean;
+  expiresInSeconds?: number;
+}): Promise<PresignedMediaUploadResult> {
+  const cfg = getMediaS3Config();
+  if (!cfg) {
     return {
-      mediaBase: ghMediaBase,
-      provider: "github",
-      fallbackUsed: s3ConfigExists,
-      reason: failoverReason,
+      mode: "batch",
+      forceBackup: false,
+      reason: "S3_NOT_CONFIGURED",
     };
   }
 
-  return null;
+  const client = getS3Client(cfg);
+  const cleanPrefix = params.prefix.replace(/^\/+|\/+$/g, "");
+
+  try {
+    if (!params.skipQuotaCheck) {
+      const usage = await getBucketUsage(cfg, client);
+      const headroom = evaluateS3QuotaHeadroom({
+        currentBytes: usage.totalBytes,
+        currentObjects: usage.objectCount,
+        incomingBytes: params.estimatedTotalBytes ?? 0,
+        incomingObjects: Math.max(
+          params.filenames.length,
+          params.estimatedTotalObjects ?? 0,
+        ),
+        maxBytes: cfg.maxBytes,
+        maxObjects: cfg.maxObjects,
+      });
+
+      if (!headroom.allowed) {
+        console.warn(
+          `[MediaStorage] S3 hard quota guard triggered (${headroom.reason}) during presign: ${headroom.projectedBytes}/${cfg.maxBytes} bytes, ${headroom.projectedObjects}/${cfg.maxObjects} objects.`,
+        );
+        return {
+          mode: "batch",
+          forceBackup: true,
+          reason: headroom.reason ?? "BYTE_QUOTA_REACHED",
+        };
+      }
+    }
+
+    const expiresIn = params.expiresInSeconds ?? 900;
+    const uploads = await Promise.all(
+      params.filenames.map(async (rawName) => {
+        const safeName = sanitizeMediaFileName(rawName);
+        const key = cleanPrefix ? `${cleanPrefix}/${safeName}` : safeName;
+        const contentType = detectMediaContentType(safeName);
+        const url = await getSignedUrl(
+          client,
+          new PutObjectCommand({
+            Bucket: cfg.bucket,
+            Key: key,
+            ContentType: contentType,
+          }),
+          { expiresIn },
+        );
+        return {
+          name: rawName,
+          safeName,
+          url,
+          contentType,
+        };
+      }),
+    );
+
+    return {
+      mode: "presigned",
+      mediaBase: cleanPrefix ? `${cfg.publicUrl}/${cleanPrefix}` : cfg.publicUrl,
+      uploads,
+    };
+  } catch (err) {
+    const safeErr = formatSafeStorageError(err);
+    console.warn("[MediaStorage] S3 presign failed, falling back to batch:", safeErr);
+    return {
+      mode: "batch",
+      forceBackup: false,
+      reason: "S3_PRESIGN_FAILED",
+      errorMessage: safeErr,
+    };
+  }
 }
 
 export async function uploadSingleMediaWithFailover(

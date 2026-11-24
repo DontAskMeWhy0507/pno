@@ -6,12 +6,12 @@ import path from "path";
 
 import { getServerAuthSession } from "@quenti/auth";
 import {
-  getMediaS3Config,
-  uploadFilesToGithubMedia,
-  uploadMediaBatchWithFailover,
-} from "@quenti/images/server";
+  uploadFilesToGithubMediaWithDiagnostics,
+  uploadMediaBatchWithDiagnostics,
+} from "@quenti/images/server/media-storage";
 
 export const config = {
+  maxDuration: 60,
   api: {
     bodyParser: {
       sizeLimit: "4mb",
@@ -33,10 +33,19 @@ export default async function handler(
     return res.status(401).json({ error: "Unauthorized" });
   }
 
-  const { importId, files, estimatedTotalBytes, forceBackup } = req.body as {
+  const {
+    importId,
+    files,
+    estimatedTotalBytes,
+    estimatedTotalObjects,
+    skipQuotaCheck,
+    forceBackup,
+  } = req.body as {
     importId?: string;
     files?: { name: string; base64: string }[];
     estimatedTotalBytes?: number;
+    estimatedTotalObjects?: number;
+    skipQuotaCheck?: boolean;
     forceBackup?: boolean;
   };
 
@@ -75,28 +84,61 @@ export default async function handler(
   const prefix = `anki/imports/${safeImportId}`;
 
   // 1. Primary S3 (Tigris / R2 with hard free-tier quota guard) -> Backup GitHub quenti-media
+  let s3Configured = false;
+  let githubConfigured = Boolean(process.env.GITHUB_MEDIA_TOKEN?.trim());
+  let s3Error: string | undefined;
+  let githubError: string | undefined;
+
   if (forceBackup) {
-    const ghMediaBase = await uploadFilesToGithubMedia(decodedFiles, prefix);
-    if (ghMediaBase) {
+    const ghRes = await uploadFilesToGithubMediaWithDiagnostics(
+      decodedFiles,
+      prefix,
+    );
+    if (ghRes.mediaBase) {
       return res.status(200).json({
-        mediaBase: ghMediaBase,
+        mediaBase: ghRes.mediaBase,
         provider: "github",
         fallbackUsed: true,
         reason: "S3_QUOTA_GUARD_DECK_ROUTED",
       });
     }
+    githubError = ghRes.errorMessage;
   } else {
-    const uploaded = await uploadMediaBatchWithFailover(decodedFiles, prefix, {
+    const outcome = await uploadMediaBatchWithDiagnostics(decodedFiles, prefix, {
       estimatedTotalBytes,
+      estimatedTotalObjects,
+      skipQuotaCheck,
     });
-    if (uploaded) {
+    s3Configured = outcome.s3Configured;
+    githubConfigured = outcome.githubConfigured;
+    s3Error = outcome.s3Error;
+    githubError = outcome.githubError;
+
+    if (outcome.result) {
       return res.status(200).json({
-        mediaBase: uploaded.mediaBase,
-        provider: uploaded.provider,
-        fallbackUsed: uploaded.fallbackUsed,
-        reason: uploaded.reason,
+        mediaBase: outcome.result.mediaBase,
+        provider: outcome.result.provider,
+        fallbackUsed: outcome.result.fallbackUsed,
+        reason: outcome.result.reason,
       });
     }
+  }
+
+  // On Vercel serverless, filesystem is read-only; return transparent storage diagnostics immediately
+  if (process.env.VERCEL === "1") {
+    const parts = [
+      `s3Configured=${s3Configured}`,
+      `githubConfigured=${githubConfigured}`,
+      s3Error ? `s3Error=${s3Error}` : null,
+      githubError ? `githubError=${githubError}` : null,
+    ].filter(Boolean);
+    return res.status(500).json({
+      error: `Media storage upload failed (${parts.join(", ")})`,
+      s3Configured,
+      githubConfigured,
+      s3Error,
+      githubError,
+    });
   }
 
   // 2. Local filesystem fallback (dev / self-hosted)
@@ -116,11 +158,13 @@ export default async function handler(
       fallbackUsed: true,
     });
   } catch (err) {
-    const s3Ready = Boolean(getMediaS3Config());
-    const ghReady = Boolean(process.env.GITHUB_MEDIA_TOKEN?.trim());
     const detail = err instanceof Error ? err.message : "Failed to save media batch.";
     return res.status(500).json({
-      error: `${detail} (s3Configured=${s3Ready}, githubConfigured=${ghReady})`,
+      error: `${detail} (s3Configured=${s3Configured}, githubConfigured=${githubConfigured}${s3Error ? `, s3Error=${s3Error}` : ""}${githubError ? `, githubError=${githubError}` : ""})`,
+      s3Configured,
+      githubConfigured,
+      s3Error,
+      githubError,
     });
   }
 }

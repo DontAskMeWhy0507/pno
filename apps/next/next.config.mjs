@@ -33,6 +33,13 @@ if (process.env.USERS_BUCKET_URL)
   domains.push(new URL(process.env.USERS_BUCKET_URL).host);
 if (process.env.ASSETS_BUCKET_URL)
   domains.push(new URL(process.env.ASSETS_BUCKET_URL).host);
+if (process.env.MEDIA_S3_PUBLIC_URL) {
+  try {
+    domains.push(new URL(process.env.MEDIA_S3_PUBLIC_URL).host);
+  } catch {
+    // Ignore invalid MEDIA_S3_PUBLIC_URL during local build
+  }
+}
 
 const getConsoleRewrites = async () => {
   try {

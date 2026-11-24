@@ -67,5 +67,8 @@
   "workspaces": [
     "apps/*",
     "packages/*"
+  ],
+  "trustedDependencies": [
+    "sharp"
   ]
 }

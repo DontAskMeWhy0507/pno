@@ -1,4 +1,3 @@
-import sharp from "sharp";
 import { rgbaToThumbHash } from "thumbhash";
 
 import { env } from "@quenti/env/client";
@@ -28,7 +27,15 @@ export const thumbhashFromCdn = async (
     height > width ? 100 : (height / width) * 100,
   );
   // Get the raw rgba data from the image, png encoding won't work
-  const image = sharp(buffer)
+  let sharpFn: typeof import("sharp");
+  try {
+    const mod = await import("sharp");
+    sharpFn = (mod.default ?? mod) as typeof import("sharp");
+  } catch {
+    return null;
+  }
+
+  const image = sharpFn(buffer)
     .ensureAlpha()
     .resize(scaledWidth, scaledHeight, { fit: "fill" })
     .raw();

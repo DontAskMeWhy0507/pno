@@ -4,7 +4,7 @@ import type { NextApiRequest, NextApiResponse } from "next";
 import path from "path";
 
 import { getServerAuthSession } from "@quenti/auth";
-import { uploadSingleMediaWithFailover } from "@quenti/images/server";
+import { uploadSingleMediaWithFailover } from "@quenti/images/server/media-storage";
 
 export const config = {
   api: {

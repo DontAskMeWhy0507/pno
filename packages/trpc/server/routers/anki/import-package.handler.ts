@@ -10,7 +10,7 @@ import {
   sanitizeAnkiHtml,
   stripFrontSidePrefix,
 } from "@quenti/lib/src/anki/template";
-import { uploadMediaBatchWithFailover } from "@quenti/images/server";
+import { uploadMediaBatchWithFailover } from "@quenti/images/server/media-storage";
 
 import { TRPCError } from "@trpc/server";
 
