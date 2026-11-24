@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import { Button, HStack, IconButton, Tooltip } from "@chakra-ui/react";
 import { IconPlayerPause, IconVolume } from "@tabler/icons-react";
+import { getAnkiFallbackMediaUrl } from "@quenti/lib/src/anki/media-fallback";
 
 export interface AnkiAudioPlayerProps {
   src: string;
@@ -34,6 +35,15 @@ export const AnkiAudioPlayer: React.FC<AnkiAudioPlayerProps> = ({
 }) => {
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
+  const [activeSrc, setActiveSrc] = useState(src);
+  const [triedFallback, setTriedFallback] = useState(false);
+  const shouldResumeRef = useRef(false);
+
+  useEffect(() => {
+    setActiveSrc(src);
+    setTriedFallback(false);
+    shouldResumeRef.current = false;
+  }, [src]);
 
   const playAudio = () => {
     const el = audioRef.current;
@@ -51,6 +61,7 @@ export const AnkiAudioPlayer: React.FC<AnkiAudioPlayerProps> = ({
       currentPlayingAudio.currentTime = 0;
     }
 
+    shouldResumeRef.current = true;
     currentPlayingAudio = el;
     el.currentTime = 0;
     el.play().catch(() => {
@@ -67,6 +78,7 @@ export const AnkiAudioPlayer: React.FC<AnkiAudioPlayerProps> = ({
       currentPlayingAudio.currentTime = 0;
     }
 
+    shouldResumeRef.current = true;
     currentPlayingAudio = el;
     el.currentTime = 0;
     el.play().catch(() => {
@@ -79,14 +91,14 @@ export const AnkiAudioPlayer: React.FC<AnkiAudioPlayerProps> = ({
       const timeout = setTimeout(forcePlay, 120);
       return () => clearTimeout(timeout);
     }
-  }, [src, autoPlay]);
+  }, [activeSrc, autoPlay]);
 
   useEffect(() => {
     if (playTrigger > 0) {
       const timeout = setTimeout(forcePlay, 60);
       return () => clearTimeout(timeout);
     }
-  }, [playTrigger, src]);
+  }, [playTrigger, activeSrc]);
 
   useEffect(() => {
     return () => {
@@ -107,11 +119,20 @@ export const AnkiAudioPlayer: React.FC<AnkiAudioPlayerProps> = ({
     >
       <audio
         ref={audioRef}
-        src={src}
+        src={activeSrc}
         preload="auto"
+        onCanPlay={() => {
+          if (shouldResumeRef.current && triedFallback && audioRef.current) {
+            shouldResumeRef.current = false;
+            audioRef.current.play().catch(() => {
+              setIsPlaying(false);
+            });
+          }
+        }}
         onPlay={() => setIsPlaying(true)}
         onPause={() => setIsPlaying(false)}
         onEnded={() => {
+          shouldResumeRef.current = false;
           setIsPlaying(false);
           if (currentPlayingAudio === audioRef.current) {
             currentPlayingAudio = null;
@@ -119,6 +140,15 @@ export const AnkiAudioPlayer: React.FC<AnkiAudioPlayerProps> = ({
           onEnded?.();
         }}
         onError={() => {
+          if (!triedFallback) {
+            const fallbackUrl = getAnkiFallbackMediaUrl(activeSrc);
+            if (fallbackUrl && fallbackUrl !== activeSrc) {
+              setTriedFallback(true);
+              setActiveSrc(fallbackUrl);
+              return;
+            }
+          }
+          shouldResumeRef.current = false;
           setIsPlaying(false);
           if (currentPlayingAudio === audioRef.current) {
             currentPlayingAudio = null;

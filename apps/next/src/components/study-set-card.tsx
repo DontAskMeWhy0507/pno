@@ -43,11 +43,7 @@ export const StudySetCard: React.FC<StudySetCardProps> = ({
     (typeof studySet.tags === "string" && studySet.tags.includes("anki")) ||
     (studySet.description?.toLowerCase().includes("anki") ?? false);
 
-  const cardUrl = draft
-    ? `/${studySet.id}/create`
-    : isAnki
-    ? `/sets/${studySet.id}/anki`
-    : `/${studySet.id}`;
+  const cardUrl = draft ? `/${studySet.id}/create` : `/${studySet.id}`;
 
   return (
     <GenericCard

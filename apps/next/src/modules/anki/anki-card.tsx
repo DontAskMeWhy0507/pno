@@ -17,6 +17,7 @@ import {
   sanitizeAnkiHtml,
   stripFrontSidePrefix,
 } from "@quenti/lib/src/anki/template";
+import { getAnkiFallbackMediaUrl } from "@quenti/lib/src/anki/media-fallback";
 import { scopeAnkiCss } from "@quenti/lib/src/anki/presets";
 import { AnkiAudioPlayer, stopAllAnkiAudio } from "./anki-audio-player";
 
@@ -219,6 +220,19 @@ export const AnkiCard: React.FC<AnkiCardProps> = ({
         justifyContent="center"
         px={{ base: 1, sm: 3 }}
         py={{ base: 2, sm: 4 }}
+        onErrorCapture={(e) => {
+          const target = e.target;
+          if (
+            target instanceof HTMLImageElement &&
+            !target.dataset.fallbackApplied
+          ) {
+            const fallbackUrl = getAnkiFallbackMediaUrl(target.src);
+            if (fallbackUrl && fallbackUrl !== target.src) {
+              target.dataset.fallbackApplied = "1";
+              target.src = fallbackUrl;
+            }
+          }
+        }}
       >
         {/* Question Side */}
         <Box

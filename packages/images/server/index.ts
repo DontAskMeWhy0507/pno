@@ -9,6 +9,7 @@ export * from "./avatars";
 export * from "./assets";
 export * from "./terms";
 export * from "./thumbhash";
+export * from "./media-storage";
 
 const hasEnv =
   !!env.R2_ACCOUNT_ID &&

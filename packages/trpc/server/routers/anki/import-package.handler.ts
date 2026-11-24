@@ -10,6 +10,7 @@ import {
   sanitizeAnkiHtml,
   stripFrontSidePrefix,
 } from "@quenti/lib/src/anki/template";
+import { uploadMediaBatchWithFailover } from "@quenti/images/server";
 
 import { TRPCError } from "@trpc/server";
 
@@ -52,142 +53,13 @@ export async function uploadFilesToGithubTree(
   files: { name: string; content: Buffer }[],
   importId?: string,
 ): Promise<string | null> {
-  const ghToken = process.env.GITHUB_MEDIA_TOKEN;
-  if (!ghToken || files.length === 0) return null;
-
-  const owner = process.env.GITHUB_MEDIA_OWNER || "DontAskMeWhy0507";
-  const repo = process.env.GITHUB_MEDIA_REPO || "quenti-media";
+  if (files.length === 0) return null;
   const safeImportId =
     importId?.replace(/[^a-zA-Z0-9_-]/g, "").slice(0, 40) ||
     `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
   const prefix = `anki/imports/${safeImportId}`;
-  const headers = {
-    Authorization: `Bearer ${ghToken}`,
-    Accept: "application/vnd.github+json",
-    "Content-Type": "application/json",
-  };
-
-  try {
-    // 1. Get current main branch HEAD commit and base tree SHA
-    const refRes = await fetch(
-      `https://api.github.com/repos/${owner}/${repo}/git/ref/heads/main`,
-      { headers, signal: AbortSignal.timeout(10_000) },
-    );
-    if (!refRes.ok) throw new Error(`GitHub ref fetch failed (${refRes.status})`);
-    const refJson = (await refRes.json()) as { object?: { sha?: string } };
-    const parentCommitSha = refJson.object?.sha;
-    if (!parentCommitSha) throw new Error("Missing HEAD commit SHA");
-
-    const commitRes = await fetch(
-      `https://api.github.com/repos/${owner}/${repo}/git/commits/${parentCommitSha}`,
-      { headers, signal: AbortSignal.timeout(10_000) },
-    );
-    if (!commitRes.ok)
-      throw new Error(`GitHub commit fetch failed (${commitRes.status})`);
-    const commitJson = (await commitRes.json()) as { tree?: { sha?: string } };
-    const baseTreeSha = commitJson.tree?.sha;
-    if (!baseTreeSha) throw new Error("Missing base tree SHA");
-
-    // 2. Create Git blobs in parallel batches of 8 (no branch lock contention!)
-    const treeEntries: {
-      path: string;
-      mode: "100644";
-      type: "blob";
-      sha: string;
-    }[] = [];
-    const batchSize = 8;
-    for (let i = 0; i < files.length; i += batchSize) {
-      const chunk = files.slice(i, i + batchSize);
-      const created = await Promise.all(
-        chunk.map(async (f) => {
-          const safeName = sanitizeMediaFilename(f.name);
-          const blobRes = await fetch(
-            `https://api.github.com/repos/${owner}/${repo}/git/blobs`,
-            {
-              method: "POST",
-              headers,
-              body: JSON.stringify({
-                content: f.content.toString("base64"),
-                encoding: "base64",
-              }),
-              signal: AbortSignal.timeout(20_000),
-            },
-          );
-          if (!blobRes.ok) return null;
-          const blobJson = (await blobRes.json()) as { sha?: string };
-          return blobJson.sha
-            ? {
-                path: `${prefix}/${safeName}`,
-                mode: "100644" as const,
-                type: "blob" as const,
-                sha: blobJson.sha,
-              }
-            : null;
-        }),
-      );
-      for (const item of created) {
-        if (item) treeEntries.push(item);
-      }
-    }
-
-    if (treeEntries.length === 0) return null;
-
-    // 3. Create single Git tree + single commit + update branch ref
-    const newTreeRes = await fetch(
-      `https://api.github.com/repos/${owner}/${repo}/git/trees`,
-      {
-        method: "POST",
-        headers,
-        body: JSON.stringify({
-          base_tree: baseTreeSha,
-          tree: treeEntries,
-        }),
-        signal: AbortSignal.timeout(15_000),
-      },
-    );
-    if (!newTreeRes.ok)
-      throw new Error(`GitHub tree creation failed (${newTreeRes.status})`);
-    const newTreeJson = (await newTreeRes.json()) as { sha?: string };
-    if (!newTreeJson.sha) throw new Error("Missing new tree SHA");
-
-    const newCommitRes = await fetch(
-      `https://api.github.com/repos/${owner}/${repo}/git/commits`,
-      {
-        method: "POST",
-        headers,
-        body: JSON.stringify({
-          message: `Anki import media batch (${treeEntries.length} files)`,
-          tree: newTreeJson.sha,
-          parents: [parentCommitSha],
-        }),
-        signal: AbortSignal.timeout(15_000),
-      },
-    );
-    if (!newCommitRes.ok)
-      throw new Error(`GitHub commit creation failed (${newCommitRes.status})`);
-    const newCommitJson = (await newCommitRes.json()) as { sha?: string };
-    if (!newCommitJson.sha) throw new Error("Missing new commit SHA");
-
-    const updateRefRes = await fetch(
-      `https://api.github.com/repos/${owner}/${repo}/git/refs/heads/main`,
-      {
-        method: "PATCH",
-        headers,
-        body: JSON.stringify({
-          sha: newCommitJson.sha,
-          force: true,
-        }),
-        signal: AbortSignal.timeout(15_000),
-      },
-    );
-    if (!updateRefRes.ok)
-      throw new Error(`GitHub ref update failed (${updateRefRes.status})`);
-
-    return `https://cdn.jsdelivr.net/gh/${owner}/${repo}@main/${prefix}`;
-  } catch (err) {
-    console.warn("GitHub Git Tree batch upload warning:", err);
-    return null;
-  }
+  const res = await uploadMediaBatchWithFailover(files, prefix);
+  return res?.mediaBase ?? null;
 }
 
 export async function importAnkiBuffer(
@@ -248,7 +120,7 @@ export async function importAnkiBuffer(
     return files;
   };
 
-  if (!mediaBase && ghToken) {
+  if (!mediaBase) {
     const files = await loadMediaFiles();
     if (files.length > 0) {
       mediaBase = await uploadFilesToGithubTree(files);

@@ -209,61 +209,131 @@ export const ImportFromAnkiModal: React.FC<ImportFromAnkiModalProps> = ({
         }
       }
 
-      // Upload media files in <= 2.2 MB batches so no request exceeds Vercel's 4.5 MB body limit
+      // Upload media files in parallel batches (3 concurrent workers, <= 45 files or 2 MB per batch)
       const importId = `${Date.now().toString(36)}${Math.random()
         .toString(36)
         .slice(2, 8)}`;
       let resolvedMediaBase: string | undefined;
-      const mediaEntries = Object.entries(mediaMap);
 
-      if (mediaEntries.length > 0) {
-        let currentBatch: { name: string; base64: string }[] = [];
+      // Deduplicate by sanitized filename so identical media aren't uploaded repeatedly
+      const dedupedEntries: Array<[string, string]> = [];
+      const seenNames = new Set<string>();
+      for (const [entryId, rawName] of Object.entries(mediaMap)) {
+        const clean =
+          rawName
+            .replace(/\\/g, "/")
+            .split("/")
+            .pop()
+            ?.replace(/[<>:"/\\|?*\x00-\x1f]/g, "_")
+            .slice(0, 180) || "media";
+        if (!seenNames.has(clean)) {
+          seenNames.add(clean);
+          dedupedEntries.push([entryId, rawName]);
+        }
+      }
+
+      if (dedupedEntries.length > 0) {
+        type UploadBatch = { name: string; base64: string }[];
+        const batches: UploadBatch[] = [];
+        let currentBatch: UploadBatch = [];
         let currentBatchBytes = 0;
         const maxBatchBytes = 2.0 * 1024 * 1024;
-        let processedCount = 0;
+        const maxBatchFiles = 45;
+        let estimatedTotalBytes = 0;
 
-        const flushBatch = async () => {
-          if (currentBatch.length === 0) return;
-          setProgressMsg(
-            `Uploading media files (${processedCount}/${mediaEntries.length})...`,
-          );
-          const resp = await fetch("/api/anki/upload-media-batch", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              importId,
-              files: currentBatch,
-            }),
-          });
-          if (resp.ok) {
-            const data = (await resp.json()) as { mediaBase?: string | null };
-            if (data.mediaBase) resolvedMediaBase = data.mediaBase;
-          } else {
-            throw new Error(
-              `Media batch upload failed (${resp.status}). Please retry or check server media storage settings.`,
-            );
-          }
-          currentBatch = [];
-          currentBatchBytes = 0;
-        };
+        setProgressMsg(
+          `Preparing ${dedupedEntries.length} media files for fast upload...`,
+        );
 
-        for (const [entryId, realName] of mediaEntries) {
+        for (const [entryId, realName] of dedupedEntries) {
           const entry = zip.file(entryId);
-          processedCount++;
           if (!entry) continue;
           const base64 = await entry.async("base64");
           const approxBytes = base64.length;
-          if (approxBytes > 2.8 * 1024 * 1024) continue; // skip single oversized media > 2.8MB
+          if (approxBytes > 2.8 * 1024 * 1024) continue;
+          estimatedTotalBytes += Math.floor((approxBytes * 3) / 4);
+
           if (
             currentBatch.length > 0 &&
-            currentBatchBytes + approxBytes > maxBatchBytes
+            (currentBatch.length >= maxBatchFiles ||
+              currentBatchBytes + approxBytes > maxBatchBytes)
           ) {
-            await flushBatch();
+            batches.push(currentBatch);
+            currentBatch = [];
+            currentBatchBytes = 0;
           }
           currentBatch.push({ name: realName, base64 });
           currentBatchBytes += approxBytes;
         }
-        await flushBatch();
+        if (currentBatch.length > 0) {
+          batches.push(currentBatch);
+        }
+
+        if (batches.length > 0) {
+          let uploadedFilesCount = 0;
+          const totalFilesToUpload = batches.reduce(
+            (sum, b) => sum + b.length,
+            0,
+          );
+
+          const postBatch = async (
+            batch: UploadBatch,
+            opts: { estimatedBytes?: number; forceBackup?: boolean },
+          ) => {
+            const resp = await fetch("/api/anki/upload-media-batch", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                importId,
+                files: batch,
+                estimatedTotalBytes: opts.estimatedBytes,
+                forceBackup: opts.forceBackup,
+              }),
+            });
+            if (!resp.ok) {
+              throw new Error(
+                `Media batch upload failed (${resp.status}). Please retry or check storage settings.`,
+              );
+            }
+            const data = (await resp.json()) as {
+              mediaBase?: string | null;
+              provider?: "s3" | "github" | "local";
+            };
+            if (data.mediaBase) resolvedMediaBase = data.mediaBase;
+            uploadedFilesCount += batch.length;
+            setProgressMsg(
+              `Uploading media (${uploadedFilesCount}/${totalFilesToUpload} files)...`,
+            );
+            return data;
+          };
+
+          // Batch 0 checks total estimated size against S3 hard quota guard so whole deck stays on 1 provider
+          setProgressMsg(
+            `Uploading media (0/${totalFilesToUpload} files)...`,
+          );
+          const firstRes = await postBatch(batches[0]!, {
+            estimatedBytes: estimatedTotalBytes,
+          });
+          const useBackupForRest = firstRes.provider === "github";
+
+          // Upload remaining batches concurrently (3 parallel workers)
+          const remaining = batches.slice(1);
+          const CONCURRENCY = 3;
+          let nextIdx = 0;
+          const workers = Array.from(
+            { length: Math.min(CONCURRENCY, remaining.length) },
+            async () => {
+              while (nextIdx < remaining.length) {
+                const idx = nextIdx++;
+                const batch = remaining[idx];
+                if (batch) {
+                  await postBatch(batch, { forceBackup: useBackupForRest });
+                }
+              }
+            },
+          );
+          await Promise.all(workers);
+        }
       }
 
       // Build lightweight collection-only .apkg zip

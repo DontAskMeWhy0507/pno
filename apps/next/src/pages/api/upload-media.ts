@@ -4,6 +4,7 @@ import type { NextApiRequest, NextApiResponse } from "next";
 import path from "path";
 
 import { getServerAuthSession } from "@quenti/auth";
+import { uploadSingleMediaWithFailover } from "@quenti/images/server";
 
 export const config = {
   api: {
@@ -127,10 +128,27 @@ export default async function handler(
   const ownerPrefix = session.user.id.replace(/[^a-zA-Z0-9_-]/g, "_");
   const relPath = `tests/${ownerPrefix}/${skill}/${testId}/${subFolder}/${filename}`;
 
-  // 1. If Vercel Blob is configured, upload there
+  // 1. Try Primary S3 (Tigris / Cloudflare R2 with Hard Quota Guard) -> Backup GitHub quenti-media
+  const cloudKey = `ielts/${relPath}`;
+  const uploadedCloud = await uploadSingleMediaWithFailover(
+    { name: filename, content: buffer },
+    cloudKey,
+  );
+  if (uploadedCloud) {
+    return res.status(200).json({
+      success: true,
+      url: uploadedCloud.url,
+      filename,
+      size: buffer.length,
+      provider: uploadedCloud.provider,
+      fallbackUsed: uploadedCloud.fallbackUsed,
+    });
+  }
+
+  // 2. Vercel Blob fallback if configured
   if (process.env.BLOB_READ_WRITE_TOKEN) {
     try {
-      const uploaded = await put(`ielts/${relPath}`, buffer, {
+      const uploaded = await put(cloudKey, buffer, {
         access: "public",
         addRandomSuffix: false,
       });
@@ -141,56 +159,7 @@ export default async function handler(
         size: buffer.length,
       });
     } catch (err) {
-      console.warn("Vercel Blob upload failed, trying fallback:", err);
-    }
-  }
-
-  // 2. If GitHub Media Token is configured, upload to GitHub CDN
-  const githubToken = process.env.GITHUB_MEDIA_TOKEN;
-  if (githubToken) {
-    try {
-      const owner = process.env.GITHUB_MEDIA_OWNER || "DontAskMeWhy0507";
-      const repo = process.env.GITHUB_MEDIA_REPO || "quenti-media";
-      const ghPath = `ielts/${ownerPrefix}/${skill}/${testId}/${subFolder}/${encodeURIComponent(filename)}`;
-      const apiUrl = `https://api.github.com/repos/${owner}/${repo}/contents/${ghPath}`;
-
-      let existingSha: string | undefined;
-      const checkRes = await fetch(apiUrl, {
-        headers: {
-          Authorization: `Bearer ${githubToken}`,
-          Accept: "application/vnd.github+json",
-        },
-      });
-      if (checkRes.ok) {
-        const existingJson = (await checkRes.json()) as { sha?: string };
-        existingSha = existingJson.sha;
-      }
-
-      const putRes = await fetch(apiUrl, {
-        method: "PUT",
-        headers: {
-          Authorization: `Bearer ${githubToken}`,
-          Accept: "application/vnd.github+json",
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          message: `upload ielts media ${filename}`,
-          content: buffer.toString("base64"),
-          ...(existingSha ? { sha: existingSha } : {}),
-        }),
-      });
-
-      if (putRes.ok) {
-        const cdnUrl = `https://cdn.jsdelivr.net/gh/${owner}/${repo}@main/ielts/${ownerPrefix}/${skill}/${testId}/${subFolder}/${encodeURIComponent(filename)}`;
-        return res.status(200).json({
-          success: true,
-          url: cdnUrl,
-          filename,
-          size: buffer.length,
-        });
-      }
-    } catch (err) {
-      console.warn("GitHub media upload failed, trying local fallback:", err);
+      console.warn("Vercel Blob upload failed, trying local fallback:", err);
     }
   }
 
