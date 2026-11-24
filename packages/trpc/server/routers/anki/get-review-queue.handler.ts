@@ -22,6 +22,16 @@ export const getReviewQueueHandler = async ({
 
   await assertStudySetReadable(ctx, input.studySetId);
 
+  const studySet = await ctx.prisma.studySet.findUnique({
+    where: { id: input.studySetId },
+    select: {
+      id: true,
+      title: true,
+      userId: true,
+      ankiTemplate: true,
+    },
+  });
+
   // Step 1: Lightweight fetch of term IDs and ranks only
   const terms = await ctx.prisma.term.findMany({
     where: { studySetId: input.studySetId, ephemeral: false },
@@ -98,6 +108,7 @@ export const getReviewQueueHandler = async ({
           id: true,
           word: true,
           definition: true,
+          wordRichText: true,
           assetUrl: true,
         },
       })
@@ -128,6 +139,7 @@ export const getReviewQueueHandler = async ({
       termId: c.termId,
       word: details?.word ?? "",
       definition: details?.definition ?? "",
+      wordRichText: details?.wordRichText ?? null,
       assetUrl: details?.assetUrl ?? null,
       rank: c.rank,
       queue: c.queue,
@@ -142,6 +154,15 @@ export const getReviewQueueHandler = async ({
   });
 
   return {
+    deck: studySet
+      ? {
+          id: studySet.id,
+          title: studySet.title,
+          userId: studySet.userId,
+          isOwner: studySet.userId === userId,
+          ankiTemplate: studySet.ankiTemplate ?? null,
+        }
+      : null,
     cards: queueCards,
     counts: {
       learn: learnDue.length,

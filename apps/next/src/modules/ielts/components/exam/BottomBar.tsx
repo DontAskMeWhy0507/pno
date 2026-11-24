@@ -54,7 +54,7 @@ export const BottomBar: FC<BottomBarProps> = ({
   const activeQuestions = (activePart?.questionGroups || []).flatMap(g => g.questions);
 
   return (
-    <footer className="min-h-[52px] bg-white border-t-2 border-gray-200 text-gray-800 flex items-center justify-between px-3 sm:px-4 py-1.5 select-none text-xs z-20 shrink-0 shadow-xs">
+    <footer className="min-h-[52px] bg-white border-t-2 border-gray-200 text-gray-800 flex items-center justify-between px-2.5 sm:px-4 pt-1.5 pb-safe sm:py-1.5 select-none text-xs z-20 shrink-0 shadow-xs">
       {/* Left: Parts list and Active part's question boxes */}
       <div className="flex items-center space-x-2 overflow-x-auto py-1 scrollbar-none flex-1 mr-2 sm:mr-4">
         {parts.map(part => {
@@ -159,11 +159,17 @@ export const BottomBar: FC<BottomBarProps> = ({
         {/* Submit button */}
         <button
           onClick={onSubmit}
-          className="h-8 px-4 rounded-xl font-bold flex items-center gap-1.5 text-xs transition ml-1.5 bg-blue-600 hover:bg-blue-700 text-white shadow-xs"
+          className="h-9 sm:h-8 px-3 sm:px-4 rounded-xl font-bold flex items-center gap-1.5 text-xs transition ml-1 sm:ml-1.5 bg-blue-600 hover:bg-blue-700 text-white shadow-xs shrink-0"
           title={isReviewMode ? 'View detailed score report' : 'Submit test'}
         >
           <Check className="w-3.5 h-3.5 stroke-[3]" />
-          <span>{isReviewMode ? 'Results' : 'Submit Test'}</span>
+          {isReviewMode ? (
+            <span>Results</span>
+          ) : (
+            <span>
+              Submit<span className="hidden sm:inline"> Test</span>
+            </span>
+          )}
         </button>
       </div>
     </footer>

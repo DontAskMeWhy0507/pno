@@ -1,13 +1,13 @@
-import { Card, VStack } from "@chakra-ui/react";
+import { Card, type ResponsiveValue, VStack } from "@chakra-ui/react";
 
 import { GhostMessage } from "./ghost-message";
 
 export interface FlashcardsEmptyProps {
-  h?: string;
+  h?: ResponsiveValue<string>;
 }
 
 export const FlashcardsEmpty: React.FC<FlashcardsEmptyProps> = ({
-  h = "500px",
+  h = { base: "340px", md: "500px" },
 }) => {
   return (
     <Card

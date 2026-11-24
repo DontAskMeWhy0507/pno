@@ -1,5 +1,5 @@
 import React from "react";
-import { Button, HStack, Text, Stack } from "@chakra-ui/react";
+import { Box, Button, HStack, Stack, Text } from "@chakra-ui/react";
 
 export interface AnkiRatingBarProps {
   estimates: {
@@ -17,95 +17,101 @@ export const AnkiRatingBar: React.FC<AnkiRatingBarProps> = ({
   onRate,
   isLoading = false,
 }) => {
+  const buttons: Array<{
+    rating: 1 | 2 | 3 | 4;
+    label: string;
+    estimate: string;
+    colorScheme: string;
+    bg: string;
+    borderColor: string;
+    darkBg: string;
+    darkBorderColor: string;
+  }> = [
+    {
+      rating: 1,
+      label: "Again",
+      estimate: estimates.again,
+      colorScheme: "red",
+      bg: "red.50",
+      borderColor: "red.300",
+      darkBg: "red.900",
+      darkBorderColor: "red.700",
+    },
+    {
+      rating: 2,
+      label: "Hard",
+      estimate: estimates.hard,
+      colorScheme: "yellow",
+      bg: "yellow.50",
+      borderColor: "yellow.400",
+      darkBg: "yellow.900",
+      darkBorderColor: "yellow.600",
+    },
+    {
+      rating: 3,
+      label: "Good",
+      estimate: estimates.good,
+      colorScheme: "blue",
+      bg: "blue.50",
+      borderColor: "blue.300",
+      darkBg: "blue.900",
+      darkBorderColor: "blue.700",
+    },
+    {
+      rating: 4,
+      label: "Easy",
+      estimate: estimates.easy,
+      colorScheme: "green",
+      bg: "green.50",
+      borderColor: "green.300",
+      darkBg: "green.900",
+      darkBorderColor: "green.700",
+    },
+  ];
+
   return (
-    <HStack spacing={{ base: 2, md: 4 }} w="full" justify="center">
-      {/* 1: Again */}
-      <Button
-        flex="1"
-        maxW="140px"
-        h="60px"
-        colorScheme="red"
-        variant="outline"
-        bg="red.50"
-        borderWidth="1px"
-        borderColor="red.300"
-        _dark={{ bg: "red.900", borderColor: "red.700" }}
-        onClick={() => onRate(1)}
-        isDisabled={isLoading}
-      >
-        <Stack spacing={0} align="center">
-          <Text fontSize="xs" fontWeight={600} opacity={0.8}>
-            {estimates.again}
-          </Text>
-          <Text fontWeight={700}>Again (1)</Text>
-        </Stack>
-      </Button>
-
-      {/* 2: Hard */}
-      <Button
-        flex="1"
-        maxW="140px"
-        h="60px"
-        colorScheme="yellow"
-        variant="outline"
-        bg="yellow.50"
-        borderWidth="1px"
-        borderColor="yellow.400"
-        _dark={{ bg: "yellow.900", borderColor: "yellow.600" }}
-        onClick={() => onRate(2)}
-        isDisabled={isLoading}
-      >
-        <Stack spacing={0} align="center">
-          <Text fontSize="xs" fontWeight={600} opacity={0.8}>
-            {estimates.hard}
-          </Text>
-          <Text fontWeight={700}>Hard (2)</Text>
-        </Stack>
-      </Button>
-
-      {/* 3: Good */}
-      <Button
-        flex="1"
-        maxW="140px"
-        h="60px"
-        colorScheme="blue"
-        variant="outline"
-        bg="blue.50"
-        borderWidth="1px"
-        borderColor="blue.300"
-        _dark={{ bg: "blue.900", borderColor: "blue.700" }}
-        onClick={() => onRate(3)}
-        isDisabled={isLoading}
-      >
-        <Stack spacing={0} align="center">
-          <Text fontSize="xs" fontWeight={600} opacity={0.8}>
-            {estimates.good}
-          </Text>
-          <Text fontWeight={700}>Good (3)</Text>
-        </Stack>
-      </Button>
-
-      {/* 4: Easy */}
-      <Button
-        flex="1"
-        maxW="140px"
-        h="60px"
-        colorScheme="green"
-        variant="outline"
-        bg="green.50"
-        borderWidth="1px"
-        borderColor="green.300"
-        _dark={{ bg: "green.900", borderColor: "green.700" }}
-        onClick={() => onRate(4)}
-        isDisabled={isLoading}
-      >
-        <Stack spacing={0} align="center">
-          <Text fontSize="xs" fontWeight={600} opacity={0.8}>
-            {estimates.easy}
-          </Text>
-          <Text fontWeight={700}>Easy (4)</Text>
-        </Stack>
-      </Button>
+    <HStack spacing={{ base: 1.5, sm: 3, md: 4 }} w="full" justify="center">
+      {buttons.map((b) => (
+        <Button
+          key={b.rating}
+          flex="1"
+          minW={0}
+          maxW="140px"
+          h={{ base: "56px", md: "60px" }}
+          px={{ base: 1, sm: 3 }}
+          rounded="xl"
+          colorScheme={b.colorScheme}
+          variant="outline"
+          bg={b.bg}
+          borderWidth="1.5px"
+          borderColor={b.borderColor}
+          _dark={{ bg: b.darkBg, borderColor: b.darkBorderColor }}
+          onClick={() => onRate(b.rating)}
+          isDisabled={isLoading}
+        >
+          <Stack spacing={0} align="center" minW={0}>
+            <Text
+              fontSize={{ base: "2xs", sm: "xs" }}
+              fontWeight={600}
+              opacity={0.8}
+              noOfLines={1}
+            >
+              {b.estimate}
+            </Text>
+            <Text
+              fontSize={{ base: "xs", sm: "sm", md: "md" }}
+              fontWeight={700}
+              noOfLines={1}
+            >
+              {b.label}
+              <Box as="span" display={{ base: "none", sm: "inline" }}>
+                {" "}
+                ({b.rating})
+              </Box>
+            </Text>
+          </Stack>
+        </Button>
+      ))}
     </HStack>
   );
 };

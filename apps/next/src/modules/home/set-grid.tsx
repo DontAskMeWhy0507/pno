@@ -218,10 +218,10 @@ export const SetGrid = () => {
       {/* Dedicated Anki Decks Section */}
       {ankiDecks.length > 0 && (
         <Stack spacing={4}>
-          <HStack justify="space-between" align="center">
-            <HStack spacing={2.5}>
+          <HStack justify="space-between" align="center" flexWrap="wrap" gap={2}>
+            <HStack spacing={2.5} flexWrap="wrap">
               <IconBrain size={24} color="#805ad5" />
-              <Heading size="lg">Anki Decks (SRS)</Heading>
+              <Heading size={{ base: "md", sm: "lg" }}>Anki Decks (SRS)</Heading>
               <Badge
                 colorScheme="purple"
                 fontSize="sm"
@@ -241,7 +241,7 @@ export const SetGrid = () => {
             audio, and images.
           </Text>
           <Grid
-            templateColumns="repeat(auto-fill, minmax(256px, 1fr))"
+            templateColumns="repeat(auto-fill, minmax(min(100%, 256px), 1fr))"
             gap={4}
           >
             {ankiDecks.map((item) => (
@@ -269,11 +269,13 @@ export const SetGrid = () => {
           <Skeleton isLoaded={!!data} rounded="md" fitContent>
             <HStack spacing={2}>
               <IconCards size={24} />
-              <Heading size="lg">Quiz Sets &amp; Folders</Heading>
+              <Heading size={{ base: "md", sm: "lg" }}>
+                Quiz Sets &amp; Folders
+              </Heading>
             </HStack>
           </Skeleton>
           <Grid
-            templateColumns="repeat(auto-fill, minmax(256px, 1fr))"
+            templateColumns="repeat(auto-fill, minmax(min(100%, 256px), 1fr))"
             gap={4}
           >
             {isLoading &&

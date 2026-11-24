@@ -1,20 +1,30 @@
-import React, { useState, useEffect, useCallback, useRef } from "react";
+import dynamic from "next/dynamic";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/router";
 import {
+  Badge,
   Box,
   Button,
   Container,
   HStack,
   Heading,
+  Icon,
+  IconButton,
+  Spinner,
   Stack,
   Text,
-  Badge,
-  Spinner,
-  Icon,
+  Tooltip,
   useColorModeValue,
   useToast,
 } from "@chakra-ui/react";
-import { IconArrowLeft, IconTrophy, IconRefresh } from "@tabler/icons-react";
+import {
+  IconArrowLeft,
+  IconEdit,
+  IconRefresh,
+  IconTrophy,
+  IconVolume,
+} from "@tabler/icons-react";
+import { parseAnkiDeckTemplate } from "@quenti/lib/src/anki/presets";
 import {
   calculateNextSchedule,
   getIntervalEstimateLabel,
@@ -25,6 +35,11 @@ import { api } from "@quenti/trpc";
 import { AnkiCard } from "./anki-card";
 import { AnkiRatingBar } from "./anki-rating-bar";
 
+const AnkiCardEditorModal = dynamic(
+  () => import("./anki-card-editor-modal").then((m) => m.AnkiCardEditorModal),
+  { ssr: false },
+);
+
 export interface AnkiStudyViewProps {
   studySetId: string;
 }
@@ -33,6 +48,7 @@ interface SessionCard {
   termId: string;
   word: string;
   definition: string;
+  wordRichText?: unknown;
   assetUrl: string | null;
   rank: number;
   queue: AnkiQueue;
@@ -58,6 +74,8 @@ export const AnkiStudyView: React.FC<AnkiStudyViewProps> = ({ studySetId }) => {
   const [isAnswerShown, setIsAnswerShown] = useState(false);
   const [sessionCards, setSessionCards] = useState<SessionCard[]>([]);
   const [liveCounts, setLiveCounts] = useState({ new: 0, learn: 0, review: 0 });
+  const [editModalOpen, setEditModalOpen] = useState(false);
+  const [replaySignal, setReplaySignal] = useState(0);
   const inFlightTermsRef = useRef<Set<string>>(new Set());
   const lastLoadedUpdatedAtRef = useRef<number>(0);
 
@@ -69,6 +87,13 @@ export const AnkiStudyView: React.FC<AnkiStudyViewProps> = ({ studySetId }) => {
       staleTime: 60000,
     },
   );
+
+  const deckInfo = queueQuery.data?.deck ?? null;
+  const deckTemplate = useMemo(
+    () => parseAnkiDeckTemplate(deckInfo?.ankiTemplate),
+    [deckInfo?.ankiTemplate],
+  );
+  const isOwner = Boolean(deckInfo?.isOwner);
 
   // Reset local session state whenever navigating between decks
   useEffect(() => {
@@ -95,7 +120,12 @@ export const AnkiStudyView: React.FC<AnkiStudyViewProps> = ({ studySetId }) => {
         review: queueQuery.data.counts.review,
       });
     }
-  }, [queueQuery.data, queueQuery.isFetching, queueQuery.dataUpdatedAt, sessionCards.length]);
+  }, [
+    queueQuery.data,
+    queueQuery.isFetching,
+    queueQuery.dataUpdatedAt,
+    sessionCards.length,
+  ]);
 
   const submitReviewMutation = api.anki.submitReview.useMutation({
     onSuccess: (_data, variables) => {
@@ -138,7 +168,6 @@ export const AnkiStudyView: React.FC<AnkiStudyViewProps> = ({ studySetId }) => {
       const ratedCard = currentCard;
       inFlightTermsRef.current.add(ratedCard.termId);
 
-      // Fire mutation in the background (optimistic UI with toast error reporting)
       submitReviewMutation.mutate({
         studySetId,
         termId: ratedCard.termId,
@@ -161,7 +190,6 @@ export const AnkiStudyView: React.FC<AnkiStudyViewProps> = ({ studySetId }) => {
       const nextState = calculateNextSchedule(prevState, rating, now);
       const stayInSession = rating === 1 || nextState.queue === "Learning";
 
-      // Update live New/Learn/Review counters
       setLiveCounts((prev) => {
         const next = { ...prev };
         if (ratedCard.queue === "New") next.new = Math.max(0, next.new - 1);
@@ -190,10 +218,11 @@ export const AnkiStudyView: React.FC<AnkiStudyViewProps> = ({ studySetId }) => {
     [currentCard, studySetId, submitReviewMutation],
   );
 
-  // Global Keyboard shortcuts (disabled when finished or focused on text inputs)
+  // Global Keyboard shortcuts
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (isFinished || queueQuery.isLoading || !currentCard) return;
+      if (isFinished || queueQuery.isLoading || !currentCard || editModalOpen)
+        return;
       if (e.ctrlKey || e.altKey || e.metaKey) return;
       if (
         e.target instanceof HTMLInputElement ||
@@ -211,6 +240,12 @@ export const AnkiStudyView: React.FC<AnkiStudyViewProps> = ({ studySetId }) => {
         } else {
           handleRate(3);
         }
+      } else if (e.key.toLowerCase() === "r") {
+        e.preventDefault();
+        setReplaySignal((s) => s + 1);
+      } else if (e.key.toLowerCase() === "e" && isOwner) {
+        e.preventDefault();
+        setEditModalOpen(true);
       } else if (isAnswerShown) {
         if (e.key === "1") handleRate(1);
         else if (e.key === "2") handleRate(2);
@@ -226,11 +261,17 @@ export const AnkiStudyView: React.FC<AnkiStudyViewProps> = ({ studySetId }) => {
     queueQuery.isLoading,
     currentCard,
     isAnswerShown,
+    editModalOpen,
+    isOwner,
     handleShowAnswer,
     handleRate,
   ]);
 
   const secondaryText = useColorModeValue("gray.600", "gray.400");
+  const stickyBg = useColorModeValue(
+    "rgba(247, 250, 252, 0.86)",
+    "rgba(23, 25, 35, 0.86)",
+  );
   const counts = liveCounts;
 
   if (queueQuery.isLoading) {
@@ -311,57 +352,129 @@ export const AnkiStudyView: React.FC<AnkiStudyViewProps> = ({ studySetId }) => {
   }
 
   return (
-    <Container maxW="4xl" py={6}>
-      <Stack spacing={6}>
-        {/* Header Bar */}
-        <HStack justify="space-between" align="center">
-          <Button
-            size="sm"
-            variant="ghost"
-            leftIcon={<IconArrowLeft size={16} />}
-            onClick={() => router.push(`/${studySetId}`)}
-          >
-            Back to Deck
-          </Button>
+    <Container
+      maxW="4xl"
+      px={{ base: 3, sm: 6 }}
+      py={{ base: 3, md: 6 }}
+      minH="calc(100dvh - 80px)"
+      display="flex"
+      flexDirection="column"
+    >
+      <Stack spacing={{ base: 4, md: 6 }} flex="1" justify="space-between">
+        <Stack spacing={{ base: 4, md: 6 }}>
+          {/* Header Bar */}
+          <HStack justify="space-between" align="center" flexWrap="wrap" gap={2}>
+            <Button
+              size="sm"
+              variant="ghost"
+              leftIcon={<IconArrowLeft size={16} />}
+              onClick={() => router.push(`/${studySetId}`)}
+            >
+              <Box as="span" display={{ base: "none", sm: "inline" }}>
+                Back to Deck
+              </Box>
+              <Box as="span" display={{ base: "inline", sm: "none" }}>
+                Deck
+              </Box>
+            </Button>
 
-          {/* Anki Review Counters: Blue (New), Red (Learn), Green (Review) */}
-          <HStack spacing={3}>
-            <Badge colorScheme="blue" px={2.5} py={1} rounded="md" fontSize="sm">
-              New: {counts.new}
-            </Badge>
-            <Badge colorScheme="red" px={2.5} py={1} rounded="md" fontSize="sm">
-              Learn: {counts.learn}
-            </Badge>
-            <Badge colorScheme="green" px={2.5} py={1} rounded="md" fontSize="sm">
-              Review: {counts.review}
-            </Badge>
+            {/* Anki Review Counters + Replay/Edit */}
+            <HStack spacing={{ base: 1.5, sm: 2.5 }}>
+              <Badge
+                colorScheme="blue"
+                px={{ base: 2, sm: 2.5 }}
+                py={1}
+                rounded="md"
+                fontSize={{ base: "xs", sm: "sm" }}
+              >
+                New: {counts.new}
+              </Badge>
+              <Badge
+                colorScheme="red"
+                px={{ base: 2, sm: 2.5 }}
+                py={1}
+                rounded="md"
+                fontSize={{ base: "xs", sm: "sm" }}
+              >
+                Learn: {counts.learn}
+              </Badge>
+              <Badge
+                colorScheme="green"
+                px={{ base: 2, sm: 2.5 }}
+                py={1}
+                rounded="md"
+                fontSize={{ base: "xs", sm: "sm" }}
+              >
+                Review: {counts.review}
+              </Badge>
+
+              <Tooltip label="Replay audio (R)">
+                <IconButton
+                  aria-label="Replay audio"
+                  icon={<IconVolume size={17} />}
+                  size="sm"
+                  variant="ghost"
+                  rounded="lg"
+                  onClick={() => setReplaySignal((s) => s + 1)}
+                />
+              </Tooltip>
+
+              {isOwner && currentCard && (
+                <Tooltip label="Edit card (E)">
+                  <IconButton
+                    aria-label="Edit card"
+                    icon={<IconEdit size={17} />}
+                    size="sm"
+                    variant="outline"
+                    rounded="lg"
+                    onClick={() => setEditModalOpen(true)}
+                  />
+                </Tooltip>
+              )}
+            </HStack>
           </HStack>
-        </HStack>
 
-        {/* Card View */}
-        {currentCard && (
-          <AnkiCard
-            key={`${currentCard.termId}-${currentIndex}`}
-            frontHtml={currentCard.word}
-            backHtml={currentCard.definition}
-            assetUrl={currentCard.assetUrl}
-            isAnswerShown={isAnswerShown}
-            onFlip={handleShowAnswer}
-          />
-        )}
+          {/* Card View */}
+          {currentCard && (
+            <AnkiCard
+              key={`${currentCard.termId}-${currentIndex}`}
+              frontHtml={currentCard.word}
+              backHtml={currentCard.definition}
+              assetUrl={currentCard.assetUrl}
+              customCss={deckTemplate?.css}
+              replaySignal={replaySignal}
+              isAnswerShown={isAnswerShown}
+              onFlip={handleShowAnswer}
+            />
+          )}
+        </Stack>
 
-        {/* Action Controls */}
-        <Box pt={2}>
+        {/* Action Controls (Sticky thumb bar on mobile) */}
+        <Box
+          position={{ base: "sticky", md: "static" }}
+          bottom={0}
+          zIndex={20}
+          bg={{ base: stickyBg, md: "transparent" }}
+          backdropFilter={{ base: "blur(12px)", md: "none" }}
+          pt={2}
+          pb={{ base: "max(12px, env(safe-area-inset-bottom))", md: 2 }}
+          mx={{ base: -3, sm: 0 }}
+          px={{ base: 3, sm: 0 }}
+        >
           {!isAnswerShown ? (
             <Button
               w="full"
-              h="54px"
+              h={{ base: "50px", md: "54px" }}
               colorScheme="orange"
               fontSize="md"
               fontWeight={700}
+              rounded="xl"
               onClick={handleShowAnswer}
             >
-              Show Answer (Space)
+              Show Answer
+              <Box as="span" display={{ base: "none", sm: "inline" }} ml={1}>
+                (Space)
+              </Box>
             </Button>
           ) : (
             currentCard && (
@@ -374,6 +487,37 @@ export const AnkiStudyView: React.FC<AnkiStudyViewProps> = ({ studySetId }) => {
           )}
         </Box>
       </Stack>
+
+      {isOwner && currentCard && editModalOpen && (
+        <AnkiCardEditorModal
+          isOpen={editModalOpen}
+          onClose={() => setEditModalOpen(false)}
+          studySetId={studySetId}
+          deckTemplate={deckTemplate}
+          card={{
+            termId: currentCard.termId,
+            word: currentCard.word,
+            definition: currentCard.definition,
+            wordRichText: currentCard.wordRichText,
+            assetUrl: currentCard.assetUrl,
+          }}
+          onSaved={(updated) => {
+            setSessionCards((prev) =>
+              prev.map((c) =>
+                c.termId === updated.id
+                  ? {
+                      ...c,
+                      word: updated.word,
+                      definition: updated.definition,
+                      wordRichText: updated.wordRichText,
+                      assetUrl: updated.assetUrl,
+                    }
+                  : c,
+              ),
+            );
+          }}
+        />
+      )}
     </Container>
   );
 };

@@ -776,7 +776,7 @@ export const HomePage: FC<HomePageProps> = ({
             </HStack>
 
             <Grid
-              templateColumns="repeat(auto-fill, minmax(280px, 1fr))"
+              templateColumns="repeat(auto-fill, minmax(min(100%, 280px), 1fr))"
               gap={4}
             >
               {inProgressItems.map((item) => {
@@ -1187,7 +1187,7 @@ export const HomePage: FC<HomePageProps> = ({
 
             {viewMode === "all_tests" ? (
               <Grid
-                templateColumns="repeat(auto-fill, minmax(280px, 1fr))"
+                templateColumns="repeat(auto-fill, minmax(min(100%, 280px), 1fr))"
                 gap={4}
               >
                 {(activeTab === "reading"
@@ -1227,7 +1227,7 @@ export const HomePage: FC<HomePageProps> = ({
                 </HStack>
 
                 <Grid
-                  templateColumns="repeat(auto-fill, minmax(280px, 1fr))"
+                  templateColumns="repeat(auto-fill, minmax(min(100%, 280px), 1fr))"
                   gap={4}
                 >
                   {(activeTab === "reading" ? readingExams : listeningExams)
@@ -1240,7 +1240,7 @@ export const HomePage: FC<HomePageProps> = ({
             ) : (
               /* Collections Folder Grid (Matches FolderCard style from Quiz) */
               <Grid
-                templateColumns="repeat(auto-fill, minmax(260px, 1fr))"
+                templateColumns="repeat(auto-fill, minmax(min(100%, 260px), 1fr))"
                 gap={4}
               >
                 {collections.map((col) => {
@@ -1366,7 +1366,7 @@ export const HomePage: FC<HomePageProps> = ({
             </HStack>
 
             <Grid
-              templateColumns="repeat(auto-fill, minmax(280px, 1fr))"
+              templateColumns="repeat(auto-fill, minmax(min(100%, 280px), 1fr))"
               gap={4}
             >
               {filteredWriting.map((test) => {
@@ -1436,7 +1436,7 @@ export const HomePage: FC<HomePageProps> = ({
             </HStack>
 
             <Grid
-              templateColumns="repeat(auto-fill, minmax(280px, 1fr))"
+              templateColumns="repeat(auto-fill, minmax(min(100%, 280px), 1fr))"
               gap={4}
             >
               {filteredSpeaking.map((test) => {

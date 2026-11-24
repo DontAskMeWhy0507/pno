@@ -27,7 +27,7 @@ import {
   type CloudIeltsSkill,
 } from './utils/cloudSync';
 import { api } from '@quenti/trpc';
-import { useColorMode, useToast } from '@chakra-ui/react';
+import { Box, useColorMode, useColorModeValue, useToast } from '@chakra-ui/react';
 import Navbar from '../../components/navbar';
 import { Footer } from '../../components/footer';
 import { menuEventChannel } from '../../events/menu';
@@ -795,6 +795,11 @@ export function App() {
     navigateSkill('speaking', exam.id);
   };
 
+  const ambientBg = useColorModeValue(
+    "linear(to-b, blue.50 0%, rgba(224, 237, 255, 0.45) 55%, transparent 100%)",
+    "linear(to-b, rgba(75, 131, 255, 0.14) 0%, rgba(75, 131, 255, 0.04) 55%, transparent 100%)",
+  );
+
   const answeredCount = Object.values(answers).filter(
     (a) => a !== undefined && a !== '' && (!Array.isArray(a) || a.length > 0)
   ).length;
@@ -804,7 +809,7 @@ export function App() {
       data-theme={colorMode}
       className={`ielts-root ${colorMode === 'dark' ? 'dark ielts-dark' : 'ielts-light'} ${
         currentView === 'home'
-          ? 'min-h-screen w-full flex flex-col bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100 font-sans'
+          ? 'min-h-screen w-full flex flex-col bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100 font-sans relative'
           : 'h-[100dvh] w-full overflow-hidden bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 font-sans'
       }`}
     >
@@ -818,42 +823,56 @@ export function App() {
 
       {/* 1. HOMEPAGE VIEW */}
       {currentView === 'home' && (
-        <>
-          <Navbar />
-          <HomePage
-            exams={allExams}
-            recentAttempts={recentAttempts}
-            syncStatus={syncStatus}
-            onSelectExam={(exam) => void handleStartExam(exam)}
-            onOpenEditor={(examToEdit) => void handleOpenExamEditor(examToEdit)}
-            onOpenTestManager={() => setIsTestManagerOpen(true)}
-            onOpenSmartImport={(collection, skill) => {
-              setSmartImportCollection(collection);
-              setSmartImportSkill(skill);
-              setIsSmartImportOpen(true);
-            }}
-            onRefreshExams={handleRefreshExams}
-            onStartWritingExam={handleStartWritingExam}
-            onStartSpeakingExam={handleStartSpeakingExam}
-            onDeleteAttempt={(attemptId) => {
-              setRecentAttempts((prev) => prev.filter((a) => a.id !== attemptId));
-              deleteAttemptMutation.mutate({ id: attemptId });
-            }}
-            onCloudSaveExam={cloudSyncExam}
-            onCloudDeleteExam={cloudDeleteExam}
-            onCloudCreateCollection={(col) => {
-              upsertCollectionMutation.mutate({
-                name: col.name,
-                description: col.description,
-              });
-            }}
-            onCloudDeleteCollection={(name, examsToTombstone) => {
-              deleteCollectionMutation.mutate({ name, examsToTombstone });
-            }}
-            onCloudClearProgress={cloudClearProgress}
+        <div className="relative w-full flex flex-col">
+          <Box
+            pos="absolute"
+            top={0}
+            left={0}
+            right={0}
+            h={{ base: '380px', md: '480px' }}
+            bgGradient={ambientBg}
+            pointerEvents="none"
+            zIndex={0}
           />
-          <Footer />
-        </>
+          <div className="relative z-[1] flex flex-col">
+            <Navbar />
+            <div className="min-h-[calc(100dvh-80px)] flex flex-col">
+              <HomePage
+                exams={allExams}
+                recentAttempts={recentAttempts}
+                syncStatus={syncStatus}
+                onSelectExam={(exam) => void handleStartExam(exam)}
+                onOpenEditor={(examToEdit) => void handleOpenExamEditor(examToEdit)}
+                onOpenTestManager={() => setIsTestManagerOpen(true)}
+                onOpenSmartImport={(collection, skill) => {
+                  setSmartImportCollection(collection);
+                  setSmartImportSkill(skill);
+                  setIsSmartImportOpen(true);
+                }}
+                onRefreshExams={handleRefreshExams}
+                onStartWritingExam={handleStartWritingExam}
+                onStartSpeakingExam={handleStartSpeakingExam}
+                onDeleteAttempt={(attemptId) => {
+                  setRecentAttempts((prev) => prev.filter((a) => a.id !== attemptId));
+                  deleteAttemptMutation.mutate({ id: attemptId });
+                }}
+                onCloudSaveExam={cloudSyncExam}
+                onCloudDeleteExam={cloudDeleteExam}
+                onCloudCreateCollection={(col) => {
+                  upsertCollectionMutation.mutate({
+                    name: col.name,
+                    description: col.description,
+                  });
+                }}
+                onCloudDeleteCollection={(name, examsToTombstone) => {
+                  deleteCollectionMutation.mutate({ name, examsToTombstone });
+                }}
+                onCloudClearProgress={cloudClearProgress}
+              />
+            </div>
+            <Footer />
+          </div>
+        </div>
       )}
 
       {/* 2. WRITING EXAM ROOM VIEW */}
@@ -992,7 +1011,7 @@ export function App() {
               ref={listeningContentRef}
               className="flex-1 overflow-y-auto bg-[#f8f9fa] dark:bg-gray-900 relative select-none"
             >
-              <div className="max-w-4xl mx-auto min-h-full bg-white px-6 md:px-12 py-8 shadow-xs border-x border-gray-200 pb-24">
+              <div className="max-w-4xl mx-auto min-h-full bg-white px-3 sm:px-6 md:px-12 py-4 sm:py-8 shadow-xs border-x border-gray-200 pb-24">
                 <div key={activePart.id} className="pt-2">
                   <div className="flex items-center justify-between mb-4 pb-2 border-b border-gray-200">
                     <h2 className="text-xl font-bold text-gray-900">
@@ -1048,7 +1067,7 @@ export function App() {
                 </div>
               </div>
 
-              <div className="fixed bottom-24 right-6 z-30 flex items-center gap-0.5">
+              <div className="hidden md:flex fixed bottom-24 right-6 z-30 items-center gap-0.5">
                 <button
                   onClick={handlePrevQuestion}
                   className="w-7 h-7 bg-[#6a6e78] hover:bg-[#52565f] text-white flex items-center justify-center font-bold transition shadow-xs"
@@ -1101,7 +1120,7 @@ export function App() {
                       ))
                     )}
 
-                    <div className="fixed bottom-13 right-4 z-30 flex items-center gap-0.5">
+                    <div className="hidden md:flex fixed bottom-13 right-4 z-30 items-center gap-0.5">
                       <button
                         onClick={handlePrevQuestion}
                         className="w-7 h-7 bg-[#6a6e78] hover:bg-[#52565f] text-white flex items-center justify-center font-bold transition shadow-xs"

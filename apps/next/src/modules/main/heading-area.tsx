@@ -109,8 +109,14 @@ export const HeadingArea = () => {
             )}
           </HStack>
         )}
-        <Heading size="2xl">{title}</Heading>
-        <Flex justifyContent="space-between" h="32px">
+        <Heading size={{ base: "xl", md: "2xl" }}>{title}</Heading>
+        <Flex
+          justifyContent="space-between"
+          alignItems="center"
+          flexWrap="wrap"
+          gap={2}
+          minH="32px"
+        >
           <HStack color={text} fontWeight={600} spacing={2}>
             <HStack>
               {visibilityIcon(visibility, 18)}

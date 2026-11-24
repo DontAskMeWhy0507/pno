@@ -127,6 +127,29 @@
   color-scheme: light dark;
 }
 
+html {
+  overflow-x: clip;
+}
+
+button,
+a,
+[role="button"] {
+  touch-action: manipulation;
+}
+
+.scrollbar-none {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.scrollbar-none::-webkit-scrollbar {
+  display: none;
+}
+
+.pb-safe {
+  padding-bottom: max(0.5rem, env(safe-area-inset-bottom));
+}
+
 :root[data-theme="dark"],
 [data-theme="dark"] {
   color-scheme: dark;

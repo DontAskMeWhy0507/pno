@@ -21,8 +21,8 @@ export const PartTabs: FC<PartTabsProps> = ({
 
   return (
     <div className="bg-white border-b-2 border-gray-200 select-none">
-      <div className="px-4 py-2 flex items-center justify-between flex-wrap gap-2">
-        <div className="flex items-center space-x-2">
+      <div className="px-2.5 sm:px-4 py-1.5 sm:py-2 flex items-center justify-between flex-nowrap overflow-x-auto scrollbar-none gap-2">
+        <div className="flex items-center space-x-1.5 sm:space-x-2 shrink-0">
           {parts.map((part) => {
             const isActive = part.partNumber === activePartNumber;
 
@@ -30,7 +30,7 @@ export const PartTabs: FC<PartTabsProps> = ({
               <button
                 key={part.id}
                 onClick={() => onSelectPart(part.partNumber)}
-                className={`px-3.5 py-1.5 text-xs font-bold rounded-xl border-2 transition flex items-center gap-1.5 ${
+                className={`px-3 sm:px-3.5 py-1.5 text-xs font-bold rounded-xl border-2 transition flex items-center gap-1.5 shrink-0 ${
                   isActive
                     ? 'bg-blue-600 text-white border-blue-600 shadow-xs'
                     : 'bg-gray-100 text-gray-700 border-gray-200 hover:bg-gray-200 hover:border-gray-300'
@@ -43,8 +43,8 @@ export const PartTabs: FC<PartTabsProps> = ({
         </div>
 
         {minQ !== null && maxQ !== null && (
-          <div className="bg-blue-50 border border-blue-200 text-blue-700 px-3 py-1 rounded-lg text-xs font-bold">
-            Questions {minQ}–{maxQ}
+          <div className="bg-blue-50 border border-blue-200 text-blue-700 px-2.5 sm:px-3 py-1 rounded-lg text-xs font-bold shrink-0 whitespace-nowrap">
+            Q {minQ}–{maxQ}
           </div>
         )}
       </div>

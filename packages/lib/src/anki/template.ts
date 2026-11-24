@@ -48,7 +48,15 @@ function renderCloze(text: string, targetOrdinal: number, isBack: boolean): stri
 
 function isFieldEmpty(val: string | undefined): boolean {
   if (!val) return true;
-  if (/<img\b/i.test(val) || /\[sound:[^\]]+\]/i.test(val)) return false;
+  if (
+    /<img\b/i.test(val) ||
+    /<audio\b/i.test(val) ||
+    /\[sound:[^\]]+\]/i.test(val) ||
+    /\banki-audio\b/i.test(val) ||
+    /\bdata-src\s*=/i.test(val)
+  ) {
+    return false;
+  }
   const stripped = val.replace(/<[^>]*>/g, "").replace(/&nbsp;/g, " ").trim();
   return stripped.length === 0;
 }
@@ -171,10 +179,46 @@ export function sanitizeAnkiHtml(
   html = html.replace(/\[sound:([^\]]+)\]/g, (_match, filename: string) => {
     const cleanFile = filename.trim();
     if (!cleanFile) return "";
-    audioSet.add(cleanFile);
-    const src = encodeMediaPath(mediaUrlPrefix, cleanFile);
-    return `<div data-anki-sound="${escapeHtmlAttr(cleanFile)}" class="anki-audio" data-src="${escapeHtmlAttr(src)}"></div>`;
+    if (/^(?:javascript|vbscript|data\s*:\s*text\/html)/i.test(cleanFile)) {
+      return "";
+    }
+    const isDirectUrl =
+      cleanFile.startsWith("http://") ||
+      cleanFile.startsWith("https://") ||
+      cleanFile.startsWith("/") ||
+      cleanFile.startsWith("data:audio/");
+    if (!isDirectUrl) {
+      audioSet.add(cleanFile);
+    }
+    const src = isDirectUrl ? cleanFile : encodeMediaPath(mediaUrlPrefix, cleanFile);
+    const labelName = cleanFile.replace(/\\/g, "/").split("/").pop() ?? cleanFile;
+    return `<div data-anki-sound="${escapeHtmlAttr(labelName)}" class="anki-audio" data-src="${escapeHtmlAttr(src)}"></div>`;
   });
+
+  // 3b. Normalize native <audio src="..."> and <audio><source src="..."></audio> tags
+  html = html.replace(
+    /<audio\b([^>]*?)>([\s\S]*?)<\/audio>/gi,
+    (_match, attrs, inner) => {
+      const attrMatch =
+        String(attrs).match(/\bsrc\s*=\s*(?:"([^"]+)"|'([^']+)')/i) ??
+        String(inner).match(/<source\b[^>]*?\bsrc\s*=\s*(?:"([^"]+)"|'([^']+)')/i);
+      const cleanSrc = String(attrMatch?.[1] ?? attrMatch?.[2] ?? "").trim();
+      if (!cleanSrc || /^(?:javascript|vbscript|data\s*:\s*text\/html)/i.test(cleanSrc)) {
+        return "";
+      }
+      const isDirectUrl =
+        cleanSrc.startsWith("http://") ||
+        cleanSrc.startsWith("https://") ||
+        cleanSrc.startsWith("/") ||
+        cleanSrc.startsWith("data:audio/");
+      if (!isDirectUrl) {
+        audioSet.add(cleanSrc);
+      }
+      const src = isDirectUrl ? cleanSrc : encodeMediaPath(mediaUrlPrefix, cleanSrc);
+      const labelName = cleanSrc.replace(/\\/g, "/").split("/").pop() ?? cleanSrc;
+      return `<div data-anki-sound="${escapeHtmlAttr(labelName)}" class="anki-audio" data-src="${escapeHtmlAttr(src)}"></div>`;
+    },
+  );
 
   // 4. Extract and rewrite <img src="..."> cleanly
   html = html.replace(
@@ -194,7 +238,7 @@ export function sanitizeAnkiHtml(
         !cleanSrc.startsWith("http://") &&
         !cleanSrc.startsWith("https://") &&
         !cleanSrc.startsWith("data:image/") &&
-        !cleanSrc.startsWith("/api/anki/media/")
+        !cleanSrc.startsWith("/")
       ) {
         imageSet.add(cleanSrc);
         const newSrc = encodeMediaPath(mediaUrlPrefix, cleanSrc);
@@ -209,6 +253,68 @@ export function sanitizeAnkiHtml(
     audioFiles: Array.from(audioSet),
     imageFiles: Array.from(imageSet),
   };
+}
+
+/**
+ * Strips duplicated FrontSide + <hr id="answer"> from rendered back HTML
+ * so storage and card rendering never repeat the front content or front audio.
+ */
+export function stripFrontSidePrefix(
+  frontHtml: string,
+  backHtml: string,
+): string {
+  const trimmedFront = frontHtml.trim();
+  let cleaned = backHtml.trimStart();
+
+  if (trimmedFront) {
+    if (cleaned.startsWith(trimmedFront)) {
+      cleaned = cleaned
+        .slice(trimmedFront.length)
+        .replace(/^\s*(?:<hr\b[^>]*\/?>|<br\s*\/?>)+\s*/i, "");
+      return cleaned.trim();
+    }
+
+    // Handle cases where FrontSide was followed immediately by <hr id="answer">
+    const hrMatch = cleaned.match(/<hr\b[^>]*id\s*=\s*["']?answer["']?[^>]*\/?>/i);
+    if (hrMatch && hrMatch.index !== undefined) {
+      const beforeHr = cleaned.slice(0, hrMatch.index).trim();
+      if (
+        beforeHr === trimmedFront ||
+        beforeHr.startsWith(trimmedFront) ||
+        beforeHr.includes(trimmedFront)
+      ) {
+        return cleaned
+          .slice(hrMatch.index + hrMatch[0].length)
+          .replace(/^\s*(?:<br\s*\/?>)+\s*/i, "")
+          .trim();
+      }
+    }
+  }
+
+  return cleaned.trim();
+}
+
+/**
+ * Extracts all playable audio URLs in exact HTML document order from both
+ * `.anki-audio` placeholders (`data-src`) and `<audio>` / `<source>` tags.
+ */
+export function extractAnkiAudioSources(html: string): string[] {
+  if (!html) return [];
+  const matches: string[] = [];
+  const addUrl = (url: string | undefined) => {
+    const clean = url?.trim();
+    if (!clean) return;
+    if (/^(?:javascript|vbscript|data\s*:\s*text\/html)/i.test(clean)) return;
+    if (!matches.includes(clean)) matches.push(clean);
+  };
+
+  const regex =
+    /(?:data-src|<audio\b[^>]*?\bsrc|<source\b[^>]*?\bsrc)\s*=\s*(?:"([^"]+)"|'([^']+)')/gi;
+  let match: RegExpExecArray | null;
+  while ((match = regex.exec(html)) !== null) {
+    addUrl(match[1] ?? match[2]);
+  }
+  return matches;
 }
 
 export function renderAnkiCard(options: RenderCardOptions): RenderedCard {

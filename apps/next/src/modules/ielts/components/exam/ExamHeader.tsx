@@ -112,9 +112,22 @@ export const ExamHeader: FC<ExamHeaderProps> = ({
       </div>
 
       {/* Right side: Tools & Navigation */}
-      <div className="flex items-center space-x-1.5 sm:space-x-2 shrink-0">
-        {/* Font size picker */}
-        <div className="flex items-center bg-gray-100 rounded-xl p-0.5 border border-gray-200 text-[11px] sm:text-xs">
+      <div className="flex items-center space-x-1 sm:space-x-2 shrink-0">
+        {/* Compact font size cycle button on < sm */}
+        <button
+          onClick={() =>
+            onChangeFontSize(
+              fontSize === 'sm' ? 'base' : fontSize === 'base' ? 'lg' : 'sm'
+            )
+          }
+          className="sm:hidden px-2 py-1 rounded-xl bg-gray-100 border border-gray-200 text-xs font-bold text-gray-700"
+          title="Cycle text size"
+        >
+          {fontSize === 'sm' ? 'A-' : fontSize === 'lg' ? 'A+' : 'A'}
+        </button>
+
+        {/* Font size picker (Desktop / Tablet) */}
+        <div className="hidden sm:flex items-center bg-gray-100 rounded-xl p-0.5 border border-gray-200 text-xs">
           <button
             onClick={() => onChangeFontSize('sm')}
             className={`px-1.5 sm:px-2 py-0.5 rounded-lg ${fontSize === 'sm' ? 'bg-white shadow-xs font-bold text-gray-900' : 'text-gray-500'}`}

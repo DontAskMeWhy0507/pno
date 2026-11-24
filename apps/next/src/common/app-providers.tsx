@@ -1,6 +1,7 @@
 import type { Session } from "next-auth";
 import type { AppProps as NextAppProps } from "next/app";
 import dynamic from "next/dynamic";
+import Head from "next/head";
 
 import { env } from "@quenti/env/client";
 import { theme } from "@quenti/lib/chakra-theme";
@@ -60,6 +61,12 @@ type AppPropsWithChildren = AppProps & { children: React.ReactNode };
 export const AppProviders = (props: AppPropsWithChildren) => {
   return (
     <ChakraProvider theme={theme}>
+      <Head>
+        <meta
+          name="viewport"
+          content="width=device-width, initial-scale=1, viewport-fit=cover"
+        />
+      </Head>
       <ToastWrapper>
         <ErrorBoundary>
           <TelemetryProvider>

@@ -1,8 +1,10 @@
 import React from "react";
 
-import { Box, Card, Progress, Skeleton } from "@chakra-ui/react";
+import { Box, Card, Progress, type ResponsiveValue, Skeleton } from "@chakra-ui/react";
 
-export const LoadingFlashcard: React.FC<{ h?: string }> = ({ h }) => {
+export const LoadingFlashcard: React.FC<{ h?: ResponsiveValue<string> }> = ({
+  h,
+}) => {
   return (
     <Box position="relative" rounded="xl" overflow="hidden" shadow="xl">
       <Skeleton rounded="xl" variant="card">

@@ -15,6 +15,7 @@ export interface RawExtractedCollection {
     {
       name: string;
       fields: string[];
+      css?: string;
       templates: Record<
         number | string,
         { name: string; qfmt: string; afmt: string }
@@ -146,6 +147,22 @@ export function decodeProtobufMedia(
   }
 
   return map;
+}
+
+function decodeNotetypeCss(bytes: Uint8Array): string {
+  const state = { pos: 0 };
+  while (state.pos < bytes.length) {
+    const tag = readVarintSafe(bytes, state);
+    const fieldNum = tag >> 3;
+    const wireType = tag & 0x07;
+    if (fieldNum === 3 && wireType === 2) {
+      const len = readVarintSafe(bytes, state);
+      if (len < 0 || state.pos + len > bytes.length) break;
+      return new TextDecoder().decode(bytes.slice(state.pos, state.pos + len));
+    }
+    skipProtobufField(bytes, state, wireType, bytes.length);
+  }
+  return "";
 }
 
 function decodeTemplateConfig(bytes: Uint8Array): {
@@ -321,10 +338,24 @@ export async function extractCollection(
     // 2. Notetypes, fields, templates
     const notetypes: RawExtractedCollection["notetypes"] = {};
     if (tableExists(db, "notetypes")) {
-      for (const row of queryAll(db, "SELECT id, name FROM notetypes")) {
+      let ntRows: Row[] = [];
+      try {
+        ntRows = queryAll(db, "SELECT id, name, config FROM notetypes");
+      } catch {
+        ntRows = queryAll(db, "SELECT id, name FROM notetypes");
+      }
+      for (const row of ntRows) {
+        const cfg = row.config;
+        const css =
+          cfg instanceof Uint8Array
+            ? decodeNotetypeCss(cfg)
+            : cfg && typeof (cfg as ArrayLike<number>).length === "number"
+              ? decodeNotetypeCss(new Uint8Array(cfg as ArrayLike<number>))
+              : "";
         notetypes[String(row.id)] = {
           name: String(row.name),
           fields: [],
+          css,
           templates: {},
         };
       }
@@ -363,6 +394,7 @@ export async function extractCollection(
         string,
         {
           name: string;
+          css?: string;
           flds?: { name: string }[];
           tmpls?: { ord: number; name: string; qfmt: string; afmt: string }[];
         }
@@ -376,6 +408,7 @@ export async function extractCollection(
         notetypes[mid] = {
           name: m.name,
           fields: (m.flds ?? []).map((f) => f.name),
+          css: m.css ?? "",
           templates,
         };
       }

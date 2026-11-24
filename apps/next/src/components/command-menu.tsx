@@ -124,6 +124,10 @@ export const CommandMenu: React.FC<CommandMenuProps> = ({
   const { colorMode, toggleColorMode } = useColorMode();
 
   const dismiss = router.pathname == "/onboarding/command-menu";
+  const isPortal = router.pathname === "/";
+  const isIelts = router.pathname.startsWith("/ielts");
+  const isQuiz = !isPortal && !isIelts;
+
   const onSet = router.pathname == "/sets/[id]";
   const onSetSubpage = router.pathname.startsWith("/sets/[id]");
   const onFolder = router.pathname == "/profile/[username]/folders/[slug]";
@@ -169,9 +173,10 @@ export const CommandMenu: React.FC<CommandMenuProps> = ({
   );
 
   const recentQuery = api.recent.get.useQuery(undefined, {
-    enabled: isOpen,
+    enabled: isOpen && !isIelts,
     refetchOnWindowFocus: false,
   });
+  const isLoadingRecent = !isIelts && recentQuery.isInitialLoading;
 
   const openLink = React.useCallback(
     (link: string, ctrl: boolean) => {
@@ -222,12 +227,14 @@ export const CommandMenu: React.FC<CommandMenuProps> = ({
   );
 
   const options = React.useMemo<MenuOption[]>(() => {
-    const data = recentQuery.data;
-    let entityOptions: MenuOption[] = [];
+    const buildEntityOptions = (): MenuOption[] => {
+      const data = recentQuery.data;
+      if (!data) return [];
 
-    if (data) {
+      const items: MenuOption[] = [];
+
       for (const set of data.sets) {
-        entityOptions.push({
+        items.push({
           id: `set:${set.id}`,
           icon: <IconBooks />,
           name: set.title,
@@ -254,7 +261,7 @@ export const CommandMenu: React.FC<CommandMenuProps> = ({
           folder.slug ?? folder.id
         }`;
 
-        entityOptions.push({
+        items.push({
           id: `folder:${folder.id}`,
           icon: <IconFolder />,
           name: folder.title,
@@ -275,7 +282,7 @@ export const CommandMenu: React.FC<CommandMenuProps> = ({
         });
       }
       for (const draft of data.drafts) {
-        entityOptions.push({
+        items.push({
           id: `draft:${draft.id}`,
           icon: <IconProgress />,
           name: draft.title || "Untitled draft",
@@ -307,7 +314,7 @@ export const CommandMenu: React.FC<CommandMenuProps> = ({
       for (const class_ of data.classes) {
         const classUrl = `/classes/${class_.id}`;
 
-        entityOptions.push({
+        items.push({
           id: `class:${class_.id}`,
           icon: <IconSchool />,
           name: class_.name,
@@ -331,17 +338,82 @@ export const CommandMenu: React.FC<CommandMenuProps> = ({
         });
       }
 
-      entityOptions = entityOptions.sort(
+      return items.sort(
         (a, b) =>
           (b.sortableDate ? new Date(b.sortableDate).getTime() : 0) -
           (a.sortableDate ? new Date(a.sortableDate).getTime() : 0),
       );
-    }
+    };
 
-    const total: MenuOption[] = [];
+    const buildIeltsOptions = (): MenuOption[] => {
+      if (typeof window === "undefined") return [];
+      const items: Array<MenuOption & { inProgress: boolean }> = [];
 
-    // Context-aware Study Set mode switching when inside /sets/[id]/*
-    if (currentSetId) {
+      try {
+        for (const exam of getAllExams()) {
+          const isListen = isListeningExam(exam);
+          const skill = isListen ? "listening" : "reading";
+          const col = getExamCollection(exam);
+          const saved = getSavedExamSummary(exam.id);
+          const path = `/ielts/${skill}/${encodeURIComponent(exam.id)}/part/${
+            saved?.activePartNumber ?? 1
+          }`;
+
+          items.push({
+            id: `ielts:${skill}:${exam.id}`,
+            icon: isListen ? <IconHeadphones /> : <IconBook />,
+            name: exam.title,
+            label: `IELTS ${isListen ? "Listening" : "Reading"} · ${col}${
+              saved ? " · In Progress" : ""
+            }`,
+            searchableName: `${exam.title} ${col} ielts ${skill}`,
+            action: (ctrl) => openIeltsPath(path, ctrl),
+            inProgress: Boolean(saved),
+          });
+        }
+
+        for (const w of getAllWritingExams()) {
+          const saved = getSavedWritingSummary(w.id);
+          const path = `/ielts/writing/${encodeURIComponent(w.id)}`;
+          items.push({
+            id: `ielts:writing:${w.id}`,
+            icon: <IconPencil />,
+            name: w.title,
+            label: `IELTS Writing · ${w.collection || "Writing"}${
+              saved ? " · In Progress" : ""
+            }`,
+            searchableName: `${w.title} ${w.collection || ""} ielts writing`,
+            action: (ctrl) => openIeltsPath(path, ctrl),
+            inProgress: Boolean(saved),
+          });
+        }
+
+        for (const s of getAllSpeakingExams()) {
+          const saved = loadSpeakingProgress(s.id);
+          const path = `/ielts/speaking/${encodeURIComponent(s.id)}`;
+          items.push({
+            id: `ielts:speaking:${s.id}`,
+            icon: <IconMicrophone />,
+            name: s.title,
+            label: `IELTS Speaking · ${s.collection || "Speaking"}${
+              saved ? " · In Progress" : ""
+            }`,
+            searchableName: `${s.title} ${s.collection || ""} ielts speaking`,
+            action: (ctrl) => openIeltsPath(path, ctrl),
+            inProgress: Boolean(saved),
+          });
+        }
+      } catch {
+        // Ignore storage read errors
+      }
+
+      // Sort in-progress exams first while keeping relative order within each group
+      items.sort((a, b) => Number(b.inProgress) - Number(a.inProgress));
+      return items.map(({ inProgress: _inProgress, ...rest }) => rest);
+    };
+
+    const setModeOptions: MenuOption[] = [];
+    if (isQuiz && currentSetId) {
       const setModes: Array<{
         path: string;
         name: string;
@@ -411,7 +483,7 @@ export const CommandMenu: React.FC<CommandMenuProps> = ({
       ];
 
       for (const m of setModes) {
-        total.push({
+        setModeOptions.push({
           id: `mode:${m.path}`,
           icon: m.icon,
           name: m.name,
@@ -426,49 +498,41 @@ export const CommandMenu: React.FC<CommandMenuProps> = ({
       }
     }
 
-    total.push(...entityOptions);
-
-    if (onSet || onFolder) {
-      total.push({
-        id: "action:copy-link",
-        icon: <IconLink />,
-        name: "Copy Link",
-        label: `Copy the URL for this ${onSet ? "set" : "folder"}`,
-        action: async () => {
-          setLoadingOptionId("action:copy-link");
-          if (onSet) await getSetShareId.refetch();
-          if (onFolder) await getFolderShareId.refetch();
-        },
-        loadable: true,
-      });
-    }
-
-    // Core navigation
-    total.push({
+    const quizNavOption: MenuOption = {
       id: "nav:home",
       icon: <IconHome />,
       name: "Quiz Dashboard",
-      label: "View your Quiz sets, Anki decks & folders",
-      searchableName: "Quiz Dashboard Home Sets Anki",
+      label: isIelts
+        ? "Switch workspace to Quiz, Anki & Flashcards"
+        : "View your Quiz sets, Anki decks & folders",
+      searchableName: isIelts
+        ? "Quiz Dashboard Switch Workspace"
+        : "Quiz Dashboard Home Sets Anki",
       action: (ctrl) => openLink(`/home`, ctrl),
       shouldShow: () =>
         typeof window !== "undefined"
           ? window.location.pathname !== "/home"
           : true,
-    });
-    total.push({
+    };
+
+    const ieltsNavOption: MenuOption = {
       id: "nav:ielts",
       icon: <IconSchool />,
-      name: "IELTS Practice",
-      label: "Open 4-skill IELTS exam suite",
-      searchableName: "IELTS Practice Reading Listening Writing Speaking",
+      name: isIelts ? "IELTS Home" : "IELTS Practice",
+      label: isIelts
+        ? "Return to IELTS exam dashboard"
+        : isQuiz
+          ? "Switch workspace to 4-skill IELTS exam suite"
+          : "Open 4-skill IELTS exam suite",
+      searchableName: "IELTS Home Practice Reading Listening Writing Speaking",
       action: (ctrl) => openIeltsPath(`/ielts`, ctrl),
       shouldShow: () =>
         typeof window !== "undefined"
           ? window.location.pathname !== "/ielts"
           : true,
-    });
-    total.push({
+    };
+
+    const portalNavOption: MenuOption = {
       id: "nav:portal",
       icon: <IconHome />,
       name: "PNO Portal",
@@ -477,166 +541,154 @@ export const CommandMenu: React.FC<CommandMenuProps> = ({
       action: (ctrl) => openLink(`/`, ctrl),
       shouldShow: () =>
         typeof window !== "undefined" ? window.location.pathname !== "/" : true,
-    });
+    };
 
-    total.push({
-      id: "nav:profile",
-      icon: <IconUser />,
-      name: "Profile",
-      label: "Navigate to your profile",
-      action: (ctrl) =>
-        openLink(`/@${session.data?.user?.username || ""}`, ctrl),
-      shouldShow: () =>
-        typeof window !== "undefined"
-          ? window.location.pathname !==
-            `/@${session.data?.user?.username || ""}`
-          : true,
-    });
-    total.push({
-      id: "nav:settings",
-      icon: <IconSettings />,
-      name: "Settings",
-      label: "Navigate to settings",
-      action: (ctrl) => openLink(`/settings`, ctrl),
-      shouldShow: () =>
-        typeof window !== "undefined"
-          ? window.location.pathname !== "/settings"
-          : true,
-    });
+    const accountOptions: MenuOption[] = [
+      {
+        id: "nav:profile",
+        icon: <IconUser />,
+        name: "Profile",
+        label: "Navigate to your profile",
+        action: (ctrl) =>
+          openLink(`/@${session.data?.user?.username || ""}`, ctrl),
+        shouldShow: () =>
+          typeof window !== "undefined"
+            ? window.location.pathname !==
+              `/@${session.data?.user?.username || ""}`
+            : true,
+      },
+      {
+        id: "nav:settings",
+        icon: <IconSettings />,
+        name: "Settings",
+        label: "Navigate to settings",
+        action: (ctrl) => openLink(`/settings`, ctrl),
+        shouldShow: () =>
+          typeof window !== "undefined"
+            ? window.location.pathname !== "/settings"
+            : true,
+      },
+      {
+        id: "action:toggle-theme",
+        icon: colorMode == "dark" ? <IconSun /> : <IconMoon />,
+        name: "Toggle Theme",
+        label: `Switch to ${colorMode == "dark" ? "light" : "dark"} mode`,
+        action: toggleColorMode,
+      },
+    ];
 
-    // Global Create & Import Actions (Quiz + IELTS)
-    total.push({
-      id: "action:create-set",
-      icon: <IconPlus />,
-      name: "Create Study Set",
-      label: "Create a new vocabulary study set",
-      action: (ctrl) => openLink(`/create`, ctrl),
-      shouldShow: () =>
-        typeof window !== "undefined"
-          ? window.location.pathname !== "/create"
-          : true,
-    });
-    total.push({
-      id: "action:import-quizlet",
-      icon: <IconCloudDownload />,
-      name: "Import From Quizlet",
-      label: "Import a study set from Quizlet.com",
-      action: () => menuEventChannel.emit("openImportDialog"),
-    });
-    total.push({
-      id: "action:import-anki",
-      icon: <IconCloudDownload />,
-      name: "Import From Anki (.apkg)",
-      label: "Import an Anki deck with media & SRS",
-      action: () => menuEventChannel.emit("openAnkiImportDialog"),
-    });
-    total.push({
-      id: "action:create-folder",
-      icon: <IconFolderPlus />,
-      name: "Create Folder",
-      label: "Create a new study folder",
-      action: () => menuEventChannel.emit("createFolder"),
-    });
-    if (isTeacher) {
-      total.push({
-        id: "action:create-class",
+    const quizActions: MenuOption[] = [
+      {
+        id: "action:create-set",
         icon: <IconPlus />,
-        name: "Create Class",
-        label: "Create a new class",
-        action: () => menuEventChannel.emit("createClass"),
-      });
-    }
+        name: "Create Study Set",
+        label: "Create a new vocabulary study set",
+        action: (ctrl) => openLink(`/create`, ctrl),
+        shouldShow: () =>
+          typeof window !== "undefined"
+            ? window.location.pathname !== "/create"
+            : true,
+      },
+      {
+        id: "action:create-anki-deck",
+        icon: <IconBrain />,
+        name: "Create Anki Deck (SRS)",
+        label: "Custom Fields & HTML/CSS Template",
+        action: () => menuEventChannel.emit("openCreateAnkiDeck"),
+      },
+      {
+        id: "action:import-quizlet",
+        icon: <IconCloudDownload />,
+        name: "Import From Quizlet",
+        label: "Import a study set from Quizlet.com",
+        action: () => menuEventChannel.emit("openImportDialog"),
+      },
+      {
+        id: "action:import-anki",
+        icon: <IconCloudDownload />,
+        name: "Import From Anki (.apkg)",
+        label: "Import an Anki deck with media & SRS",
+        action: () => menuEventChannel.emit("openAnkiImportDialog"),
+      },
+      {
+        id: "action:create-folder",
+        icon: <IconFolderPlus />,
+        name: "Create Folder",
+        label: "Create a new study folder",
+        action: () => menuEventChannel.emit("createFolder"),
+      },
+      ...(isTeacher
+        ? [
+            {
+              id: "action:create-class",
+              icon: <IconPlus />,
+              name: "Create Class",
+              label: "Create a new class",
+              action: () => menuEventChannel.emit("createClass"),
+            },
+          ]
+        : []),
+    ];
 
-    total.push({
-      id: "action:ielts-add",
-      icon: <IconPlus />,
-      name: "Add IELTS Test (4 Skills)",
-      label: "Import or create a new Reading, Listening, Writing or Speaking test",
-      action: () => triggerIeltsAction("add_test", "openIeltsAddTest"),
-    });
-    total.push({
-      id: "action:ielts-bank",
-      icon: <IconDatabase />,
-      name: "IELTS Test Bank",
-      label: "Browse, export, clone & organize IELTS tests",
-      action: () => triggerIeltsAction("test_bank", "openIeltsTestBank"),
-    });
-    total.push({
-      id: "action:ielts-col",
-      icon: <IconFolderPlus />,
-      name: "New IELTS Collection",
-      label: "Create a collection folder in IELTS",
-      action: () =>
-        triggerIeltsAction("new_collection", "openIeltsNewCollection"),
-    });
+    const ieltsActions: MenuOption[] = [
+      {
+        id: "action:ielts-add",
+        icon: <IconPlus />,
+        name: "Add IELTS Test (4 Skills)",
+        label: "Import or create a new Reading, Listening, Writing or Speaking test",
+        action: () => triggerIeltsAction("add_test", "openIeltsAddTest"),
+      },
+      {
+        id: "action:ielts-bank",
+        icon: <IconDatabase />,
+        name: "IELTS Test Bank",
+        label: "Browse, export, clone & organize IELTS tests",
+        action: () => triggerIeltsAction("test_bank", "openIeltsTestBank"),
+      },
+      {
+        id: "action:ielts-col",
+        icon: <IconFolderPlus />,
+        name: "New IELTS Collection",
+        label: "Create a collection folder in IELTS",
+        action: () =>
+          triggerIeltsAction("new_collection", "openIeltsNewCollection"),
+      },
+    ];
 
-    total.push({
-      id: "action:toggle-theme",
-      icon: colorMode == "dark" ? <IconSun /> : <IconMoon />,
-      name: "Toggle Theme",
-      label: `Switch to ${colorMode == "dark" ? "light" : "dark"} mode`,
-      action: toggleColorMode,
-    });
+    const total: MenuOption[] = [];
 
-    // Searchable IELTS 4-Skill Catalog (client-side only)
-    if (typeof window !== "undefined") {
-      try {
-        const rlExams = getAllExams();
-        for (const exam of rlExams) {
-          const isListen = isListeningExam(exam);
-          const skill = isListen ? "listening" : "reading";
-          const col = getExamCollection(exam);
-          const saved = getSavedExamSummary(exam.id);
-          const path = `/ielts/${skill}/${encodeURIComponent(exam.id)}/part/${
-            saved?.activePartNumber ?? 1
-          }`;
-
-          total.push({
-            id: `ielts:${skill}:${exam.id}`,
-            icon: isListen ? <IconHeadphones /> : <IconBook />,
-            name: exam.title,
-            label: `IELTS ${isListen ? "Listening" : "Reading"} · ${col}${
-              saved ? " · In Progress" : ""
-            }`,
-            searchableName: `${exam.title} ${col} ielts ${skill}`,
-            action: (ctrl) => openIeltsPath(path, ctrl),
-          });
-        }
-
-        const writingExams = getAllWritingExams();
-        for (const w of writingExams) {
-          const saved = getSavedWritingSummary(w.id);
-          const path = `/ielts/writing/${encodeURIComponent(w.id)}`;
-          total.push({
-            id: `ielts:writing:${w.id}`,
-            icon: <IconPencil />,
-            name: w.title,
-            label: `IELTS Writing · ${w.collection || "Writing"}${
-              saved ? " · In Progress" : ""
-            }`,
-            searchableName: `${w.title} ${w.collection || ""} ielts writing`,
-            action: (ctrl) => openIeltsPath(path, ctrl),
-          });
-        }
-
-        const speakingExams = getAllSpeakingExams();
-        for (const s of speakingExams) {
-          const saved = loadSpeakingProgress(s.id);
-          const path = `/ielts/speaking/${encodeURIComponent(s.id)}`;
-          total.push({
-            id: `ielts:speaking:${s.id}`,
-            icon: <IconMicrophone />,
-            name: s.title,
-            label: `IELTS Speaking · ${s.collection || "Speaking"}${
-              saved ? " · In Progress" : ""
-            }`,
-            searchableName: `${s.title} ${s.collection || ""} ielts speaking`,
-            action: (ctrl) => openIeltsPath(path, ctrl),
-          });
-        }
-      } catch {
-        // Ignore storage read errors
+    if (isIelts) {
+      total.push(...buildIeltsOptions());
+      total.push(...ieltsActions);
+      total.push(ieltsNavOption, quizNavOption, portalNavOption);
+      total.push(...accountOptions);
+    } else if (isQuiz) {
+      total.push(...setModeOptions);
+      if (onSet || onFolder) {
+        total.push({
+          id: "action:copy-link",
+          icon: <IconLink />,
+          name: "Copy Link",
+          label: `Copy the URL for this ${onSet ? "set" : "folder"}`,
+          action: async () => {
+            setLoadingOptionId("action:copy-link");
+            if (onSet) await getSetShareId.refetch();
+            if (onFolder) await getFolderShareId.refetch();
+          },
+          loadable: true,
+        });
       }
+      total.push(...buildEntityOptions());
+      total.push(...quizActions);
+      total.push(quizNavOption, ieltsNavOption, portalNavOption);
+      total.push(...accountOptions);
+    } else {
+      // Portal (/): both workspaces + recent sets + IELTS tests + quick actions
+      total.push(quizNavOption, ieltsNavOption);
+      total.push(...buildEntityOptions());
+      total.push(...buildIeltsOptions());
+      total.push(...quizActions, ...ieltsActions);
+      total.push(...accountOptions);
     }
 
     if (env.NEXT_PUBLIC_DEPLOYMENT === undefined) total.push(...devActions);
@@ -645,6 +697,9 @@ export const CommandMenu: React.FC<CommandMenuProps> = ({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     isOpen,
+    isPortal,
+    isIelts,
+    isQuiz,
     recentQuery.data,
     currentSetId,
     onSet,
@@ -725,7 +780,7 @@ export const CommandMenu: React.FC<CommandMenuProps> = ({
   const hintColor = useColorModeValue("gray.600", "gray.400");
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} isCentered size="xl">
+    <Modal isOpen={isOpen} onClose={onClose} size="xl">
       <ModalOverlay
         backdropFilter="blur(12px)"
         transform="translateZ(0px)"
@@ -735,6 +790,8 @@ export const CommandMenu: React.FC<CommandMenuProps> = ({
         )}
       />
       <ModalContent
+        my={{ base: 3, sm: "12vh" }}
+        mx={{ base: 3, sm: 4 }}
         background={useColorModeValue(
           "rgba(247, 250, 252, 0.85)",
           "rgba(23, 25, 35, 0.84)",
@@ -759,8 +816,8 @@ export const CommandMenu: React.FC<CommandMenuProps> = ({
             />
           )}
           <HStack
-            py="4"
-            px="6"
+            py={{ base: 3, sm: 4 }}
+            px={{ base: 4, sm: 6 }}
             spacing="3.5"
             borderBottomWidth="2px"
             borderBottomColor={borderColor}
@@ -770,10 +827,16 @@ export const CommandMenu: React.FC<CommandMenuProps> = ({
             </Box>
             <Input
               aria-label="Search commands, study sets, and IELTS tests"
-              placeholder="Search study sets, IELTS tests, or commands..."
+              placeholder={
+                isIelts
+                  ? "Search IELTS tests, skills, or commands..."
+                  : isQuiz
+                    ? "Search study sets, folders, or commands..."
+                    : "Search study sets, IELTS tests, or commands..."
+              }
               size="lg"
               variant="unstyled"
-              fontSize="xl"
+              fontSize={{ base: "md", sm: "xl" }}
               fontWeight={600}
               px="0"
               _placeholder={{
@@ -787,13 +850,14 @@ export const CommandMenu: React.FC<CommandMenuProps> = ({
           </HStack>
           <Box
             overflow={filteredOptions.length > 6 ? "auto" : "hidden"}
-            px="4"
+            maxH={{ base: "52dvh", sm: "none" }}
+            px={{ base: 2.5, sm: 4 }}
             my="3"
             pos="relative"
             transition="height cubic-bezier(.4,0,.2,1) 250ms"
             style={{
               height:
-                recentQuery.isLoading && !filteredOptions.length
+                isLoadingRecent && !filteredOptions.length
                   ? 72
                   : filteredOptions.length === 0
                     ? 88
@@ -818,19 +882,22 @@ export const CommandMenu: React.FC<CommandMenuProps> = ({
                 <Box bg={cursorBg} rounded="xl" w="full" h="full" />
               </Box>
             )}
-            {recentQuery.isLoading && !filteredOptions.length && (
+            {isLoadingRecent && !filteredOptions.length && (
               <Center w="full" h="16">
                 <Spinner color="blue.300" />
               </Center>
             )}
-            {!recentQuery.isLoading && filteredOptions.length === 0 && (
+            {!isLoadingRecent && filteredOptions.length === 0 && (
               <Center w="full" h="full" flexDir="column" gap={1}>
                 <Text fontSize="sm" fontWeight={700} color={hintColor}>
                   No results found for &ldquo;{query}&rdquo;
                 </Text>
                 <Text fontSize="xs" color="gray.500">
-                  Try searching a study set, Reading/Listening/Writing/Speaking
-                  test, or action.
+                  {isIelts
+                    ? "Try searching Reading, Listening, Writing, Speaking tests or IELTS actions."
+                    : isQuiz
+                      ? "Try searching a study set, folder, study mode, or Quiz action."
+                      : "Try searching a study set, IELTS test, or workspace action."}
                 </Text>
               </Center>
             )}

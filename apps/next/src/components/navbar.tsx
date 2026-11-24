@@ -55,7 +55,7 @@ export const Navbar: React.FC = () => {
         aria-label="Main navigation"
         w="full"
         mx="auto"
-        px={{ base: "6", md: "8" }}
+        px={{ base: "4", md: "8" }}
         py="4"
         justify="space-between"
       >
@@ -70,8 +70,8 @@ export const Navbar: React.FC = () => {
             {user && (
               <IconButton
                 aria-label="Open command menu"
-                icon={<IconSearch size={18} />}
-                size="sm"
+                icon={<IconSearch size={19} />}
+                size="md"
                 variant="ghost"
                 rounded="xl"
                 onClick={() => menuEventChannel.emit("openCommandMenu")}
@@ -93,13 +93,15 @@ export const Navbar: React.FC = () => {
               aria-label={"Open menu"}
               icon={
                 isMobileMenuOpen ? (
-                  <IconX size={20} />
+                  <IconX size={21} />
                 ) : (
-                  <IconMenu size={20} />
+                  <IconMenu size={21} />
                 )
               }
+              size="md"
               variant="ghost"
               colorScheme="gray"
+              rounded="xl"
               onClick={onMobileMenuToggle}
             />
           </HStack>

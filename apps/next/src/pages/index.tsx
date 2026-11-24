@@ -44,10 +44,6 @@ const PnoPortalPage = () => {
   const cardBorder = useColorModeValue("gray.200", "gray.700");
   const subTextColor = useColorModeValue("gray.600", "gray.400");
   const pillBg = useColorModeValue("gray.100", "gray.750");
-  const heroBg = useColorModeValue(
-    "linear(to-b, blue.50 0%, rgba(224, 237, 255, 0.45) 55%, transparent 100%)",
-    "linear(to-b, rgba(75, 131, 255, 0.14) 0%, rgba(75, 131, 255, 0.04) 55%, transparent 100%)",
-  );
 
   return (
     <>
@@ -55,30 +51,18 @@ const PnoPortalPage = () => {
         title="PNO — Quiz & IELTS Practice Platform"
         hideTitleSuffix
       />
-      <Flex direction="column" minH="calc(100dvh - 80px)" pos="relative">
-        {/* Seamless gradient extending behind the 80px Navbar */}
-        <Box
-          pos="absolute"
-          top="-80px"
-          left={0}
-          right={0}
-          h={{ base: "380px", md: "480px" }}
-          bgGradient={heroBg}
-          pointerEvents="none"
-          zIndex={0}
-        />
-
+      <Flex direction="column">
         <Flex
           as="main"
           pos="relative"
           zIndex={1}
-          flex="1"
+          minH="calc(100dvh - 80px)"
           direction="column"
           justify="center"
           pt={{ base: 2, md: 3 }}
           pb={{ base: 8, md: 10 }}
         >
-          <Container maxW="6xl">
+          <Container maxW="6xl" px={{ base: 4, sm: 6 }}>
             <VStack spacing={{ base: 6, md: 8 }}>
               {/* Header */}
               <VStack spacing={3} textAlign="center" maxW="4xl">
@@ -153,15 +137,15 @@ const PnoPortalPage = () => {
                     shadow: "xl",
                   }}
                   transition="all 0.2s cubic-bezier(0.16, 1, 0.3, 1)"
-                  rounded="3xl"
-                  p={{ base: 6, sm: 7 }}
+                  rounded={{ base: "2xl", sm: "3xl" }}
+                  p={{ base: 5, sm: 7 }}
                   shadow="md"
                   display="flex"
                   flexDirection="column"
                   justifyContent="space-between"
                 >
                   <Stack spacing={5}>
-                    <Flex justify="space-between" align="center">
+                    <Flex justify="space-between" align="center" flexWrap="wrap" gap={2}>
                       <Flex
                         w={14}
                         h={14}
@@ -204,7 +188,7 @@ const PnoPortalPage = () => {
                       </Text>
                     </Stack>
 
-                    <SimpleGrid columns={2} spacing={2.5}>
+                    <SimpleGrid columns={{ base: 1, sm: 2 }} spacing={2.5}>
                       {[
                         { icon: IconCards, label: "Flashcards & Anki SRS" },
                         { icon: IconBrain, label: "Adaptive Learn & Test" },
@@ -271,15 +255,15 @@ const PnoPortalPage = () => {
                     shadow: "xl",
                   }}
                   transition="all 0.2s cubic-bezier(0.16, 1, 0.3, 1)"
-                  rounded="3xl"
-                  p={{ base: 6, sm: 7 }}
+                  rounded={{ base: "2xl", sm: "3xl" }}
+                  p={{ base: 5, sm: 7 }}
                   shadow="md"
                   display="flex"
                   flexDirection="column"
                   justifyContent="space-between"
                 >
                   <Stack spacing={5}>
-                    <Flex justify="space-between" align="center">
+                    <Flex justify="space-between" align="center" flexWrap="wrap" gap={2}>
                       <Flex
                         w={14}
                         h={14}
@@ -322,7 +306,7 @@ const PnoPortalPage = () => {
                       </Text>
                     </Stack>
 
-                    <SimpleGrid columns={2} spacing={2.5}>
+                    <SimpleGrid columns={{ base: 1, sm: 2 }} spacing={2.5}>
                       {[
                         { icon: IconBook, label: "Reading Split-Pane" },
                         { icon: IconHeadphones, label: "Listening Audio" },

@@ -4,6 +4,7 @@ export const menuEventChannel = eventBus<{
   createFolder: (setId?: string) => void;
   openImportDialog: (edit?: boolean) => void;
   openAnkiImportDialog: () => void;
+  openCreateAnkiDeck: () => void;
   openCommandMenu: () => void;
   ieltsNavigate: (path: string) => void;
   folderWithSetCreated: (setId: string) => void;

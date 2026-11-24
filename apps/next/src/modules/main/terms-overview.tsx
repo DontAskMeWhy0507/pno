@@ -83,7 +83,7 @@ export const TermsOverview = () => {
               <>{terms.length != 1 ? "terms" : "term"} in this set</>
             </HStack>
           </Heading>
-          <HStack spacing={4}>
+          <HStack spacing={4} flexWrap="wrap">
             {!!starredTerms.length && (
               <ToggleGroup
                 index={starredOnly ? 1 : 0}

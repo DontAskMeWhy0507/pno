@@ -15,6 +15,7 @@ import {
   Grid,
   HStack,
   IconButton,
+  type ResponsiveValue,
   Text,
   useColorModeValue,
 } from "@chakra-ui/react";
@@ -41,7 +42,7 @@ export interface FlashcardProps {
   index: number;
   numTerms: number;
   starred: boolean;
-  h?: string;
+  h?: ResponsiveValue<string>;
   variant?: "default" | "sortable";
   onLeftAction: () => void;
   onRightAction: () => void;
@@ -56,7 +57,7 @@ export const Flashcard: React.FC<FlashcardProps> = ({
   index,
   numTerms,
   starred,
-  h = "500px",
+  h = { base: "340px", md: "500px" },
   variant = "default",
   onLeftAction,
   onRightAction,
@@ -89,7 +90,7 @@ export const Flashcard: React.FC<FlashcardProps> = ({
           width: `calc(100% * ${index + 1} / ${numTerms})`,
         }}
       />
-      <Flex flexDir="column" h="calc(100% - 8px)" p="8">
+      <Flex flexDir="column" h="calc(100% - 8px)" p={{ base: 4, sm: 6, md: 8 }}>
         <Grid templateColumns="1fr 1fr 1fr">
           <HStack h="max" alignItems="start">
             {variant == "sortable" && (

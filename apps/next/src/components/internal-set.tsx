@@ -24,7 +24,11 @@ const InternalSetContent: React.FC<InternalSetProps> = ({ collab }) => {
   const isAnki = Array.isArray(data.tags) && data.tags.includes("anki");
 
   if (isAnki) {
-    return <AnkiDeckHub data={data} />;
+    return (
+      <WithFooter>
+        <AnkiDeckHub data={data} />
+      </WithFooter>
+    );
   }
 
   return (

@@ -13,6 +13,7 @@ import {
   Heading,
   LinkBox,
   LinkOverlay,
+  type ResponsiveValue,
   Stack,
   Text,
   useColorModeValue,
@@ -37,13 +38,13 @@ import { plural } from "../utils/string";
 import { CircularTermMastery } from "./circular-term-mastery";
 
 export interface SortFlashcardProgressProps {
-  h?: string;
+  h?: ResponsiveValue<string>;
   onNextRound: () => void;
   onResetProgress: () => void;
 }
 
 export const SortFlashcardProgress: React.FC<SortFlashcardProgressProps> = ({
-  h = "500px",
+  h = { base: "340px", md: "500px" },
   onNextRound,
   onResetProgress,
 }) => {

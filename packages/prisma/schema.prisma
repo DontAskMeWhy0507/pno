@@ -403,6 +403,7 @@ model StudySet {
   wordLanguage       String             @default("en")
   definitionLanguage String             @default("en")
   cortexStale        Boolean            @default(true)
+  ankiTemplate       Json?
 
   collab       StudySetCollab?
   terms        Term[]
@@ -568,8 +569,8 @@ model FoldersOnClasses {
 
 model Term {
   id                 String  @id @default(cuid())
-  word               String  @db.VarChar(1000)
-  definition         String  @db.VarChar(1000)
+  word               String  @db.Text
+  definition         String  @db.Text
   wordRichText       Json?
   definitionRichText Json?
   assetUrl           String? @db.VarChar(255)

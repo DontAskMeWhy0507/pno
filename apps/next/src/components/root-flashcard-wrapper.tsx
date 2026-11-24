@@ -5,7 +5,7 @@ import React from "react";
 import type { FacingTerm } from "@quenti/interfaces";
 import { api } from "@quenti/trpc";
 
-import { Box } from "@chakra-ui/react";
+import { Box, type ResponsiveValue } from "@chakra-ui/react";
 
 import { menuEventChannel } from "../events/menu";
 import { useSetFolderUnison } from "../hooks/use-set-folder-unison";
@@ -24,14 +24,14 @@ const EditTermModal = dynamic(
 export interface RootFlashcardWrapperProps {
   terms: FacingTerm[];
   termOrder: string[];
-  h?: string;
+  h?: ResponsiveValue<string>;
   isDirty?: boolean;
 }
 
 interface RootFlashcardContextProps {
   terms: FacingTerm[];
   termOrder: string[];
-  h?: string;
+  h?: ResponsiveValue<string>;
   editTerm: (term: FacingTerm, focusDefinition: boolean) => void;
   starTerm: (term: FacingTerm) => void;
 }
@@ -47,7 +47,7 @@ export const RootFlashcardContext =
 export const RootFlashcardWrapper: React.FC<RootFlashcardWrapperProps> = ({
   terms,
   termOrder,
-  h = "500px",
+  h = { base: "340px", md: "500px" },
   isDirty = false,
 }) => {
   const authed = useSession().status == "authenticated";

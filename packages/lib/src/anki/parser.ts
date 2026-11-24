@@ -18,6 +18,7 @@ export interface ParsedCard {
   audioFiles: string[];
   imageFiles: string[];
   tags: string[];
+  clozeOrdinal?: number;
   srs?: {
     queue: number;
     interval: number;
@@ -28,10 +29,19 @@ export interface ParsedCard {
   };
 }
 
+export interface ParsedDeckTemplate {
+  fields: string[];
+  qfmt: string;
+  afmt: string;
+  css: string;
+  isCloze?: boolean;
+}
+
 export interface ParsedDeck {
   id: string;
   name: string;
   parentName?: string;
+  template?: ParsedDeckTemplate;
   cards: ParsedCard[];
 }
 
@@ -86,11 +96,12 @@ export async function parseAnkiPackage(
         afmt: "{{Back}}",
       };
 
+    const clozeOrdinal = card.ord + 1;
     const rendered: RenderedCard = renderAnkiCard({
       qfmt: tmpl.qfmt,
       afmt: tmpl.afmt,
       fields: note.fields,
-      clozeOrdinal: card.ord + 1,
+      clozeOrdinal,
       mediaUrlPrefix: prefix,
     });
 
@@ -104,6 +115,7 @@ export async function parseAnkiPackage(
       audioFiles: rendered.audioFiles,
       imageFiles: rendered.imageFiles,
       tags: note.tags,
+      clozeOrdinal,
       srs: {
         queue: card.queue,
         interval: card.interval,
@@ -116,6 +128,15 @@ export async function parseAnkiPackage(
 
     const deck = deckMap.get(card.deckId);
     if (deck) {
+      if (!deck.template && notetype) {
+        deck.template = {
+          fields: notetype.fields,
+          qfmt: tmpl.qfmt,
+          afmt: tmpl.afmt,
+          css: notetype.css ?? "",
+          isCloze: tmpl.qfmt.includes("{{cloze:"),
+        };
+      }
       deck.cards.push(parsedCard);
     }
   }

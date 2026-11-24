@@ -18,6 +18,10 @@ const ImportFromAnkiModal = dynamic(
   () => import("./import-from-anki-modal"),
   { ssr: false },
 );
+const AnkiCreateDeckModal = dynamic(
+  () => import("../modules/anki/anki-create-deck-modal"),
+  { ssr: false },
+);
 const CreateFolderModal = dynamic(() => import("./create-folder-modal"), {
   ssr: false,
 });
@@ -29,6 +33,7 @@ export default function GlobalShortcutLayer() {
   const [importIsEdit, setImportIsEdit] = React.useState(false);
   const [importModalOpen, setImportModalOpen] = React.useState(false);
   const [ankiImportModalOpen, setAnkiImportModalOpen] = React.useState(false);
+  const [ankiCreateModalOpen, setAnkiCreateModalOpen] = React.useState(false);
 
   const router = useRouter();
   const session = useSession();
@@ -68,6 +73,9 @@ export default function GlobalShortcutLayer() {
     const openAnkiImportDialog = () => {
       setAnkiImportModalOpen(true);
     };
+    const openCreateAnkiDeck = () => {
+      setAnkiCreateModalOpen(true);
+    };
     const createClass = () => {
       if (user?.organizationId || earlyClassAccess) {
         void router.push("/classes/new");
@@ -79,11 +87,13 @@ export default function GlobalShortcutLayer() {
     menuEventChannel.on("createFolder", createFolder);
     menuEventChannel.on("openImportDialog", openImportDialog);
     menuEventChannel.on("openAnkiImportDialog", openAnkiImportDialog);
+    menuEventChannel.on("openCreateAnkiDeck", openCreateAnkiDeck);
     menuEventChannel.on("createClass", createClass);
     return () => {
       menuEventChannel.off("createFolder", createFolder);
       menuEventChannel.off("openImportDialog", openImportDialog);
       menuEventChannel.off("openAnkiImportDialog", openAnkiImportDialog);
+      menuEventChannel.off("openCreateAnkiDeck", openCreateAnkiDeck);
       menuEventChannel.off("createClass", createClass);
     };
   }, [earlyClassAccess, router, user?.organizationId]);
@@ -116,6 +126,14 @@ export default function GlobalShortcutLayer() {
           isOpen={ankiImportModalOpen}
           onClose={() => {
             setAnkiImportModalOpen(false);
+          }}
+        />
+      )}
+      {ankiCreateModalOpen && (
+        <AnkiCreateDeckModal
+          isOpen={ankiCreateModalOpen}
+          onClose={() => {
+            setAnkiCreateModalOpen(false);
           }}
         />
       )}

@@ -2,7 +2,10 @@ import {
   renderAnkiCard,
   extractClozeOrdinals,
   sanitizeAnkiHtml,
+  stripFrontSidePrefix,
+  extractAnkiAudioSources,
 } from "../packages/lib/src/anki/template";
+import { scopeAnkiCss } from "../packages/lib/src/anki/presets";
 
 describe("Anki Template & Cloze Parsing Engine", () => {
   test("replaces standard fields {{Field}} with field content", () => {
@@ -108,6 +111,85 @@ describe("Anki Template & Cloze Parsing Engine", () => {
     expect(result.html).not.toContain("onerror");
     expect(result.html).not.toContain("onclick");
     expect(result.html).toContain('src="/api/anki/media/pic.jpg"');
+  });
+
+  test("preserves 2+ audio tags on back after stripping FrontSide prefix", () => {
+    const mediaPrefix =
+      "https://cdn.jsdelivr.net/gh/example/quenti-media@main/anki/imports/abc123";
+    const card = renderAnkiCard({
+      qfmt: "<div><b>{{Word}}</b><div>{{IPA}}</div>{{WordAudio}}</div>",
+      afmt: "{{FrontSide}}<hr id=answer>{{Image}}<div>Example: {{Example}}</div><div>Meaning: {{Meaning}}</div><div>{{ExampleAudio}} {{MeaningAudio}}</div>",
+      mediaUrlPrefix: mediaPrefix,
+      fields: {
+        Word: "crust",
+        IPA: "krʌst",
+        WordAudio: "[sound:crust.mp3]",
+        Image: '<img src="crust.jpg" />',
+        Example: "The little boy never ate the crust of his pizza.",
+        Meaning: "Crust is the tough outer part of a loaf of bread.",
+        ExampleAudio: "[sound:crust_example.mp3]",
+        MeaningAudio: "[sound:crust_meaning.mp3]",
+      },
+    });
+
+    const cleanBack = stripFrontSidePrefix(card.questionHtml, card.answerHtml);
+    const frontAudios = extractAnkiAudioSources(card.questionHtml);
+    const backAudios = extractAnkiAudioSources(cleanBack);
+
+    expect(frontAudios).toEqual([`${mediaPrefix}/crust.mp3`]);
+    expect(backAudios).toEqual([
+      `${mediaPrefix}/crust_example.mp3`,
+      `${mediaPrefix}/crust_meaning.mp3`,
+    ]);
+    expect(cleanBack).toContain("crust.jpg");
+    expect(cleanBack).not.toContain("crust.mp3");
+  });
+
+  test("normalizes <audio> tags and preserves direct URLs without double-prefixing", () => {
+    const raw =
+      '<audio src="/tests/u1/listening/s1/audio/a.mp3" controls></audio>[sound:https://cdn.example.com/b.mp3]';
+    const sanitized = sanitizeAnkiHtml(raw, "/api/anki/media");
+    const sources = extractAnkiAudioSources(sanitized.html);
+
+    expect(sources).toEqual([
+      "/tests/u1/listening/s1/audio/a.mp3",
+      "https://cdn.example.com/b.mp3",
+    ]);
+  });
+
+  test("scopeAnkiCss scopes selectors and strips dangerous rules", () => {
+    const css =
+      '@import url("https://evil.com/x.css"); .card { font-size: 20px; } .ipa { color: red; } @media (max-width: 600px) { .word { font-size: 16px; } }';
+    const scoped = scopeAnkiCss(css);
+
+    expect(scoped).not.toContain("@import");
+    expect(scoped).toContain(".anki-card-surface { font-size: 20px; }");
+    expect(scoped).toContain(".anki-card-surface .ipa { color: red; }");
+    expect(scoped).toContain(".anki-card-surface .word { font-size: 16px; }");
+  });
+
+  test("treats pre-sanitized .anki-audio divs as non-empty in {{#Field}} conditionals", () => {
+    const rendered = renderAnkiCard({
+      qfmt: "{{Word}}{{#WordAudio}}{{WordAudio}}{{/WordAudio}}",
+      afmt: "{{#ExampleAudio}}{{ExampleAudio}}{{/ExampleAudio}}{{#MeaningAudio}}{{MeaningAudio}}{{/MeaningAudio}}",
+      fields: {
+        Word: "crust",
+        WordAudio:
+          '<div data-anki-sound="crust.mp3" class="anki-audio" data-src="https://cdn.example.com/crust.mp3"></div>',
+        ExampleAudio:
+          '<div data-anki-sound="ex.mp3" class="anki-audio" data-src="https://cdn.example.com/ex.mp3"></div>',
+        MeaningAudio:
+          '<div data-anki-sound="mean.mp3" class="anki-audio" data-src="https://cdn.example.com/mean.mp3"></div>',
+      },
+    });
+
+    expect(extractAnkiAudioSources(rendered.questionHtml)).toEqual([
+      "https://cdn.example.com/crust.mp3",
+    ]);
+    expect(extractAnkiAudioSources(rendered.answerHtml)).toEqual([
+      "https://cdn.example.com/ex.mp3",
+      "https://cdn.example.com/mean.mp3",
+    ]);
   });
 });
 

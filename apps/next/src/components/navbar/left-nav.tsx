@@ -14,13 +14,12 @@ import {
   InputLeftElement,
   Menu,
   MenuButton,
-  MenuDivider,
-  MenuList,
   useColorModeValue,
 } from "@chakra-ui/react";
 
 import {
   IconBooks,
+  IconBrain,
   IconChevronDown,
   IconCloudDownload,
   IconDatabase,
@@ -32,7 +31,11 @@ import {
 
 import { Logo } from "../../../../../packages/components/logo";
 import { menuEventChannel } from "../../events/menu";
-import { MenuOption } from "../menu-option";
+import {
+  CommandDropdownDivider,
+  CommandDropdownItem,
+  CommandDropdownList,
+} from "../command-dropdown";
 
 export interface LeftNavProps {
   onFolderClick: () => void;
@@ -116,33 +119,39 @@ export const LeftNav: React.FC<LeftNavProps> = ({
                 Create
               </Button>
             </MenuButton>
-            <MenuList
-              overflow="hidden"
-              w="max"
-              marginTop={2}
-            >
-              <MenuOption
+            <CommandDropdownList minW="310px">
+              <CommandDropdownItem
                 href="/create"
                 icon={<IconBooks size={20} />}
-                label="Study set"
+                label="Study Set"
+                description="Create a new vocabulary study set"
               />
-              <MenuOption
+              <CommandDropdownItem
+                icon={<IconBrain size={20} />}
+                label="Anki Deck"
+                description="Custom SRS deck with Fields & HTML Template"
+                onClick={() => menuEventChannel.emit("openCreateAnkiDeck")}
+              />
+              <CommandDropdownItem
                 icon={<IconCloudDownload size={20} />}
                 label="Import from Quizlet"
+                description="Paste & import terms from Quizlet"
                 onClick={onImportClick}
               />
-              <MenuOption
+              <CommandDropdownItem
                 icon={<IconCloudDownload size={20} />}
                 label="Import from Anki (.apkg)"
+                description="Import flashcards & audio from .apkg"
                 onClick={onAnkiImportClick}
               />
-              <MenuDivider />
-              <MenuOption
+              <CommandDropdownDivider />
+              <CommandDropdownItem
                 icon={<IconFolder size={20} />}
                 label="Folder"
+                description="Organize study sets into a folder"
                 onClick={onFolderClick}
               />
-            </MenuList>
+            </CommandDropdownList>
           </Menu>
         </HStack>
       )}
@@ -172,28 +181,27 @@ export const LeftNav: React.FC<LeftNavProps> = ({
                 Create
               </Button>
             </MenuButton>
-            <MenuList
-              overflow="hidden"
-              w="max"
-              marginTop={2}
-            >
-              <MenuOption
+            <CommandDropdownList minW="320px">
+              <CommandDropdownItem
                 icon={<IconPlus size={20} />}
                 label="Add IELTS Test (4 Skills)"
+                description="Create or import Reading, Listening, Writing & Speaking"
                 onClick={() => menuEventChannel.emit("openIeltsAddTest")}
               />
-              <MenuOption
+              <CommandDropdownItem
                 icon={<IconDatabase size={20} />}
                 label="Test Bank"
+                description="Manage & edit built-in and custom IELTS tests"
                 onClick={() => menuEventChannel.emit("openIeltsTestBank")}
               />
-              <MenuDivider />
-              <MenuOption
+              <CommandDropdownDivider />
+              <CommandDropdownItem
                 icon={<IconFolderPlus size={20} />}
                 label="New Collection"
+                description="Group IELTS tests into a custom collection"
                 onClick={() => menuEventChannel.emit("openIeltsNewCollection")}
               />
-            </MenuList>
+            </CommandDropdownList>
           </Menu>
 
           <InputGroup size="sm" w={{ md: "220px", lg: "260px" }}>

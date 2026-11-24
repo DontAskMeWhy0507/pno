@@ -6,6 +6,10 @@ import * as fzstd from "fzstd";
 import { put } from "@vercel/blob";
 
 import { parseAnkiPackage } from "@quenti/lib/src/anki/parser";
+import {
+  sanitizeAnkiHtml,
+  stripFrontSidePrefix,
+} from "@quenti/lib/src/anki/template";
 
 import { TRPCError } from "@trpc/server";
 
@@ -346,6 +350,16 @@ export async function importAnkiBuffer(
             userId,
             created: true,
             tags: ["anki"],
+            ankiTemplate: deck.template
+              ? {
+                  presetId: "imported",
+                  fields: deck.template.fields,
+                  qfmt: deck.template.qfmt,
+                  afmt: deck.template.afmt,
+                  css: deck.template.css,
+                  isCloze: deck.template.isCloze,
+                }
+              : undefined,
           },
         });
 
@@ -370,6 +384,7 @@ export async function importAnkiBuffer(
         }
 
         // Insert terms in batches of 500
+        const resolvedMediaPrefix = mediaBase ?? "/api/anki/media";
         const batchSize = 500;
         for (let i = 0; i < deck.cards.length; i += batchSize) {
           const chunk = deck.cards.slice(i, i + batchSize);
@@ -386,9 +401,27 @@ export async function importAnkiBuffer(
                   : `/api/anki/media/${safeName}`;
                 assetUrl = candidate.length <= 255 ? candidate : null;
               }
+              const rewrittenFront = rewriteMedia(c.front);
+              const rewrittenBack = stripFrontSidePrefix(
+                rewrittenFront,
+                rewriteMedia(c.back),
+              );
+              const normalizedFields: Record<string, string> = {};
+              for (const [fKey, fVal] of Object.entries(c.rawFields ?? {})) {
+                normalizedFields[fKey] = sanitizeAnkiHtml(
+                  fVal,
+                  resolvedMediaPrefix,
+                ).html;
+              }
               return {
-                word: safeTruncate(rewriteMedia(c.front), 1000),
-                definition: safeTruncate(rewriteMedia(c.back), 1000),
+                word: safeTruncate(rewrittenFront, 32000),
+                definition: safeTruncate(rewrittenBack, 32000),
+                wordRichText: {
+                  ankiFields: normalizedFields,
+                  ...(c.clozeOrdinal !== undefined
+                    ? { clozeOrdinal: c.clozeOrdinal }
+                    : {}),
+                },
                 rank: i + idx,
                 studySetId: studySet.id,
                 assetUrl,
