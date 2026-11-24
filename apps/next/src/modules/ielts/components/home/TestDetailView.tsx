@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState, type FC } from 'react';
-import { outfit } from '@quenti/lib/chakra-theme';
+import { outfit } from '@pno/lib/chakra-theme';
 import {
   Badge,
   Box,

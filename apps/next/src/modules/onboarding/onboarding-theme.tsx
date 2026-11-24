@@ -1,4 +1,4 @@
-import { ToggleGroup } from "@quenti/components/toggle-group";
+import { ToggleGroup } from "@pno/components/toggle-group";
 
 import {
   Text,

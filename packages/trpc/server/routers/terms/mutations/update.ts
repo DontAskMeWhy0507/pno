@@ -1,6 +1,6 @@
-import { chunkArray } from "@quenti/lib/array";
-import { prisma } from "@quenti/prisma";
-import { Prisma, type Term } from "@quenti/prisma/client";
+import { chunkArray } from "@pno/lib/array";
+import { prisma } from "@pno/prisma";
+import { Prisma, type Term } from "@pno/prisma/client";
 
 export const bulkUpdateTerms = async (
   terms: Pick<

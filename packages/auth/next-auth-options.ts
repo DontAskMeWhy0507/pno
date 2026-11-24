@@ -2,9 +2,9 @@ import { type NextAuthOptions } from "next-auth";
 import type { Provider } from "next-auth/providers";
 import GoogleProvider from "next-auth/providers/google";
 
-import { env } from "@quenti/env/server";
-import { APP_URL } from "@quenti/lib/constants/url";
-import { prisma } from "@quenti/prisma";
+import { env } from "@pno/env/server";
+import { APP_URL } from "@pno/lib/constants/url";
+import { prisma } from "@pno/prisma";
 
 import pjson from "../../apps/next/package.json";
 import { isEmailAllowed, isMagicLinkConfigured } from "./allowlist";

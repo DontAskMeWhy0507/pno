@@ -1,6 +1,6 @@
 import dynamic from 'next/dynamic';
 import React, { useCallback, useMemo, useState, useEffect, type FC } from 'react';
-import { outfit } from '@quenti/lib/chakra-theme';
+import { outfit } from '@pno/lib/chakra-theme';
 import {
   Badge,
   Box,
@@ -2067,7 +2067,7 @@ export const HomePage: FC<HomePageProps> = ({
               <Stack spacing={4}>
                 <Box>
                   <Text fontSize="xs" fontWeight={700} mb={1}>
-                    Tên bộ đề (ví dụ: Cambridge 20, Vol 11...)
+                    Tên bộ đề (ví dụ: Cambridge 21, Cambridge 20...)
                   </Text>
                   <Input
                     required

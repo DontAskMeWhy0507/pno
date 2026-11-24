@@ -1,9 +1,9 @@
 import { useSession } from "next-auth/react";
 import React from "react";
 
-import { Link } from "@quenti/components";
-import { Modal } from "@quenti/components/modal";
-import { api } from "@quenti/trpc";
+import { Link } from "@pno/components";
+import { Modal } from "@pno/components/modal";
+import { api } from "@pno/trpc";
 
 import {
   Box,

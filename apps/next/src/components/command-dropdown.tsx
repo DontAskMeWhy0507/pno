@@ -1,7 +1,7 @@
 import React from "react";
 
-import { Link } from "@quenti/components";
-import { outfit } from "@quenti/lib/chakra-theme";
+import { Link } from "@pno/components";
+import { outfit } from "@pno/lib/chakra-theme";
 
 import {
   Box,

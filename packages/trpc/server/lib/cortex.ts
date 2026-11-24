@@ -1,5 +1,5 @@
-import { bulkGenerateDistractors } from "@quenti/cortex/distractors";
-import { prisma } from "@quenti/prisma";
+import { bulkGenerateDistractors } from "@pno/cortex/distractors";
+import { prisma } from "@pno/prisma";
 
 export const markCortexStale = async (id: string) => {
   await prisma.studySet.update({

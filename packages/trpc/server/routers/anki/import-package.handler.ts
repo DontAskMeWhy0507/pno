@@ -5,12 +5,12 @@ import JSZip from "jszip";
 import * as fzstd from "fzstd";
 import { put } from "@vercel/blob";
 
-import { parseAnkiPackage } from "@quenti/lib/src/anki/parser";
+import { parseAnkiPackage } from "@pno/lib/src/anki/parser";
 import {
   sanitizeAnkiHtml,
   stripFrontSidePrefix,
-} from "@quenti/lib/src/anki/template";
-import { uploadMediaBatchWithFailover } from "@quenti/images/server/media-storage";
+} from "@pno/lib/src/anki/template";
+import { uploadMediaBatchWithFailover } from "@pno/images/server/media-storage";
 
 import { TRPCError } from "@trpc/server";
 

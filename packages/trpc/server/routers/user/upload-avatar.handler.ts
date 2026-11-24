@@ -1,4 +1,4 @@
-import { getPresignedAvatarJwt } from "@quenti/images/server";
+import { getPresignedAvatarJwt } from "@pno/images/server";
 
 import type { NonNullableUserContext } from "../../lib/types";
 

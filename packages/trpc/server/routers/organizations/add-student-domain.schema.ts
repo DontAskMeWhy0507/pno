@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-import { DOMAIN_REGEX } from "@quenti/lib/constants/organizations";
+import { DOMAIN_REGEX } from "@pno/lib/constants/organizations";
 
 export const ZAddStudentDomainSchema = z.object({
   orgId: z.string().cuid2(),

@@ -1,9 +1,9 @@
 import { useRouter } from "next/router";
 import React from "react";
 
-import { ToggleGroup } from "@quenti/components/toggle-group";
-import type { UserType } from "@quenti/prisma/client";
-import { api } from "@quenti/trpc";
+import { ToggleGroup } from "@pno/components/toggle-group";
+import type { UserType } from "@pno/prisma/client";
+import { api } from "@pno/trpc";
 
 import { HStack, Text, useColorModeValue } from "@chakra-ui/react";
 

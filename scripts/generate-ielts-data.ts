@@ -3,7 +3,6 @@ import path from "path";
 
 import rawImportedExams from "../apps/next/src/modules/ielts/data/imported_exams.json";
 import rawImportedListeningExams from "../apps/next/src/modules/ielts/data/imported_listening_exams.json";
-import { sampleListeningExams } from "../apps/next/src/modules/ielts/data/listeningExams";
 import { sampleExam } from "../apps/next/src/modules/ielts/data/sampleExam";
 import type { Exam } from "../apps/next/src/modules/ielts/types/exam";
 
@@ -20,9 +19,6 @@ if (!importedTitles.has((sampleExam.title || "").trim().toUpperCase())) {
   allMap.set(sampleExam.id, sampleExam);
 }
 for (const ex of importedExamsList) {
-  allMap.set(ex.id, ex);
-}
-for (const ex of sampleListeningExams) {
   allMap.set(ex.id, ex);
 }
 for (const ex of importedListeningExamsList) {

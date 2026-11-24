@@ -1,4 +1,4 @@
-import { TestQuestionType } from "@quenti/interfaces";
+import { TestQuestionType } from "@pno/interfaces";
 
 export const getBitwiseForTypes = (types: TestQuestionType[]) => {
   // Get the bitwise value for the types

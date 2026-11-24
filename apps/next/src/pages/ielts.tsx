@@ -1,7 +1,7 @@
 import dynamic from "next/dynamic";
 import React from "react";
 
-import { HeadSeo } from "@quenti/components/head-seo";
+import { HeadSeo } from "@pno/components/head-seo";
 
 import { PageWrapper } from "../common/page-wrapper";
 import TopLoadingBar from "../common/top-loading-bar";

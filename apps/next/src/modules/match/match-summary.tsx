@@ -1,9 +1,9 @@
 import { useRouter } from "next/router";
 
-import { Link } from "@quenti/components";
-import { HeadSeo } from "@quenti/components/head-seo";
-import { api } from "@quenti/trpc";
-import { MATCH_MIN_TIME } from "@quenti/trpc/server/common/constants";
+import { Link } from "@pno/components";
+import { HeadSeo } from "@pno/components/head-seo";
+import { api } from "@pno/trpc";
+import { MATCH_MIN_TIME } from "@pno/trpc/server/common/constants";
 
 import {
   Button,

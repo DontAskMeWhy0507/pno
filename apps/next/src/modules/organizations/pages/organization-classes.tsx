@@ -1,5 +1,5 @@
-import { Link } from "@quenti/components";
-import { api } from "@quenti/trpc";
+import { Link } from "@pno/components";
+import { api } from "@pno/trpc";
 
 import {
   Button,

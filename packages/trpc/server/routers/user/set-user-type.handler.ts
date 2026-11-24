@@ -1,4 +1,4 @@
-import { invalidateDefaultOwnerSession } from "@quenti/auth";
+import { invalidateDefaultOwnerSession } from "@pno/auth";
 
 import { TRPCError } from "@trpc/server";
 

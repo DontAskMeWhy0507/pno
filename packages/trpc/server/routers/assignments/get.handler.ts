@@ -1,5 +1,5 @@
-import { strip } from "@quenti/lib/strip";
-import { Prisma, type PrismaClient } from "@quenti/prisma/client";
+import { strip } from "@pno/lib/strip";
+import { Prisma, type PrismaClient } from "@pno/prisma/client";
 
 import { TRPCError } from "@trpc/server";
 

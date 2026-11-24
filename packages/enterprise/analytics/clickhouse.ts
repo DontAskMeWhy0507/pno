@@ -1,6 +1,6 @@
 import { createClient } from "@clickhouse/client";
 
-import { env } from "@quenti/env/server";
+import { env } from "@pno/env/server";
 
 export const CLICKHOUSE_ENABLED =
   env.ENABLE_CLICKHOUSE === "true" &&

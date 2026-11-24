@@ -1,11 +1,11 @@
 import { Handlers } from "@highlight-run/node";
 import { withAxiom } from "next-axiom";
 
-import { env as clientEnv } from "@quenti/env/client";
-import { env } from "@quenti/env/server";
-import { createNextApiHandler } from "@quenti/trpc/server/adapters/next";
-import { appRouter } from "@quenti/trpc/server/root";
-import { createTRPCContext } from "@quenti/trpc/server/trpc";
+import { env as clientEnv } from "@pno/env/client";
+import { env } from "@pno/env/server";
+import { createNextApiHandler } from "@pno/trpc/server/adapters/next";
+import { appRouter } from "@pno/trpc/server/root";
+import { createTRPCContext } from "@pno/trpc/server/trpc";
 
 export const config = {
   api: {

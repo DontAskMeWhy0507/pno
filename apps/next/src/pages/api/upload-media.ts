@@ -3,8 +3,8 @@ import fs from "fs";
 import type { NextApiRequest, NextApiResponse } from "next";
 import path from "path";
 
-import { getServerAuthSession } from "@quenti/auth";
-import { uploadSingleMediaWithFailover } from "@quenti/images/server/media-storage";
+import { getServerAuthSession } from "@pno/auth";
+import { uploadSingleMediaWithFailover } from "@pno/images/server/media-storage";
 
 export const config = {
   api: {

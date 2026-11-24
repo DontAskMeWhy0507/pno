@@ -1,6 +1,6 @@
-import { Link } from "@quenti/components";
-import type { Widen } from "@quenti/lib/widen";
-import type { UserType } from "@quenti/prisma/client";
+import { Link } from "@pno/components";
+import type { Widen } from "@pno/lib/widen";
+import type { UserType } from "@pno/prisma/client";
 
 import {
   Box,

@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-import type { Prisma } from "@quenti/prisma/client";
+import type { Prisma } from "@pno/prisma/client";
 
 import { createTRPCRouter, protectedProcedure } from "../../trpc";
 

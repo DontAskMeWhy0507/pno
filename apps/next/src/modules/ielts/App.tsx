@@ -28,7 +28,7 @@ import {
   type CloudBootstrapPayload,
   type CloudIeltsSkill,
 } from './utils/cloudSync';
-import { api } from '@quenti/trpc';
+import { api } from '@pno/trpc';
 import { Box, useColorMode, useColorModeValue, useToast } from '@chakra-ui/react';
 import Navbar from '../../components/navbar';
 import { Footer } from '../../components/footer';

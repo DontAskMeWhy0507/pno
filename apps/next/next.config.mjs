@@ -10,8 +10,8 @@ import { fileURLToPath } from "url";
  * Run `build` or `dev` with `SKIP_ENV_VALIDATION` to skip env validation.
  * This is especially useful for Docker builds.
  */
-import "@quenti/env/client/client.mjs";
-import "@quenti/env/server/server.mjs";
+import "@pno/env/client/client.mjs";
+import "@pno/env/server/server.mjs";
 
 import fs from "fs";
 const pjson = JSON.parse(
@@ -43,7 +43,7 @@ if (process.env.MEDIA_S3_PUBLIC_URL) {
 
 const getConsoleRewrites = async () => {
   try {
-    return (await import("@quenti/console/next.mjs")).INTERNAL_REWRITES;
+    return (await import("@pno/console/next.mjs")).INTERNAL_REWRITES;
   } catch {
     return [];
   }
@@ -54,7 +54,7 @@ let config = {
   generateBuildId: () => nextBuildId({ dir: __dirname }),
   experimental: {
     optimizePackageImports: [
-      "@quenti/components",
+      "@pno/components",
       "@tabler/icons-react",
       "@chakra-ui/react",
       "lucide-react",
@@ -123,25 +123,25 @@ let config = {
     formats: ["image/avif", "image/webp"],
   },
   transpilePackages: [
-    "@quenti/auth",
-    "@quenti/core",
-    "@quenti/cortex",
-    "@quenti/emails",
-    "@quenti/env",
-    "@quenti/images",
-    "@quenti/interfaces",
-    "@quenti/lib",
-    "@quenti/components",
-    "@quenti/branding",
-    "@quenti/payments",
-    "@quenti/enterprise",
-    "@quenti/prisma",
-    "@quenti/drizzle",
-    "@quenti/trpc",
-    "@quenti/inngest",
-    "@quenti/integrations",
-    "@quenti/types",
-    "@quenti/website",
+    "@pno/auth",
+    "@pno/core",
+    "@pno/cortex",
+    "@pno/emails",
+    "@pno/env",
+    "@pno/images",
+    "@pno/interfaces",
+    "@pno/lib",
+    "@pno/components",
+    "@pno/branding",
+    "@pno/payments",
+    "@pno/enterprise",
+    "@pno/prisma",
+    "@pno/drizzle",
+    "@pno/trpc",
+    "@pno/inngest",
+    "@pno/integrations",
+    "@pno/types",
+    "@pno/website",
   ],
   headers: async () => [
     {

@@ -1,5 +1,5 @@
-import { invalidateDefaultOwnerSession } from "@quenti/auth";
-import { getUserAvatarUrl } from "@quenti/images/server";
+import { invalidateDefaultOwnerSession } from "@pno/auth";
+import { getUserAvatarUrl } from "@pno/images/server";
 
 import type { NonNullableUserContext } from "../../lib/types";
 

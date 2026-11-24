@@ -1,6 +1,6 @@
-import { invalidateDefaultOwnerSession } from "@quenti/auth";
-import { failsPrecondition } from "@quenti/lib/usernames";
-import { Prisma } from "@quenti/prisma/client";
+import { invalidateDefaultOwnerSession } from "@pno/auth";
+import { failsPrecondition } from "@pno/lib/usernames";
+import { Prisma } from "@pno/prisma/client";
 
 import { TRPCError } from "@trpc/server";
 
@@ -40,7 +40,7 @@ export const changeUsernameHandler = async ({
       input.username,
     );
   } catch {
-    // Optional @quenti/console submodule may not be installed
+    // Optional @pno/console submodule may not be installed
   }
 
   if (!consoleAvailable) {

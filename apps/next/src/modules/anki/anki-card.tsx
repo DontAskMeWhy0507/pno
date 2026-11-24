@@ -16,9 +16,9 @@ import {
   extractAnkiAudioSources,
   sanitizeAnkiHtml,
   stripFrontSidePrefix,
-} from "@quenti/lib/src/anki/template";
-import { getAnkiFallbackMediaUrl } from "@quenti/lib/src/anki/media-fallback";
-import { scopeAnkiCss } from "@quenti/lib/src/anki/presets";
+} from "@pno/lib/src/anki/template";
+import { getAnkiFallbackMediaUrl } from "@pno/lib/src/anki/media-fallback";
+import { scopeAnkiCss } from "@pno/lib/src/anki/presets";
 import { AnkiAudioPlayer, stopAllAnkiAudio } from "./anki-audio-player";
 
 export interface AnkiCardProps {

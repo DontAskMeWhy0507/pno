@@ -1,5 +1,5 @@
-import { prisma } from "@quenti/prisma";
-import { fetchQuizletSet } from "@quenti/lib/src/quizlet/parser";
+import { prisma } from "@pno/prisma";
+import { fetchQuizletSet } from "@pno/lib/src/quizlet/parser";
 
 export const importIntegration = async (path: string) => {
   if (path === "quizlet" || path === "quizlet/index") {

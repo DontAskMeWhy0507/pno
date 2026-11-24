@@ -6,7 +6,7 @@ import React, {
   useState,
 } from "react";
 
-import { Link } from "@quenti/components";
+import { Link } from "@pno/components";
 
 import {
   Badge,

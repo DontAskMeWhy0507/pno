@@ -1,5 +1,5 @@
-import { invalidateDefaultOwnerSession } from "@quenti/auth";
-import { env } from "@quenti/env/server";
+import { invalidateDefaultOwnerSession } from "@pno/auth";
+import { env } from "@pno/env/server";
 
 import { TRPCError } from "@trpc/server";
 

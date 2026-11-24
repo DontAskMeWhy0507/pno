@@ -1,11 +1,11 @@
 import Compressor from "compressorjs";
 import React from "react";
 
-import { Link } from "@quenti/components";
-import { BgGradient } from "@quenti/components/bg-gradient";
-import { env } from "@quenti/env/client";
-import { useDebounce } from "@quenti/lib/hooks/use-debounce";
-import { type RouterOutputs, api } from "@quenti/trpc";
+import { Link } from "@pno/components";
+import { BgGradient } from "@pno/components/bg-gradient";
+import { env } from "@pno/env/client";
+import { useDebounce } from "@pno/lib/hooks/use-debounce";
+import { type RouterOutputs, api } from "@pno/trpc";
 
 import {
   Box,

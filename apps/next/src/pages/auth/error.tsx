@@ -1,7 +1,7 @@
 import { useRouter } from "next/router";
 
-import { Link, Logo } from "@quenti/components";
-import { HeadSeo } from "@quenti/components/head-seo";
+import { Link, Logo } from "@pno/components";
+import { HeadSeo } from "@pno/components/head-seo";
 
 import {
   Button,

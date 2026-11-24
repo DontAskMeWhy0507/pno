@@ -1,8 +1,8 @@
 import crypto from "crypto";
 import type { NextApiRequest, NextApiResponse } from "next";
 
-import { env } from "@quenti/env/server";
-import { register } from "@quenti/trpc/server/prometheus";
+import { env } from "@pno/env/server";
+import { register } from "@pno/trpc/server/prometheus";
 
 const safeCompare = (a: string, b: string): boolean => {
   const bufA = Buffer.from(a);

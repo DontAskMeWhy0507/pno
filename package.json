@@ -1,8 +1,8 @@
 {
-  "name": "quenti-monorepo",
+  "name": "pno-monorepo",
   "private": true,
   "scripts": {
-    "build": "dotenv -- turbo run build --filter=@quenti/next",
+    "build": "dotenv -- turbo run build --filter=@pno/next",
     "vercel-build": "bun run build",
     "test": "jest",
     "clean": "find . -name node_modules -o -name .next -o -name .turbo -o -name dist -type d -prune | xargs rm -rf",
@@ -15,8 +15,8 @@
     "lint": "dotenv -- turbo lint",
     "lint:fix": "turbo lint:fix",
     "type-check": "turbo type-check",
-    "dev": "dotenv -- turbo dev --filter=@quenti/next",
-    "start": "dotenv -- turbo start --filter=@quenti/next",
+    "dev": "dotenv -- turbo dev --filter=@pno/next",
+    "start": "dotenv -- turbo start --filter=@pno/next",
     "next": "dotenv -- bun run --cwd apps/next",
     "website": "dotenv -- bun run --cwd apps/website",
     "prisma": "dotenv -- bun run --cwd packages/prisma",

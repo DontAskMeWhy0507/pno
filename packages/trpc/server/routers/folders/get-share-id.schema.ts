@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-import { USERNAME_REGEXP } from "@quenti/lib/constants/characters";
+import { USERNAME_REGEXP } from "@pno/lib/constants/characters";
 
 export const ZGetShareIdSchema = z
   .object({

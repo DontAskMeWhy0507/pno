@@ -1,6 +1,6 @@
 import { useState, useRef, type FC } from 'react';
 import { useToast } from '@chakra-ui/react';
-import { outfit } from '@quenti/lib/chakra-theme';
+import { outfit } from '@pno/lib/chakra-theme';
 import type { Exam } from '../../types/exam';
 import {
   getAllExams,

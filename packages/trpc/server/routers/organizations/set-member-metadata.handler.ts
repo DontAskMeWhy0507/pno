@@ -1,4 +1,4 @@
-import { orgMembershipMetadata } from "@quenti/prisma/zod-schemas";
+import { orgMembershipMetadata } from "@pno/prisma/zod-schemas";
 
 import { TRPCError } from "@trpc/server";
 

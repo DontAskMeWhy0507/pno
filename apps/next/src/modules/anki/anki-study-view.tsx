@@ -24,14 +24,14 @@ import {
   IconTrophy,
   IconVolume,
 } from "@tabler/icons-react";
-import { parseAnkiDeckTemplate } from "@quenti/lib/src/anki/presets";
+import { parseAnkiDeckTemplate } from "@pno/lib/src/anki/presets";
 import {
   calculateNextSchedule,
   getIntervalEstimateLabel,
   type AnkiQueue,
   type CardScheduleState,
-} from "@quenti/lib/src/anki/srs";
-import { api } from "@quenti/trpc";
+} from "@pno/lib/src/anki/srs";
+import { api } from "@pno/trpc";
 import { AnkiCard } from "./anki-card";
 import { AnkiRatingBar } from "./anki-rating-bar";
 

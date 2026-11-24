@@ -1,7 +1,7 @@
 import React, { useMemo, useRef } from "react";
 
-import { Modal } from "@quenti/components/modal";
-import { parseQuizletExportText } from "@quenti/lib/src/quizlet/parser";
+import { Modal } from "@pno/components/modal";
+import { parseQuizletExportText } from "@pno/lib/src/quizlet/parser";
 
 import {
   Button,

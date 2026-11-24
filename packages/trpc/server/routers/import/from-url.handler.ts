@@ -3,7 +3,7 @@ import { TRPCError } from "@trpc/server";
 import {
   fetchQuizletSet,
   parseQuizletExportText,
-} from "@quenti/lib/src/quizlet/parser";
+} from "@pno/lib/src/quizlet/parser";
 
 import type { NonNullableUserContext } from "../../lib/types";
 import type { TFromUrlSchema } from "./from-url.schema";

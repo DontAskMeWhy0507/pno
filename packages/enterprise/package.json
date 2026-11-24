@@ -1,12 +1,12 @@
 {
-  "name": "@quenti/enterprise",
+  "name": "@pno/enterprise",
   "version": "0.0.0",
   "private": true,
   "dependencies": {
     "@clickhouse/client": "^0.2.2",
-    "@quenti/core": "workspace:*",
-    "@quenti/env": "workspace:*",
-    "@quenti/prisma": "workspace:*",
+    "@pno/core": "workspace:*",
+    "@pno/env": "workspace:*",
+    "@pno/prisma": "workspace:*",
     "@upstash/redis": "^1.22.1"
   },
   "scripts": {

@@ -1,6 +1,6 @@
-import { invalidateDefaultOwnerSession } from "@quenti/auth";
-import { env } from "@quenti/env/client";
-import { deleteAvatar } from "@quenti/images/server";
+import { invalidateDefaultOwnerSession } from "@pno/auth";
+import { env } from "@pno/env/client";
+import { deleteAvatar } from "@pno/images/server";
 
 import type { NonNullableUserContext } from "../../lib/types";
 

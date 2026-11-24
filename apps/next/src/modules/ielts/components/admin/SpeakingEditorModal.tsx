@@ -1,6 +1,6 @@
 import { useState, type FC } from 'react';
 import { useToast } from '@chakra-ui/react';
-import { outfit } from '@quenti/lib/chakra-theme';
+import { outfit } from '@pno/lib/chakra-theme';
 import type { SpeakingExam, SpeakingQuestion } from '../../types/speaking';
 import { getAllCollections } from '../../utils/storage';
 import {

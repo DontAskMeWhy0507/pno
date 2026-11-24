@@ -4,7 +4,7 @@ import {
   calculateNextSchedule,
   CardScheduleState,
   AnkiQueue,
-} from "@quenti/lib/src/anki/srs";
+} from "@pno/lib/src/anki/srs";
 
 import type { NonNullableUserContext } from "../../lib/types";
 import { assertStudySetReadable } from "./access";

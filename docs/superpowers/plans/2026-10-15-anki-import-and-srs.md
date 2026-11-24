@@ -384,7 +384,7 @@ model AnkiCardSchedule {
 - On success, redirects to the newly created set or folder and triggers confetti effect.
 
 - [ ] **Step 1: Implement `apps/next/src/components/import-from-anki-modal.tsx`**
-  Build modal adhering to Quenti's design system (`@quenti/components/modal`, Chakra UI, file input, error handling).
+  Build modal adhering to Quenti's design system (`@pno/components/modal`, Chakra UI, file input, error handling).
 
 - [ ] **Step 2: Add trigger button in create navigation**
   Add "Import from Anki" alongside "Import from Quizlet" in create dropdowns.

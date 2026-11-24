@@ -1,7 +1,7 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 
-import { getServerAuthSession } from "@quenti/auth";
-import { createPresignedMediaUploads } from "@quenti/images/server/media-storage";
+import { getServerAuthSession } from "@pno/auth";
+import { createPresignedMediaUploads } from "@pno/images/server/media-storage";
 
 export const config = {
   maxDuration: 60,

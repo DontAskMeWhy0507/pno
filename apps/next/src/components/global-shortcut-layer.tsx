@@ -3,7 +3,7 @@ import dynamic from "next/dynamic";
 import { useRouter } from "next/router";
 import React from "react";
 
-import { EnabledFeature } from "@quenti/lib/feature";
+import { EnabledFeature } from "@pno/lib/feature";
 
 import { menuEventChannel } from "../events/menu";
 import { useFeature } from "../hooks/use-feature";

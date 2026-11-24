@@ -2,8 +2,8 @@ import { useSession } from "next-auth/react";
 import dynamic from "next/dynamic";
 import React from "react";
 
-import type { FacingTerm } from "@quenti/interfaces";
-import { api } from "@quenti/trpc";
+import type { FacingTerm } from "@pno/interfaces";
+import { api } from "@pno/trpc";
 
 import { Box, type ResponsiveValue } from "@chakra-ui/react";
 

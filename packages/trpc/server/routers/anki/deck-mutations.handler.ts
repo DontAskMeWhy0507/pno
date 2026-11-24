@@ -4,11 +4,11 @@ import { TRPCError } from "@trpc/server";
 import {
   getAnkiPreset,
   parseAnkiCardFields,
-} from "@quenti/lib/src/anki/presets";
+} from "@pno/lib/src/anki/presets";
 import {
   renderAnkiCard,
   stripFrontSidePrefix,
-} from "@quenti/lib/src/anki/template";
+} from "@pno/lib/src/anki/template";
 
 import type { NonNullableUserContext } from "../../lib/types";
 import type {

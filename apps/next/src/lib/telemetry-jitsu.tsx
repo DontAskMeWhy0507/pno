@@ -4,7 +4,7 @@ import { useSession } from "next-auth/react";
 import { useRouter } from "next/router";
 import React from "react";
 
-import { env } from "@quenti/env/client";
+import { env } from "@pno/env/client";
 
 export const JitsuTelemetryProvider = ({
   children,

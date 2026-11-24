@@ -1,8 +1,8 @@
 import { signOut, useSession } from "next-auth/react";
 import React from "react";
 
-import { avatarUrl } from "@quenti/lib/avatar";
-import { outfit } from "@quenti/lib/chakra-theme";
+import { avatarUrl } from "@pno/lib/avatar";
+import { outfit } from "@pno/lib/chakra-theme";
 
 import {
   Avatar,

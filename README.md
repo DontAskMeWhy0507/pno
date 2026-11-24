@@ -48,7 +48,7 @@ Get up and running by following these steps.
 
    - Copy `.env.example` to `.env`
    - Use `openssl rand -base64 32` to generate a key for `NEXTAUTH_SECRET` and set it as the value in `.env`
-   - Use `openssl rand -base64 24` to generate a key for `QUENTI_ENCRYPTION_KEY` and set it as the value in `.env`
+   - Use `openssl rand -base64 24` to generate a key for `PNO_ENCRYPTION_KEY` and set it as the value in `.env`
    - You'll need to create a Google OAuth client ID from the [Google API Console](https://console.developers.google.com/). There are plenty of guides for this, like [this one from LogRocket](https://blog.logrocket.com/nextauth-js-for-next-js-client-side-authentication/#create-a-google-oauth-app) embedded:
 
      > ![Google OAuth Client Screenshot](https://files.readme.io/eca93af-GCPStep2OAuth.png)

@@ -1,7 +1,7 @@
 import client from "prom-client";
 
-import { env } from "@quenti/env/server";
-import { prisma } from "@quenti/prisma";
+import { env } from "@pno/env/server";
+import { prisma } from "@pno/prisma";
 
 import pjson from "../../../apps/next/package.json";
 
@@ -107,7 +107,7 @@ export const register =
 
     new client.Gauge({
       name: "version_info",
-      help: "Quenti version info.",
+      help: "PNO version info.",
       labelNames: ["version", "major", "minor", "patch"],
       aggregator: "first",
       collect() {

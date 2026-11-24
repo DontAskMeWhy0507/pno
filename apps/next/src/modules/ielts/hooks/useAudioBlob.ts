@@ -56,7 +56,12 @@ export function useAudioBlob(audioUrl?: string) {
         ? trimmed
         : '/' + trimmed;
 
-    if (normalized.startsWith('blob:') || normalized.startsWith('data:')) {
+    if (
+      normalized.startsWith('blob:') ||
+      normalized.startsWith('data:') ||
+      normalized.startsWith('http://') ||
+      normalized.startsWith('https://')
+    ) {
       setBlobUrl(normalized);
       setError(null);
       setIsLoading(false);

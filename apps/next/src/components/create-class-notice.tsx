@@ -1,6 +1,6 @@
 import React from "react";
 
-import { Modal } from "@quenti/components";
+import { Modal } from "@pno/components";
 
 import { Button, VStack } from "@chakra-ui/react";
 

@@ -2,8 +2,8 @@ import { useSession } from "next-auth/react";
 import { useRouter } from "next/router";
 import React from "react";
 
-import { Modal } from "@quenti/components";
-import { api } from "@quenti/trpc";
+import { Modal } from "@pno/components";
+import { api } from "@pno/trpc";
 
 import {
   Button,

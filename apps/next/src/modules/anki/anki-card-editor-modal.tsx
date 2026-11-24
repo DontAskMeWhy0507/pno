@@ -4,15 +4,15 @@ import {
   type AnkiDeckTemplate,
   getAnkiPreset,
   parseAnkiCardFields,
-} from "@quenti/lib/src/anki/presets";
+} from "@pno/lib/src/anki/presets";
 import {
   extractAnkiAudioSources,
   renderAnkiCard,
   sanitizeAnkiHtml,
   stripFrontSidePrefix,
-} from "@quenti/lib/src/anki/template";
-import { outfit } from "@quenti/lib/chakra-theme";
-import { api } from "@quenti/trpc";
+} from "@pno/lib/src/anki/template";
+import { outfit } from "@pno/lib/chakra-theme";
+import { api } from "@pno/trpc";
 
 import {
   Badge,

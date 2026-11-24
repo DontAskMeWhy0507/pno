@@ -1,4 +1,4 @@
-import { theme } from "@quenti/lib/chakra-theme";
+import { theme } from "@pno/lib/chakra-theme";
 
 import { ChakraProvider } from "@chakra-ui/provider";
 

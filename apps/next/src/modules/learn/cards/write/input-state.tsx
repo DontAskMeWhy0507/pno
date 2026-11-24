@@ -1,10 +1,10 @@
 import React from "react";
 
-import { GenericLabel } from "@quenti/components";
-import { EvaluationResult, evaluate } from "@quenti/core/evaluator";
-import { placeholderLanguage } from "@quenti/core/language";
-import type { Question } from "@quenti/interfaces";
-import { api } from "@quenti/trpc";
+import { GenericLabel } from "@pno/components";
+import { EvaluationResult, evaluate } from "@pno/core/evaluator";
+import { placeholderLanguage } from "@pno/core/language";
+import type { Question } from "@pno/interfaces";
+import { api } from "@pno/trpc";
 
 import {
   Box,

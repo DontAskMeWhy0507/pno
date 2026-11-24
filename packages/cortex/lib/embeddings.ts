@@ -1,7 +1,7 @@
 import type { EmbedFloatsResponse } from "cohere-ai/api";
 
-import { env } from "@quenti/env/server";
-import { chunkArray } from "@quenti/lib/array";
+import { env } from "@pno/env/server";
+import { chunkArray } from "@pno/lib/array";
 
 import { cohere } from "./cohere";
 

@@ -1,7 +1,7 @@
-import { HttpError } from "@quenti/lib/http-error";
-import { prisma } from "@quenti/prisma";
-import { Prisma } from "@quenti/prisma/client";
-import { userMetadataSchema } from "@quenti/prisma/zod-schemas";
+import { HttpError } from "@pno/lib/http-error";
+import { prisma } from "@pno/prisma";
+import { Prisma } from "@pno/prisma/client";
+import { userMetadataSchema } from "@pno/prisma/zod-schemas";
 
 import { stripe } from "./stripe";
 

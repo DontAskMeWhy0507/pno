@@ -1,6 +1,6 @@
 import type React from "react";
 
-import { useShortcut } from "@quenti/lib/hooks/use-shortcut";
+import { useShortcut } from "@pno/lib/hooks/use-shortcut";
 
 export interface SortableShortcutLayer {
   triggerFlip: () => void;

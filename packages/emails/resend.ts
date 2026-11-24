@@ -1,7 +1,7 @@
 import { Resend } from "resend";
 import type { CreateEmailOptions } from "resend/build/src/emails/interfaces";
 
-import { env } from "@quenti/env/server";
+import { env } from "@pno/env/server";
 
 import ClasssInviteEmail, {
   type ClassInviteEmailProps,

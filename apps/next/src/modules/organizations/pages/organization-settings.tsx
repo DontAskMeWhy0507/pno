@@ -1,10 +1,10 @@
 import { useSession } from "next-auth/react";
 import React from "react";
 
-import { Link } from "@quenti/components";
-import { ORG_SUPPORT_EMAIL } from "@quenti/lib/constants/email";
-import type { MembershipRole } from "@quenti/prisma/client";
-import { api } from "@quenti/trpc";
+import { Link } from "@pno/components";
+import { ORG_SUPPORT_EMAIL } from "@pno/lib/constants/email";
+import type { MembershipRole } from "@pno/prisma/client";
+import { api } from "@pno/trpc";
 
 import {
   Box,

@@ -1,9 +1,9 @@
 import { useRouter } from "next/router";
 import React, { useState } from "react";
 
-import { ANKI_DECK_PRESETS, type AnkiPresetDefinition } from "@quenti/lib/src/anki/presets";
-import { outfit } from "@quenti/lib/chakra-theme";
-import { api } from "@quenti/trpc";
+import { ANKI_DECK_PRESETS, type AnkiPresetDefinition } from "@pno/lib/src/anki/presets";
+import { outfit } from "@pno/lib/chakra-theme";
+import { api } from "@pno/trpc";
 
 import {
   Badge,

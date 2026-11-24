@@ -1,8 +1,8 @@
 import React from "react";
 
-import { Link } from "@quenti/components";
-import { HeadSeo } from "@quenti/components/head-seo";
-import { outfit } from "@quenti/lib/chakra-theme";
+import { Link } from "@pno/components";
+import { HeadSeo } from "@pno/components/head-seo";
+import { outfit } from "@pno/lib/chakra-theme";
 
 import {
   Badge,

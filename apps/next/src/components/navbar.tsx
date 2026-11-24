@@ -1,8 +1,8 @@
 import { useSession } from "next-auth/react";
 import React from "react";
 
-import { Link } from "@quenti/components";
-import { avatarUrl } from "@quenti/lib/avatar";
+import { Link } from "@pno/components";
+import { avatarUrl } from "@pno/lib/avatar";
 
 import {
   Avatar,

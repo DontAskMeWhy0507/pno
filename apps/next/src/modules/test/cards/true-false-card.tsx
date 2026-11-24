@@ -1,7 +1,7 @@
-import { GenericLabel } from "@quenti/components";
-import { Clickable, EvaluatedTrue } from "@quenti/components/test";
-import { RichPromptDisplay } from "@quenti/components/test/rich-prompt-display";
-import type { TrueFalseData } from "@quenti/interfaces";
+import { GenericLabel } from "@pno/components";
+import { Clickable, EvaluatedTrue } from "@pno/components/test";
+import { RichPromptDisplay } from "@pno/components/test/rich-prompt-display";
+import type { TrueFalseData } from "@pno/interfaces";
 
 import {
   Box,

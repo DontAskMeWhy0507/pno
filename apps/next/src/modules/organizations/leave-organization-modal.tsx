@@ -1,7 +1,7 @@
 import { useRouter } from "next/router";
 
-import { Modal } from "@quenti/components/modal";
-import { api } from "@quenti/trpc";
+import { Modal } from "@pno/components/modal";
+import { api } from "@pno/trpc";
 
 import { Button, ButtonGroup, Text, useToast } from "@chakra-ui/react";
 

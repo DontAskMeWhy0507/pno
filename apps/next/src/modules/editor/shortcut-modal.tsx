@@ -1,4 +1,4 @@
-import { Modal } from "@quenti/components/modal";
+import { Modal } from "@pno/components/modal";
 
 import { Flex, Kbd, Stack, Text, useColorModeValue } from "@chakra-ui/react";
 

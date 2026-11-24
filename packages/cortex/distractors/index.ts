@@ -1,5 +1,5 @@
-import { shuffleArray } from "@quenti/lib/array";
-import type { Term } from "@quenti/prisma/client";
+import { shuffleArray } from "@pno/lib/array";
+import type { Term } from "@pno/prisma/client";
 
 import { generateEmbeddings } from "../lib/embeddings";
 import { VectorStore } from "../lib/vector-store";

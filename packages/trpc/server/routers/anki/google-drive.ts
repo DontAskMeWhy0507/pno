@@ -1,6 +1,6 @@
 import { TRPCError } from "@trpc/server";
 
-import { env } from "@quenti/env/server";
+import { env } from "@pno/env/server";
 
 import type { NonNullableUserContext } from "../../lib/types";
 

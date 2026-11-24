@@ -1,5 +1,5 @@
-import { chunkArray } from "@quenti/lib/array";
-import { Prisma, type PrismaClient } from "@quenti/prisma/client";
+import { chunkArray } from "@pno/lib/array";
+import { Prisma, type PrismaClient } from "@pno/prisma/client";
 
 export const reorder = async (
   prisma: Pick<PrismaClient, "term" | "$executeRaw">,

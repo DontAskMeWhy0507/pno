@@ -1,4 +1,4 @@
-import { getPresignedTermAssetJwt } from "@quenti/images/server";
+import { getPresignedTermAssetJwt } from "@pno/images/server";
 
 import { TRPCError } from "@trpc/server";
 

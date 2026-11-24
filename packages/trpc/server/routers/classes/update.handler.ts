@@ -1,4 +1,4 @@
-import { inngest } from "@quenti/inngest";
+import { inngest } from "@pno/inngest";
 
 import { isClassTeacherOrThrow } from "../../lib/queries/classes";
 import type { NonNullableUserContext } from "../../lib/types";

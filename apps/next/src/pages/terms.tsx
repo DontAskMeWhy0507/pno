@@ -1,6 +1,6 @@
 import type { GetServerSideProps } from "next";
 
-import { HeadSeo } from "@quenti/components/head-seo";
+import { HeadSeo } from "@pno/components/head-seo";
 
 import {
   Container,

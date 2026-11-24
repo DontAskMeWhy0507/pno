@@ -1,5 +1,5 @@
-import { classifyClass } from "@quenti/cortex/classify";
-import { prisma } from "@quenti/prisma";
+import { classifyClass } from "@pno/cortex/classify";
+import { prisma } from "@pno/prisma";
 
 import { inngest } from "../inngest";
 

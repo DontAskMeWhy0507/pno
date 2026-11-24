@@ -3,9 +3,9 @@ import Head from "next/head";
 import { useRouter } from "next/router";
 import React from "react";
 
-import { EnabledFeature } from "@quenti/lib/feature";
-import type { Widen } from "@quenti/lib/widen";
-import { type RouterOutputs, api } from "@quenti/trpc";
+import { EnabledFeature } from "@pno/lib/feature";
+import type { Widen } from "@pno/lib/widen";
+import { type RouterOutputs, api } from "@pno/trpc";
 
 import { Button, Center, Heading, Text, VStack } from "@chakra-ui/react";
 

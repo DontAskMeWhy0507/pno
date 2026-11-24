@@ -1,6 +1,6 @@
 import React from "react";
 import { useRouter } from "next/router";
-import { HeadSeo } from "@quenti/components/head-seo";
+import { HeadSeo } from "@pno/components/head-seo";
 import { Container, Spinner } from "@chakra-ui/react";
 import { PageWrapper } from "../../../common/page-wrapper";
 import { AuthedPage } from "../../../components/authed-page";

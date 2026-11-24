@@ -5,10 +5,10 @@ import { useSession } from "next-auth/react";
 import { log } from "next-axiom";
 import React from "react";
 
-import { GenericLabel } from "@quenti/components";
-import type { Question } from "@quenti/interfaces";
-import { getRandom } from "@quenti/lib/array";
-import { api } from "@quenti/trpc";
+import { GenericLabel } from "@pno/components";
+import type { Question } from "@pno/interfaces";
+import { getRandom } from "@pno/lib/array";
+import { api } from "@pno/trpc";
 
 import { Button, Flex, Stack } from "@chakra-ui/react";
 

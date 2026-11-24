@@ -1,7 +1,7 @@
 import React from "react";
 
-import { env } from "@quenti/env/client";
-import { api } from "@quenti/trpc";
+import { env } from "@pno/env/client";
+import { api } from "@pno/trpc";
 
 import {
   Box,

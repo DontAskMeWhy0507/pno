@@ -1,6 +1,6 @@
-import { strip } from "@quenti/lib/strip";
-import { prisma } from "@quenti/prisma";
-import type { ClassMembershipType } from "@quenti/prisma/client";
+import { strip } from "@pno/lib/strip";
+import { prisma } from "@pno/prisma";
+import type { ClassMembershipType } from "@pno/prisma/client";
 
 import {
   assignmentArgs,

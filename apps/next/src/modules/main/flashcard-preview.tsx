@@ -1,8 +1,8 @@
 import { useSession } from "next-auth/react";
 import React from "react";
 
-import { shuffleArray } from "@quenti/lib/array";
-import { api } from "@quenti/trpc";
+import { shuffleArray } from "@pno/lib/array";
+import { api } from "@pno/trpc";
 
 import { Box, Button, Flex, IconButton, Stack } from "@chakra-ui/react";
 

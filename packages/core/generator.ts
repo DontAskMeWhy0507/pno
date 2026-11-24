@@ -1,4 +1,4 @@
-import type { FacingTerm } from "@quenti/interfaces";
+import type { FacingTerm } from "@pno/interfaces";
 import {
   type MatchData,
   type MultipleChoiceData,
@@ -6,9 +6,9 @@ import {
   type TestQuestion,
   TestQuestionType,
   type TrueFalseData,
-} from "@quenti/interfaces";
-import { getRandom, shuffleArray } from "@quenti/lib/array";
-import type { StudySetAnswerMode } from "@quenti/prisma/client";
+} from "@pno/interfaces";
+import { getRandom, shuffleArray } from "@pno/lib/array";
+import type { StudySetAnswerMode } from "@pno/prisma/client";
 
 export const getAnswerMode = (
   answerMode: StudySetAnswerMode,

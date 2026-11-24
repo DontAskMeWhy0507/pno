@@ -3,14 +3,14 @@ import { useRouter } from "next/router";
 import { signIn } from "next-auth/react";
 import JSZip from "jszip";
 import * as fzstd from "fzstd";
-import { Modal } from "@quenti/components/modal";
-import { decodeProtobufMedia } from "@quenti/lib/src/anki/protobuf-media";
+import { Modal } from "@pno/components/modal";
+import { decodeProtobufMedia } from "@pno/lib/src/anki/protobuf-media";
 import {
   detectAnkiMediaContentType,
   packWorkerMediaBatch,
   type WorkerBatchFileInput,
-} from "@quenti/lib/src/anki/worker-batch";
-import { api } from "@quenti/trpc";
+} from "@pno/lib/src/anki/worker-batch";
+import { api } from "@pno/trpc";
 import {
   Button,
   ButtonGroup,

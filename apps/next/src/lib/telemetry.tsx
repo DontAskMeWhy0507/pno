@@ -1,8 +1,8 @@
 import dynamic from "next/dynamic";
 import React from "react";
 
-import { env } from "@quenti/env/client";
-import type { StudySetVisibility } from "@quenti/prisma/client";
+import { env } from "@pno/env/client";
+import type { StudySetVisibility } from "@pno/prisma/client";
 
 type SetCreated = {
   id: string;

@@ -1,4 +1,4 @@
-import { Link } from "@quenti/components";
+import { Link } from "@pno/components";
 
 import { Center, HStack, IconButton, Skeleton } from "@chakra-ui/react";
 

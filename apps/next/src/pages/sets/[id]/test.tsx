@@ -2,10 +2,10 @@ import { useSession } from "next-auth/react";
 import { log } from "next-axiom";
 import React from "react";
 
-import { HeadSeo } from "@quenti/components/head-seo";
-import { EvaluationResult, evaluate } from "@quenti/core/evaluator";
-import { TestQuestionType, type WriteData } from "@quenti/interfaces";
-import { api } from "@quenti/trpc";
+import { HeadSeo } from "@pno/components/head-seo";
+import { EvaluationResult, evaluate } from "@pno/core/evaluator";
+import { TestQuestionType, type WriteData } from "@pno/interfaces";
+import { api } from "@pno/trpc";
 
 import { Container } from "@chakra-ui/react";
 

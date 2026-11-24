@@ -1,4 +1,4 @@
-import { bulkGradeAnswers } from "@quenti/cortex/grader";
+import { bulkGradeAnswers } from "@pno/cortex/grader";
 
 import { getIp } from "../../lib/get-ip";
 import { RateLimitType, rateLimitOrThrowMultiple } from "../../lib/rate-limit";

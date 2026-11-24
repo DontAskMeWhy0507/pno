@@ -1,5 +1,5 @@
-import { collectOrganizationActivity as collectActivity } from "@quenti/enterprise/analytics";
-import { prisma } from "@quenti/prisma";
+import { collectOrganizationActivity as collectActivity } from "@pno/enterprise/analytics";
+import { prisma } from "@pno/prisma";
 
 import { inngest } from "../inngest";
 

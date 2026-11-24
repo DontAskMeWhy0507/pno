@@ -267,9 +267,6 @@ export function getExamCollection(exam: Exam): string {
   if (camMatch) {
     return `Cambridge ${camMatch[1]}`;
   }
-  if (title.includes('MADAGASCAR')) {
-    return 'Vol 9';
-  }
   return exam.isBuiltin ? 'Official IELTS Library' : 'My Tests';
 }
 
@@ -302,17 +299,13 @@ export function getCustomCollections(): { id: string; name: string; description?
 export function getAllCollections(): { id: string; name: string; description?: string; isBuiltin?: boolean }[] {
   const defaultCollections = [
     { id: 'col_my_tests', name: 'My Tests', description: 'User created & imported custom practice tests', isBuiltin: true },
+    { id: 'col_cam_21', name: 'Cambridge 21', description: 'Official Cambridge Practice Tests 21', isBuiltin: true },
+    { id: 'col_cam_20', name: 'Cambridge 20', description: 'Official Cambridge Practice Tests 20', isBuiltin: true },
+    { id: 'col_cam_19', name: 'Cambridge 19', description: 'Official Cambridge Practice Tests 19', isBuiltin: true },
     { id: 'col_cam_18', name: 'Cambridge 18', description: 'Official Cambridge Practice Tests 18', isBuiltin: true },
-    { id: 'col_vol_10', name: 'Vol 10', description: 'Recent IELTS Practice Tests Vol 10', isBuiltin: true },
-    { id: 'col_vol_9', name: 'Vol 9', description: 'Curated IELTS Tests Vol 9', isBuiltin: true },
-    { id: 'col_vol_8', name: 'Vol 8', description: 'Curated IELTS Tests Vol 8', isBuiltin: true },
-    { id: 'col_vol_7', name: 'Vol 7', description: 'Curated IELTS Tests Vol 7', isBuiltin: true },
-    { id: 'col_vol_6', name: 'Vol 6', description: 'Curated IELTS Tests Vol 6', isBuiltin: true },
-    { id: 'col_vol_5', name: 'Vol 5', description: 'Curated IELTS Tests Vol 5', isBuiltin: true },
-    { id: 'col_vol_4', name: 'Vol 4', description: 'Curated IELTS Tests Vol 4', isBuiltin: true },
-    { id: 'col_vol_3', name: 'Vol 3', description: 'Curated IELTS Tests Vol 3', isBuiltin: true },
-    { id: 'col_vol_2', name: 'Vol 2', description: 'Curated IELTS Tests Vol 2', isBuiltin: true },
-    { id: 'col_vol_1', name: 'Vol 1', description: 'Curated IELTS Tests Vol 1', isBuiltin: true },
+    { id: 'col_cam_17', name: 'Cambridge 17', description: 'Official Cambridge Practice Tests 17', isBuiltin: true },
+    { id: 'col_cam_16', name: 'Cambridge 16', description: 'Official Cambridge Practice Tests 16', isBuiltin: true },
+    { id: 'col_cam_15', name: 'Cambridge 15', description: 'Official Cambridge Practice Tests 15', isBuiltin: true },
   ];
 
   const colMap = new Map<string, { id: string; name: string; description?: string; isBuiltin?: boolean }>();
@@ -339,8 +332,16 @@ export function getAllCollections(): { id: string; name: string; description?: s
     }
   }
 
+  const legacyCollections = new Set([
+    'ielts listening',
+    'ielts forecast 2024-2026',
+    'ielts actual tests',
+  ]);
   const deletedSet = getDeletedCollections();
-  return Array.from(colMap.values()).filter((c) => !deletedSet.has(c.name.toLowerCase()));
+  return Array.from(colMap.values()).filter((c) => {
+    const lower = c.name.toLowerCase();
+    return !deletedSet.has(lower) && !lower.startsWith('vol ') && !legacyCollections.has(lower);
+  });
 }
 
 export function createCollection(name: string, description?: string): { id: string; name: string; description?: string } {

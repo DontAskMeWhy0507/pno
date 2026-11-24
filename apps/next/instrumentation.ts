@@ -1,4 +1,4 @@
-import { env } from "@quenti/env/client";
+import { env } from "@pno/env/client";
 
 export async function register() {
   if (

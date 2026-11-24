@@ -1,5 +1,5 @@
-import { sendMagicLinkEmail } from "@quenti/emails";
-import { env } from "@quenti/env/server";
+import { sendMagicLinkEmail } from "@pno/emails";
+import { env } from "@pno/env/server";
 
 export const sendVerificationRequest = async (params: {
   identifier: string;

@@ -1,4 +1,4 @@
-import { getOrganizationActivity } from "@quenti/enterprise/analytics";
+import { getOrganizationActivity } from "@pno/enterprise/analytics";
 
 import { TRPCError } from "@trpc/server";
 

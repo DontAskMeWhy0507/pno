@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import { Button, HStack, IconButton, Tooltip } from "@chakra-ui/react";
 import { IconPlayerPause, IconVolume } from "@tabler/icons-react";
-import { getAnkiFallbackMediaUrl } from "@quenti/lib/src/anki/media-fallback";
+import { getAnkiFallbackMediaUrl } from "@pno/lib/src/anki/media-fallback";
 
 export interface AnkiAudioPlayerProps {
   src: string;

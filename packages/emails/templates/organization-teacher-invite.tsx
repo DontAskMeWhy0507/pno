@@ -7,7 +7,7 @@ import {
   Tailwind,
 } from "@react-email/components";
 
-import { BODY_COPY_BASE } from "@quenti/branding";
+import { BODY_COPY_BASE } from "@pno/branding";
 
 import { BodyContainer } from "../components/body-container";
 import { Content } from "../components/content";
@@ -31,7 +31,7 @@ export const OrganizationTeacherInviteEmail = ({
         <Head />
         <Preview>
           {inviter.name ?? inviter.email} has invited you to join {orgName} on
-          Quenti
+          PNO
         </Preview>
         <BodyContainer>
           <MainContainer>
@@ -47,7 +47,7 @@ export const OrganizationTeacherInviteEmail = ({
                 {inviter.name ?? inviter.email}
               </strong>{" "}
               has invited you to join{" "}
-              <strong className="text-black">{orgName}</strong> on Quenti
+              <strong className="text-black">{orgName}</strong> on PNO
             </Heading>
             <Content>
               {BODY_COPY_BASE}{" "}

@@ -1,4 +1,4 @@
-import { FrameLogo, Link } from "@quenti/components";
+import { FrameLogo, Link } from "@pno/components";
 
 import {
   Box,

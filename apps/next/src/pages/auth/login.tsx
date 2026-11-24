@@ -1,8 +1,8 @@
 import type { GetServerSideProps } from "next";
 import { useRouter } from "next/router";
 
-import { getServerAuthSession } from "@quenti/auth";
-import { isMagicLinkConfigured } from "@quenti/auth/allowlist";
+import { getServerAuthSession } from "@pno/auth";
+import { isMagicLinkConfigured } from "@pno/auth/allowlist";
 
 import { PageWrapper } from "../../common/page-wrapper";
 import { AuthLayout } from "../../components/auth-layout";

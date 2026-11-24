@@ -1,4 +1,4 @@
-import { triggerDownload } from "@quenti/images/server/unsplash";
+import { triggerDownload } from "@pno/images/server/unsplash";
 
 import { getIp } from "../../lib/get-ip";
 import { getCachedPhoto } from "../../lib/images/photo";

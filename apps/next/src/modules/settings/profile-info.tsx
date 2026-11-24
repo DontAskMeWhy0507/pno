@@ -1,9 +1,9 @@
 import { useSession } from "next-auth/react";
 import React from "react";
 
-import { Link } from "@quenti/components";
-import { env } from "@quenti/env/client";
-import { api } from "@quenti/trpc";
+import { Link } from "@pno/components";
+import { env } from "@pno/env/client";
+import { api } from "@pno/trpc";
 
 import {
   Avatar,

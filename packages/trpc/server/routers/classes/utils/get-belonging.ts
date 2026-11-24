@@ -1,6 +1,6 @@
-import type { Widen } from "@quenti/lib/widen";
-import { prisma } from "@quenti/prisma";
-import { Prisma } from "@quenti/prisma/client";
+import type { Widen } from "@pno/lib/widen";
+import { prisma } from "@pno/prisma";
+import { Prisma } from "@pno/prisma/client";
 
 const classSelect = Prisma.validator<Prisma.ClassDefaultArgs["select"]>()({
   id: true,

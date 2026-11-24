@@ -1,5 +1,5 @@
-import { env } from "@quenti/env/server";
-import { prisma } from "@quenti/prisma";
+import { env } from "@pno/env/server";
+import { prisma } from "@pno/prisma";
 
 const CACHE_TTL_MS = 60 * 1000;
 const allowlistCache = new Map<string, { allowed: boolean; expiresAt: number }>();

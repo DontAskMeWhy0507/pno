@@ -4,11 +4,11 @@ import fs from "fs/promises";
 import type { NextApiRequest, NextApiResponse } from "next";
 import path from "path";
 
-import { getServerAuthSession } from "@quenti/auth";
+import { getServerAuthSession } from "@pno/auth";
 import {
   uploadFilesToGithubMediaWithDiagnostics,
   uploadMediaBatchWithDiagnostics,
-} from "@quenti/images/server/media-storage";
+} from "@pno/images/server/media-storage";
 
 export const config = {
   maxDuration: 60,

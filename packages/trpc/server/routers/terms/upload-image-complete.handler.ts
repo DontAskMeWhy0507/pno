@@ -1,4 +1,4 @@
-import { getTermAssetUrl } from "@quenti/images/server";
+import { getTermAssetUrl } from "@pno/images/server";
 
 import { TRPCError } from "@trpc/server";
 

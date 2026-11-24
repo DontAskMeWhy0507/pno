@@ -1,9 +1,9 @@
 import { useRouter } from "next/router";
 import React from "react";
 
-import { Modal } from "@quenti/components/modal";
-import { parseQuizletExportText } from "@quenti/lib/src/quizlet/parser";
-import { api } from "@quenti/trpc";
+import { Modal } from "@pno/components/modal";
+import { parseQuizletExportText } from "@pno/lib/src/quizlet/parser";
+import { api } from "@pno/trpc";
 
 import {
   Badge,
@@ -34,7 +34,7 @@ import {
   useColorModeValue,
 } from "@chakra-ui/react";
 
-import { QUIZLET_IMPORT_REGEXP } from "@quenti/lib/constants/characters";
+import { QUIZLET_IMPORT_REGEXP } from "@pno/lib/constants/characters";
 import { effectChannel } from "../events/effects";
 import { queryEventChannel } from "../events/query";
 import { useTelemetry } from "../lib/telemetry";

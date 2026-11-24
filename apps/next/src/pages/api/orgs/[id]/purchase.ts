@@ -1,15 +1,15 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import { z } from "zod";
 
-import { getServerAuthSession } from "@quenti/auth";
-import { IS_PAYMENT_ENABLED } from "@quenti/lib/constants/payments";
-import { APP_URL } from "@quenti/lib/constants/url";
-import { purchaseOrganizationSubscription } from "@quenti/payments";
+import { getServerAuthSession } from "@pno/auth";
+import { IS_PAYMENT_ENABLED } from "@pno/lib/constants/payments";
+import { APP_URL } from "@pno/lib/constants/url";
+import { purchaseOrganizationSubscription } from "@pno/payments";
 import {
   conflictingDomains,
   getOrgDomains,
-} from "@quenti/trpc/server/lib/orgs/domains";
-import { isOrganizationAdmin } from "@quenti/trpc/server/lib/queries/organizations";
+} from "@pno/trpc/server/lib/orgs/domains";
+import { isOrganizationAdmin } from "@pno/trpc/server/lib/queries/organizations";
 
 const querySchema = z.object({
   id: z.string().cuid2(),

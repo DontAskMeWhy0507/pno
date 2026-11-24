@@ -3,13 +3,13 @@ import React, { useMemo, useState } from "react";
 import { useRouter } from "next/router";
 import { useSession } from "next-auth/react";
 
-import { parseAnkiDeckTemplate } from "@quenti/lib/src/anki/presets";
+import { parseAnkiDeckTemplate } from "@pno/lib/src/anki/presets";
 import {
   extractAnkiAudioSources,
   sanitizeAnkiHtml,
-} from "@quenti/lib/src/anki/template";
-import { outfit } from "@quenti/lib/chakra-theme";
-import { api } from "@quenti/trpc";
+} from "@pno/lib/src/anki/template";
+import { outfit } from "@pno/lib/chakra-theme";
+import { api } from "@pno/trpc";
 
 import {
   Badge,

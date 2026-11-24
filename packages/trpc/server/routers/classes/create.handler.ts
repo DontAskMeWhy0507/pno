@@ -1,6 +1,6 @@
-import { inngest } from "@quenti/inngest";
-import { randomBannerColor } from "@quenti/lib/color";
-import { EnabledFeature } from "@quenti/lib/feature";
+import { inngest } from "@pno/inngest";
+import { randomBannerColor } from "@pno/lib/color";
+import { EnabledFeature } from "@pno/lib/feature";
 
 import { TRPCError } from "@trpc/server";
 

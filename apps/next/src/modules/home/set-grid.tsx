@@ -1,8 +1,8 @@
 import { useSession } from "next-auth/react";
 import React from "react";
 
-import type { SetFolderEntity } from "@quenti/interfaces";
-import { api } from "@quenti/trpc";
+import type { SetFolderEntity } from "@pno/interfaces";
+import { api } from "@pno/trpc";
 
 import {
   Badge,

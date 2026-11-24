@@ -3,7 +3,7 @@ import Head from "next/head";
 import { useRouter } from "next/router";
 import React from "react";
 
-import { type RouterOutputs, api } from "@quenti/trpc";
+import { type RouterOutputs, api } from "@pno/trpc";
 
 import { Button, Center, Heading, Text, VStack } from "@chakra-ui/react";
 

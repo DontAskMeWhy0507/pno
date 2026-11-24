@@ -1,7 +1,7 @@
 import React from "react";
 
-import { getRandom } from "@quenti/lib/array";
-import { GRADING_MESSAGES } from "@quenti/lib/constants/remarks";
+import { getRandom } from "@pno/lib/array";
+import { GRADING_MESSAGES } from "@pno/lib/constants/remarks";
 
 import {
   Box,

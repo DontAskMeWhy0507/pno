@@ -3,8 +3,8 @@
 /* eslint-disable @next/next/no-img-element */
 import React from "react";
 
-import { env } from "@quenti/env/client";
-import type { EntityImageProps, ProfileImageProps } from "@quenti/lib/seo";
+import { env } from "@pno/env/client";
+import type { EntityImageProps, ProfileImageProps } from "@pno/lib/seo";
 
 const ImageWrapper: React.FC<React.PropsWithChildren> = ({ children }) => {
   return (

@@ -3,8 +3,8 @@ import type { AppProps as NextAppProps } from "next/app";
 import dynamic from "next/dynamic";
 import Head from "next/head";
 
-import { env } from "@quenti/env/client";
-import { theme } from "@quenti/lib/chakra-theme";
+import { env } from "@pno/env/client";
+import { theme } from "@pno/lib/chakra-theme";
 
 import { ChakraProvider } from "@chakra-ui/provider";
 

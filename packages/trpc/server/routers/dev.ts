@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-import { UserType } from "@quenti/prisma/client";
+import { UserType } from "@pno/prisma/client";
 
 import { createTRPCRouter, devProcedure } from "../trpc";
 

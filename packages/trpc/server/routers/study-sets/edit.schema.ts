@@ -1,7 +1,7 @@
 import { z } from "zod";
 
-import { LANGUAGE_VALUES } from "@quenti/core";
-import { StudySetVisibility } from "@quenti/prisma/client";
+import { LANGUAGE_VALUES } from "@pno/core";
+import { StudySetVisibility } from "@pno/prisma/client";
 
 import {
   MAX_CHARS_TAGS,

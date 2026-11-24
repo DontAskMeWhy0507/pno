@@ -1,4 +1,4 @@
-import { SUPPORT_EMAIL } from "@quenti/lib/constants/email";
+import { SUPPORT_EMAIL } from "@pno/lib/constants/email";
 
 import {
   Box,

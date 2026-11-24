@@ -1,6 +1,6 @@
-import { sendProfileImportCompleteEmail } from "@quenti/emails";
-import { env } from "@quenti/env/client";
-import { prisma } from "@quenti/prisma";
+import { sendProfileImportCompleteEmail } from "@pno/emails";
+import { env } from "@pno/env/client";
+import { prisma } from "@pno/prisma";
 
 import { inngest } from "../inngest";
 

@@ -1,11 +1,11 @@
 import type { GetServerSidePropsContext } from "next";
 
-import { db, eq } from "@quenti/drizzle";
+import { db, eq } from "@pno/drizzle";
 import {
   entityShare as entityShareTable,
   folder as folderTable,
-} from "@quenti/drizzle/schema";
-import { prisma } from "@quenti/prisma";
+} from "@pno/drizzle/schema";
+import { prisma } from "@pno/prisma";
 
 import { PageWrapper } from "../../common/page-wrapper";
 import { Generic404 } from "../../components/generic-404";

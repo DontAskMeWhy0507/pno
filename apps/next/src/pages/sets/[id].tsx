@@ -1,9 +1,9 @@
 import dynamic from "next/dynamic";
 
-import { HeadSeo } from "@quenti/components/head-seo";
-import { and, asc, db, eq, sql } from "@quenti/drizzle";
-import { studySet, studySetCollaborator, term } from "@quenti/drizzle/schema";
-import type { GetServerSidePropsContext } from "@quenti/types";
+import { HeadSeo } from "@pno/components/head-seo";
+import { and, asc, db, eq, sql } from "@pno/drizzle";
+import { studySet, studySetCollaborator, term } from "@pno/drizzle/schema";
+import type { GetServerSidePropsContext } from "@pno/types";
 
 import { LazyWrapper } from "../../common/lazy-wrapper";
 import { PageWrapper } from "../../common/page-wrapper";

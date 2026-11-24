@@ -1,6 +1,6 @@
 import { useSession } from "next-auth/react";
 
-import { api } from "@quenti/trpc";
+import { api } from "@pno/trpc";
 
 import { Stack } from "@chakra-ui/react";
 
