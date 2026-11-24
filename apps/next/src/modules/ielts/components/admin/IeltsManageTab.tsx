@@ -1,4 +1,4 @@
-import React, { useMemo, useRef, useState, type FC } from 'react';
+import React, { useEffect, useId, useMemo, useRef, useState, type FC } from 'react';
 import { outfit } from '@pno/lib/chakra-theme';
 import {
   AlertDialog,
@@ -10,17 +10,17 @@ import {
   Badge,
   Box,
   Button,
-  Checkbox,
   Flex,
-  Grid,
-  GridItem,
+  FormControl,
+  FormErrorMessage,
+  FormLabel,
   HStack,
   Heading,
-  Icon,
   IconButton,
   Input,
   InputGroup,
   InputLeftElement,
+  InputRightElement,
   Menu,
   MenuButton,
   MenuDivider,
@@ -37,17 +37,12 @@ import {
   Stack,
   Text,
   Textarea,
-  Tooltip,
   useColorModeValue,
   useToast,
 } from '@chakra-ui/react';
 import {
   IconBook,
   IconChevronDown,
-  IconCopy,
-  IconDownload,
-  IconEdit,
-  IconFolder,
   IconFolderPlus,
   IconHeadphones,
   IconMicrophone,
@@ -56,8 +51,8 @@ import {
   IconRefresh,
   IconSearch,
   IconSparkles,
-  IconTrash,
   IconUpload,
+  IconX,
 } from '@tabler/icons-react';
 
 import type { Exam } from '../../types/exam';
@@ -69,10 +64,11 @@ import {
   deleteCollection,
   deleteExam,
   exportExamAsJSON,
+  exportJsonBlob,
   getExamCollection,
   getExamPartCount,
   getExamQuestionCount,
-  importExamFromJSON,
+  importTestsBundleFromJSON,
   isListeningExam,
   loadFullExam,
   renameCollection,
@@ -89,34 +85,20 @@ import {
   restoreDefaultSpeakingExams,
   saveSpeakingExam,
 } from '../../data/speakingExams';
+import {
+  computeTestHealth,
+  sortUnifiedRows,
+  type CloudExamPayload,
+  type CollectionItem,
+  type OriginFilter,
+  type SortDirection,
+  type SortField,
+  type UnifiedTestRow,
+} from './manage/ManageHelpers';
+import { ManageTestsTable } from './manage/ManageTestsTable';
+import { ManageCollectionsGrid } from './manage/ManageCollectionsGrid';
 
-export interface CollectionItem {
-  id: string;
-  name: string;
-  description?: string;
-  isBuiltin?: boolean;
-}
-
-export interface CloudExamPayload {
-  examId: string;
-  skill: CloudIeltsSkill;
-  title: string;
-  collection: string;
-  data: Record<string, unknown>;
-}
-
-interface UnifiedTestRow {
-  key: string;
-  id: string;
-  title: string;
-  skill: CloudIeltsSkill;
-  collection: string;
-  meta: string;
-  updatedAt: number;
-  rawExam?: Exam;
-  rawWriting?: WritingExam;
-  rawSpeaking?: SpeakingExam;
-}
+export type { CollectionItem, CloudExamPayload, UnifiedTestRow };
 
 type ConfirmActionState =
   | { type: 'delete_test'; row: UnifiedTestRow }
@@ -131,12 +113,16 @@ interface IeltsManageTabProps {
   speakingExams: SpeakingExam[];
   collections: CollectionItem[];
   searchQuery: string;
+  subTab: 'tests' | 'collections';
+  onSubTabChange: (sub: 'tests' | 'collections') => void;
+  openNewCollectionSignal?: number;
   onSearchQueryChange: (q: string) => void;
   onCreateManualExam: (defaultCollection?: string, defaultSkill?: 'reading' | 'listening') => void;
   onOpenSmartImport: (
     collection?: string,
     skill?: 'reading' | 'listening' | 'writing' | 'speaking'
   ) => void;
+  onPreviewTest: (row: UnifiedTestRow) => void;
   onEditExam: (exam: Exam) => void;
   onEditWriting: (exam?: WritingExam | null, defaultCollection?: string) => void;
   onEditSpeaking: (exam?: SpeakingExam | null, defaultCollection?: string) => void;
@@ -165,9 +151,13 @@ export const IeltsManageTab: FC<IeltsManageTabProps> = ({
   speakingExams,
   collections,
   searchQuery,
+  subTab,
+  onSubTabChange,
+  openNewCollectionSignal,
   onSearchQueryChange,
   onCreateManualExam,
   onOpenSmartImport,
+  onPreviewTest,
   onEditExam,
   onEditWriting,
   onEditSpeaking,
@@ -184,10 +174,13 @@ export const IeltsManageTab: FC<IeltsManageTabProps> = ({
   const toast = useToast();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const cancelConfirmRef = useRef<HTMLButtonElement>(null);
+  const colNameErrorId = useId();
 
-  const [subTab, setSubTab] = useState<'tests' | 'collections'>('tests');
   const [skillFilter, setSkillFilter] = useState<'all' | CloudIeltsSkill>('all');
+  const [originFilter, setOriginFilter] = useState<OriginFilter>('all');
   const [collectionFilter, setCollectionFilter] = useState<string>('all');
+  const [sortField, setSortField] = useState<SortField>('updatedAt');
+  const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
   const [selectedKeys, setSelectedKeys] = useState<Set<string>>(() => new Set());
   const [bulkMoveTarget, setBulkMoveTarget] = useState<string>('');
   const [isBusy, setIsBusy] = useState(false);
@@ -197,17 +190,24 @@ export const IeltsManageTab: FC<IeltsManageTabProps> = ({
   const [colEditOldName, setColEditOldName] = useState('');
   const [colFormName, setColFormName] = useState('');
   const [colFormDesc, setColFormDesc] = useState('');
+  const [colFormTouched, setColFormTouched] = useState(false);
+  const [colFormSubmitted, setColFormSubmitted] = useState(false);
 
   // Confirmation AlertDialog
   const [confirmAction, setConfirmAction] = useState<ConfirmActionState>(null);
 
   const cardBg = useColorModeValue('white', 'gray.800');
   const cardBorder = useColorModeValue('gray.200', 'gray.700');
-  const subtleBg = useColorModeValue('gray.50', 'gray.900');
   const pillBg = useColorModeValue('gray.100', 'gray.800');
   const secondaryColor = useColorModeValue('gray.600', 'gray.400');
-  const bulkBg = useColorModeValue('blue.50', 'blue.900');
-  const bulkBorder = useColorModeValue('blue.200', 'blue.700');
+
+  // Trigger New Collection modal when external shortcut fires
+  useEffect(() => {
+    if (openNewCollectionSignal && openNewCollectionSignal > 0) {
+      openCreateCollectionModal();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [openNewCollectionSignal]);
 
   // Build unified list of tests across all 4 skills
   const allRows = useMemo<UnifiedTestRow[]>(() => {
@@ -225,7 +225,10 @@ export const IeltsManageTab: FC<IeltsManageTabProps> = ({
         skill,
         collection: getExamCollection(ex),
         meta: `${ex.durationMinutes || (isListen ? 30 : 60)} min • ${parts} ${isListen ? 'Sections' : 'Parts'} • ${qs} Qs`,
+        questionCount: qs,
+        isBuiltin: Boolean(ex.isBuiltin),
         updatedAt: ex.updatedAt || ex.createdAt || 0,
+        healthWarnings: computeTestHealth({ skill, questionCount: qs, rawExam: ex }),
         rawExam: ex,
       });
     }
@@ -238,12 +241,16 @@ export const IeltsManageTab: FC<IeltsManageTabProps> = ({
         skill: 'Writing',
         collection: w.collection || 'My Tests',
         meta: `${w.durationMinutes || 60} min • Task 1 & Task 2`,
+        questionCount: 2,
+        isBuiltin: w.id.startsWith('writing_test_'),
         updatedAt: w.updatedAt || w.createdAt || 0,
+        healthWarnings: computeTestHealth({ skill: 'Writing', questionCount: 2, rawWriting: w }),
         rawWriting: w,
       });
     }
 
     for (const s of speakingExams) {
+      const qs = (s.part1Questions?.length || 0) + 1 + (s.part3Questions?.length || 0);
       rows.push({
         key: `Speaking:${s.id}`,
         id: s.id,
@@ -251,7 +258,10 @@ export const IeltsManageTab: FC<IeltsManageTabProps> = ({
         skill: 'Speaking',
         collection: s.collection || 'My Tests',
         meta: `Part 1 (${s.part1Questions.length} Qs) • Part 2 • Part 3 (${s.part3Questions.length} Qs)`,
+        questionCount: qs,
+        isBuiltin: s.id.startsWith('speaking_test_'),
         updatedAt: s.updatedAt || s.createdAt || 0,
+        healthWarnings: computeTestHealth({ skill: 'Speaking', questionCount: qs, rawSpeaking: s }),
         rawSpeaking: s,
       });
     }
@@ -267,10 +277,12 @@ export const IeltsManageTab: FC<IeltsManageTabProps> = ({
     return counts;
   }, [allRows]);
 
-  const filteredRows = useMemo(() => {
+  const filteredAndSortedRows = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
-    return allRows.filter((row) => {
+    const filtered = allRows.filter((row) => {
       if (skillFilter !== 'all' && row.skill !== skillFilter) return false;
+      if (originFilter === 'custom' && row.isBuiltin) return false;
+      if (originFilter === 'builtin' && !row.isBuiltin) return false;
       if (
         collectionFilter !== 'all' &&
         row.collection.toLowerCase() !== collectionFilter.toLowerCase()
@@ -282,15 +294,30 @@ export const IeltsManageTab: FC<IeltsManageTabProps> = ({
       }
       return true;
     });
-  }, [allRows, skillFilter, collectionFilter, searchQuery]);
+    return sortUnifiedRows(filtered, sortField, sortDirection);
+  }, [allRows, skillFilter, originFilter, collectionFilter, searchQuery, sortField, sortDirection]);
 
-  const selectedRows = useMemo(
-    () => allRows.filter((r) => selectedKeys.has(r.key)),
-    [allRows, selectedKeys]
-  );
+  const hasActiveFilters =
+    skillFilter !== 'all' ||
+    originFilter !== 'all' ||
+    collectionFilter !== 'all' ||
+    Boolean(searchQuery.trim());
 
-  const allFilteredSelected =
-    filteredRows.length > 0 && filteredRows.every((r) => selectedKeys.has(r.key));
+  const resetFilters = () => {
+    setSkillFilter('all');
+    setOriginFilter('all');
+    setCollectionFilter('all');
+    onSearchQueryChange('');
+  };
+
+  const handleSortChange = (field: SortField) => {
+    if (sortField === field) {
+      setSortDirection((prev) => (prev === 'asc' ? 'desc' : 'asc'));
+    } else {
+      setSortField(field);
+      setSortDirection(field === 'updatedAt' || field === 'questions' ? 'desc' : 'asc');
+    }
+  };
 
   const toggleRowSelection = (key: string) => {
     setSelectedKeys((prev) => {
@@ -301,30 +328,36 @@ export const IeltsManageTab: FC<IeltsManageTabProps> = ({
     });
   };
 
-  const toggleSelectAllFiltered = () => {
-    if (allFilteredSelected) {
-      setSelectedKeys((prev) => {
-        const next = new Set(prev);
-        for (const r of filteredRows) next.delete(r.key);
-        return next;
-      });
-    } else {
-      setSelectedKeys((prev) => {
-        const next = new Set(prev);
-        for (const r of filteredRows) next.add(r.key);
-        return next;
-      });
-    }
+  const toggleSelectAllVisible = () => {
+    const allVisibleSelected =
+      filteredAndSortedRows.length > 0 &&
+      filteredAndSortedRows.every((r) => selectedKeys.has(r.key));
+
+    setSelectedKeys((prev) => {
+      const next = new Set(prev);
+      if (allVisibleSelected) {
+        for (const r of filteredAndSortedRows) next.delete(r.key);
+      } else {
+        for (const r of filteredAndSortedRows) next.add(r.key);
+      }
+      return next;
+    });
   };
 
   const materializeRowForCloud = async (
     row: UnifiedTestRow,
-    targetCollection?: string
-  ): Promise<{ payload: CloudExamPayload; updatedRow?: unknown }> => {
-    const col = targetCollection ?? row.collection;
+    overrides?: { collection?: string; title?: string }
+  ): Promise<{ payload: CloudExamPayload; updatedRow: Exam | WritingExam | SpeakingExam }> => {
+    const col = overrides?.collection ?? row.collection;
+    const nextTitle = overrides?.title ?? row.title;
     if (row.rawExam) {
       const full = (await loadFullExam(row.rawExam)) ?? row.rawExam;
-      const updated: Exam = { ...full, collection: col, updatedAt: Date.now() };
+      const updated: Exam = {
+        ...full,
+        title: nextTitle,
+        collection: col,
+        updatedAt: Date.now(),
+      };
       delete updated.dataFile;
       return {
         payload: {
@@ -338,7 +371,12 @@ export const IeltsManageTab: FC<IeltsManageTabProps> = ({
       };
     }
     if (row.rawWriting) {
-      const updated: WritingExam = { ...row.rawWriting, collection: col, updatedAt: Date.now() };
+      const updated: WritingExam = {
+        ...row.rawWriting,
+        title: nextTitle,
+        collection: col,
+        updatedAt: Date.now(),
+      };
       return {
         payload: {
           examId: updated.id,
@@ -350,7 +388,12 @@ export const IeltsManageTab: FC<IeltsManageTabProps> = ({
         updatedRow: updated,
       };
     }
-    const updated: SpeakingExam = { ...row.rawSpeaking!, collection: col, updatedAt: Date.now() };
+    const updated: SpeakingExam = {
+      ...row.rawSpeaking!,
+      title: nextTitle,
+      collection: col,
+      updatedAt: Date.now(),
+    };
     return {
       payload: {
         examId: updated.id,
@@ -363,17 +406,48 @@ export const IeltsManageTab: FC<IeltsManageTabProps> = ({
     };
   };
 
+  const persistRow = (row: UnifiedTestRow, updatedRow: Exam | WritingExam | SpeakingExam) => {
+    if (row.rawExam) saveExam(updatedRow as Exam);
+    else if (row.rawWriting) saveWritingExam(updatedRow as WritingExam);
+    else if (row.rawSpeaking) saveSpeakingExam(updatedRow as SpeakingExam);
+  };
+
+  const handleQuickRenameTest = async (row: UnifiedTestRow, nextTitle: string) => {
+    setIsBusy(true);
+    try {
+      const { payload, updatedRow } = await materializeRowForCloud(row, { title: nextTitle });
+      persistRow(row, updatedRow);
+      onCloudSaveExam?.(payload);
+      onRefreshAll();
+      toast({
+        title: 'Renamed test',
+        description: `"${nextTitle}"`,
+        status: 'success',
+        duration: 1800,
+        isClosable: true,
+        position: 'bottom-right',
+      });
+    } catch (err) {
+      toast({
+        title: 'Rename failed',
+        description: err instanceof Error ? err.message : undefined,
+        status: 'error',
+        duration: 2500,
+        isClosable: true,
+        position: 'bottom-right',
+      });
+    } finally {
+      setIsBusy(false);
+    }
+  };
+
   const handleMoveSingleTest = async (row: UnifiedTestRow, nextCollection: string) => {
     setIsBusy(true);
     try {
-      const { payload, updatedRow } = await materializeRowForCloud(row, nextCollection);
-      if (row.rawExam) {
-        saveExam(updatedRow as Exam);
-      } else if (row.rawWriting) {
-        saveWritingExam(updatedRow as WritingExam);
-      } else if (row.rawSpeaking) {
-        saveSpeakingExam(updatedRow as SpeakingExam);
-      }
+      const { payload, updatedRow } = await materializeRowForCloud(row, {
+        collection: nextCollection,
+      });
+      persistRow(row, updatedRow);
       onCloudSaveExam?.(payload);
       onRefreshAll();
       toast({
@@ -384,9 +458,10 @@ export const IeltsManageTab: FC<IeltsManageTabProps> = ({
         isClosable: true,
         position: 'bottom-right',
       });
-    } catch {
+    } catch (err) {
       toast({
         title: 'Failed to move test',
+        description: err instanceof Error ? err.message : undefined,
         status: 'error',
         duration: 2500,
         isClosable: true,
@@ -398,21 +473,24 @@ export const IeltsManageTab: FC<IeltsManageTabProps> = ({
   };
 
   const handleBulkMove = async () => {
+    const visibleSelected = filteredAndSortedRows.filter((r) => selectedKeys.has(r.key));
     const target = bulkMoveTarget || collections[0]?.name;
-    if (!target || selectedRows.length === 0) return;
+    if (!target || visibleSelected.length === 0) return;
 
     setIsBusy(true);
     try {
       const cloudItems: CloudExamPayload[] = [];
-      for (const row of selectedRows) {
-        const { payload, updatedRow } = await materializeRowForCloud(row, target);
-        if (row.rawExam) saveExam(updatedRow as Exam);
-        else if (row.rawWriting) saveWritingExam(updatedRow as WritingExam);
-        else if (row.rawSpeaking) saveSpeakingExam(updatedRow as SpeakingExam);
+      for (const row of visibleSelected) {
+        const { payload, updatedRow } = await materializeRowForCloud(row, { collection: target });
+        persistRow(row, updatedRow);
         cloudItems.push(payload);
       }
       onCloudBulkMoveExams?.(target, cloudItems);
-      setSelectedKeys(new Set());
+      setSelectedKeys((prev) => {
+        const next = new Set(prev);
+        for (const r of visibleSelected) next.delete(r.key);
+        return next;
+      });
       onRefreshAll();
       toast({
         title: `Moved ${cloudItems.length} test(s)`,
@@ -422,9 +500,50 @@ export const IeltsManageTab: FC<IeltsManageTabProps> = ({
         isClosable: true,
         position: 'bottom-right',
       });
-    } catch {
+    } catch (err) {
       toast({
         title: 'Bulk move failed',
+        description: err instanceof Error ? err.message : undefined,
+        status: 'error',
+        duration: 2500,
+        isClosable: true,
+        position: 'bottom-right',
+      });
+    } finally {
+      setIsBusy(false);
+    }
+  };
+
+  const handleBulkExport = async (rowsToExport: UnifiedTestRow[]) => {
+    if (rowsToExport.length === 0) return;
+    setIsBusy(true);
+    try {
+      const tests: unknown[] = [];
+      for (const row of rowsToExport) {
+        if (row.rawExam) {
+          const full = (await loadFullExam(row.rawExam)) ?? row.rawExam;
+          tests.push(full);
+        } else if (row.rawWriting) {
+          tests.push(row.rawWriting);
+        } else if (row.rawSpeaking) {
+          tests.push(row.rawSpeaking);
+        }
+      }
+      exportJsonBlob(`pno_ielts_bundle_${tests.length}_tests.json`, {
+        version: 1,
+        exportedAt: new Date().toISOString(),
+        tests,
+      });
+      toast({
+        title: `Exported ${tests.length} test(s)`,
+        status: 'success',
+        duration: 2000,
+        isClosable: true,
+        position: 'bottom-right',
+      });
+    } catch {
+      toast({
+        title: 'Bulk export failed',
         status: 'error',
         duration: 2500,
         isClosable: true,
@@ -499,9 +618,10 @@ export const IeltsManageTab: FC<IeltsManageTabProps> = ({
         isClosable: true,
         position: 'bottom-right',
       });
-    } catch {
+    } catch (err) {
       toast({
         title: 'Unable to duplicate test',
+        description: err instanceof Error ? err.message : undefined,
         status: 'error',
         duration: 2500,
         isClosable: true,
@@ -520,15 +640,8 @@ export const IeltsManageTab: FC<IeltsManageTabProps> = ({
       } else {
         const payload = row.rawWriting ?? row.rawSpeaking;
         if (!payload) return;
-        const dataStr =
-          'data:text/json;charset=utf-8,' +
-          encodeURIComponent(JSON.stringify(payload, null, 2));
-        const a = document.createElement('a');
-        a.href = dataStr;
-        a.download = `${(payload.title || 'ielts-test').replace(/[^a-z0-9]/gi, '_').toLowerCase()}.json`;
-        document.body.appendChild(a);
-        a.click();
-        a.remove();
+        const cleanTitle = (payload.title || 'ielts-test').replace(/[^a-z0-9]/gi, '_').toLowerCase();
+        exportJsonBlob(`${cleanTitle}.json`, payload);
       }
     } catch {
       toast({
@@ -541,98 +654,119 @@ export const IeltsManageTab: FC<IeltsManageTabProps> = ({
     }
   };
 
-  const handleImportJsonFile = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = (evt) => {
-      try {
-        const content = evt.target?.result as string;
-        const parsed = JSON.parse(content);
-        if (parsed && parsed.task1 && parsed.task2) {
-          const newWriting: WritingExam = {
-            ...parsed,
-            id: 'writing_' + Date.now(),
-            collection:
-              parsed.collection || (collectionFilter !== 'all' ? collectionFilter : 'My Tests'),
-            createdAt: Date.now(),
-            updatedAt: Date.now(),
-          };
-          saveWritingExam(newWriting);
+  const handleImportJsonFiles = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || []);
+    if (files.length === 0) return;
+    setIsBusy(true);
+
+    let totalImported = 0;
+    const defaultCol = collectionFilter !== 'all' ? collectionFilter : 'My Tests';
+
+    try {
+      for (const file of files) {
+        const content = await file.text();
+        const result = importTestsBundleFromJSON(content, defaultCol);
+
+        for (const ex of result.exams) {
           onCloudSaveExam?.({
-            examId: newWriting.id,
-            skill: 'Writing',
-            title: newWriting.title,
-            collection: newWriting.collection || 'My Tests',
-            data: newWriting as unknown as Record<string, unknown>,
+            examId: ex.id,
+            skill: isListeningExam(ex) ? 'Listening' : 'Reading',
+            title: ex.title,
+            collection: getExamCollection(ex),
+            data: ex as unknown as Record<string, unknown>,
           });
-          onRefreshAll();
-          toast({ title: `Imported Writing "${newWriting.title}"`, status: 'success', duration: 2400 });
-        } else if (parsed && parsed.part2Question) {
-          const newSpeaking: SpeakingExam = {
-            ...parsed,
-            id: 'speaking_' + Date.now(),
-            collection:
-              parsed.collection || (collectionFilter !== 'all' ? collectionFilter : 'My Tests'),
-            createdAt: Date.now(),
-            updatedAt: Date.now(),
-          };
-          saveSpeakingExam(newSpeaking);
-          onCloudSaveExam?.({
-            examId: newSpeaking.id,
-            skill: 'Speaking',
-            title: newSpeaking.title,
-            collection: newSpeaking.collection || 'My Tests',
-            data: newSpeaking as unknown as Record<string, unknown>,
-          });
-          onRefreshAll();
-          toast({ title: `Imported Speaking "${newSpeaking.title}"`, status: 'success', duration: 2400 });
-        } else {
-          const imported = importExamFromJSON(content);
-          onCloudSaveExam?.({
-            examId: imported.id,
-            skill: isListeningExam(imported) ? 'Listening' : 'Reading',
-            title: imported.title,
-            collection: getExamCollection(imported),
-            data: imported as unknown as Record<string, unknown>,
-          });
-          onRefreshAll();
-          toast({ title: `Imported "${imported.title}"`, status: 'success', duration: 2400 });
+          totalImported++;
         }
-      } catch (err) {
-        toast({
-          title: 'Invalid JSON file',
-          description: err instanceof Error ? err.message : 'Unable to parse JSON.',
-          status: 'error',
-          duration: 3000,
-        });
-      } finally {
-        if (fileInputRef.current) fileInputRef.current.value = '';
+        for (const w of result.writingExams) {
+          onCloudSaveExam?.({
+            examId: w.id,
+            skill: 'Writing',
+            title: w.title,
+            collection: w.collection || defaultCol,
+            data: w as unknown as Record<string, unknown>,
+          });
+          totalImported++;
+        }
+        for (const s of result.speakingExams) {
+          onCloudSaveExam?.({
+            examId: s.id,
+            skill: 'Speaking',
+            title: s.title,
+            collection: s.collection || defaultCol,
+            data: s as unknown as Record<string, unknown>,
+          });
+          totalImported++;
+        }
       }
-    };
-    reader.readAsText(file);
+
+      onRefreshAll();
+      toast({
+        title: `Imported ${totalImported} test(s)`,
+        description: `Saved to ${defaultCol} (unless specified in JSON).`,
+        status: 'success',
+        duration: 2600,
+        isClosable: true,
+        position: 'bottom-right',
+      });
+    } catch (err) {
+      toast({
+        title: 'Invalid JSON file',
+        description: err instanceof Error ? err.message : 'Unable to parse JSON.',
+        status: 'error',
+        duration: 3200,
+        isClosable: true,
+        position: 'bottom-right',
+      });
+    } finally {
+      setIsBusy(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
   };
 
-  const openCreateCollectionModal = () => {
+  function openCreateCollectionModal() {
     setColModalMode('create');
     setColEditOldName('');
     setColFormName('');
     setColFormDesc('');
-  };
+    setColFormTouched(false);
+    setColFormSubmitted(false);
+  }
 
-  const openEditCollectionModal = (col: CollectionItem) => {
+  function openEditCollectionModal(col: CollectionItem) {
     setColModalMode('edit');
     setColEditOldName(col.name);
     setColFormName(col.name);
     setColFormDesc(col.description || '');
-  };
+    setColFormTouched(false);
+    setColFormSubmitted(false);
+  }
+
+  const trimmedColName = colFormName.trim();
+  const colDuplicate = useMemo(() => {
+    if (!trimmedColName || !colModalMode) return false;
+    const lower = trimmedColName.toLowerCase();
+    if (colModalMode === 'edit' && lower === colEditOldName.trim().toLowerCase()) {
+      return false;
+    }
+    return collections.some((c) => c.name.toLowerCase() === lower);
+  }, [trimmedColName, colModalMode, colEditOldName, collections]);
+
+  const colValidationError = !trimmedColName
+    ? 'Collection name cannot be empty.'
+    : colDuplicate
+      ? `Collection "${trimmedColName}" already exists.`
+      : '';
+  const showColValidationError = Boolean(
+    colValidationError && (colFormTouched || colFormSubmitted)
+  );
 
   const handleSubmitCollectionModal = async (e: React.FormEvent) => {
     e.preventDefault();
-    const newName = colFormName.trim();
-    const desc = colFormDesc.trim();
-    if (!newName) return;
+    setColFormSubmitted(true);
+    if (colValidationError) return;
 
+    const newName = trimmedColName;
+    const desc = colFormDesc.trim();
     setIsBusy(true);
     try {
       if (colModalMode === 'create') {
@@ -656,10 +790,10 @@ export const IeltsManageTab: FC<IeltsManageTabProps> = ({
             (r) => r.collection.toLowerCase() === oldName.toLowerCase()
           );
           for (const row of matchingRows) {
-            const { payload, updatedRow } = await materializeRowForCloud(row, newName);
-            if (row.rawExam) saveExam(updatedRow as Exam);
-            else if (row.rawWriting) saveWritingExam(updatedRow as WritingExam);
-            else if (row.rawSpeaking) saveSpeakingExam(updatedRow as SpeakingExam);
+            const { payload, updatedRow } = await materializeRowForCloud(row, {
+              collection: newName,
+            });
+            persistRow(row, updatedRow);
             movedExams.push(payload);
           }
           if (collectionFilter.toLowerCase() === oldName.toLowerCase()) {
@@ -734,7 +868,11 @@ export const IeltsManageTab: FC<IeltsManageTabProps> = ({
         return { examId: row.id, skill: row.skill };
       });
       onCloudBulkDeleteExams?.(items);
-      setSelectedKeys(new Set());
+      setSelectedKeys((prev) => {
+        const next = new Set(prev);
+        for (const r of confirmAction.rows) next.delete(r.key);
+        return next;
+      });
       onRefreshAll();
       toast({
         title: `Deleted ${items.length} test(s)`,
@@ -784,13 +922,6 @@ export const IeltsManageTab: FC<IeltsManageTabProps> = ({
     setConfirmAction(null);
   };
 
-  const getSkillBadgeProps = (skill: CloudIeltsSkill) => {
-    if (skill === 'Listening') return { colorScheme: 'purple', icon: IconHeadphones };
-    if (skill === 'Writing') return { colorScheme: 'orange', icon: IconPencil };
-    if (skill === 'Speaking') return { colorScheme: 'pink', icon: IconMicrophone };
-    return { colorScheme: 'blue', icon: IconBook };
-  };
-
   const activeCollectionDefault =
     collectionFilter !== 'all' ? collectionFilter : undefined;
 
@@ -799,12 +930,13 @@ export const IeltsManageTab: FC<IeltsManageTabProps> = ({
       <input
         ref={fileInputRef}
         type="file"
+        multiple
         accept=".json,application/json"
         className="hidden"
-        onChange={handleImportJsonFile}
+        onChange={(e) => void handleImportJsonFiles(e)}
       />
 
-      {/* Top Studio Header */}
+      {/* Top Studio Header — Smart Add Test promoted to #1 Primary CTA */}
       <Flex
         justify="space-between"
         align={{ base: 'start', md: 'center' }}
@@ -830,24 +962,35 @@ export const IeltsManageTab: FC<IeltsManageTabProps> = ({
             </Badge>
           </HStack>
           <Text fontSize="sm" color={secondaryColor}>
-            Full control over all 4 skills and collections — create, edit, rename, organize, export, or delete any item.
+            Smart Add parses text into editable tests with images, audio &amp; video — or manage existing items inline below.
           </Text>
         </Stack>
 
         <HStack spacing={2} flexWrap="wrap">
+          <Button
+            size="sm"
+            colorScheme="blue"
+            rounded="xl"
+            leftIcon={<IconSparkles size={16} />}
+            onClick={() => onOpenSmartImport(activeCollectionDefault)}
+            isDisabled={isBusy}
+          >
+            Smart Add Test
+          </Button>
+
           <Menu placement="bottom-end">
             <MenuButton
               as={Button}
               size="sm"
-              colorScheme="blue"
+              variant="outline"
               rounded="xl"
               leftIcon={<IconPlus size={16} />}
               rightIcon={<IconChevronDown size={14} />}
               isDisabled={isBusy}
             >
-              Add Test
+              Manual / Import
             </MenuButton>
-            <MenuList minW="260px" zIndex={40}>
+            <MenuList minW="250px" zIndex={40}>
               <MenuItem
                 icon={<IconBook size={16} />}
                 onClick={() => onCreateManualExam(activeCollectionDefault, 'reading')}
@@ -874,16 +1017,10 @@ export const IeltsManageTab: FC<IeltsManageTabProps> = ({
               </MenuItem>
               <MenuDivider />
               <MenuItem
-                icon={<IconSparkles size={16} />}
-                onClick={() => onOpenSmartImport(activeCollectionDefault)}
-              >
-                Smart Import (TXT / Audio)
-              </MenuItem>
-              <MenuItem
                 icon={<IconUpload size={16} />}
                 onClick={() => fileInputRef.current?.click()}
               >
-                Import JSON File
+                Import JSON / Bundle (.json)
               </MenuItem>
             </MenuList>
           </Menu>
@@ -913,7 +1050,7 @@ export const IeltsManageTab: FC<IeltsManageTabProps> = ({
         </HStack>
       </Flex>
 
-      {/* Sub-Tabs: Tests | Collections */}
+      {/* Sub-Tabs: Tests | Collections (URL-synced) */}
       <HStack
         bg={pillBg}
         p={1}
@@ -929,7 +1066,7 @@ export const IeltsManageTab: FC<IeltsManageTabProps> = ({
           fontWeight={700}
           variant={subTab === 'tests' ? 'solid' : 'ghost'}
           colorScheme={subTab === 'tests' ? 'blue' : 'gray'}
-          onClick={() => setSubTab('tests')}
+          onClick={() => onSubTabChange('tests')}
         >
           Tests ({allRows.length})
         </Button>
@@ -939,7 +1076,7 @@ export const IeltsManageTab: FC<IeltsManageTabProps> = ({
           fontWeight={700}
           variant={subTab === 'collections' ? 'solid' : 'ghost'}
           colorScheme={subTab === 'collections' ? 'blue' : 'gray'}
-          onClick={() => setSubTab('collections')}
+          onClick={() => onSubTabChange('collections')}
         >
           Collections ({collections.length})
         </Button>
@@ -951,8 +1088,8 @@ export const IeltsManageTab: FC<IeltsManageTabProps> = ({
           {/* Filter Bar */}
           <Flex
             justify="space-between"
-            align={{ base: 'stretch', lg: 'center' }}
-            direction={{ base: 'column', lg: 'row' }}
+            align={{ base: 'stretch', xl: 'center' }}
+            direction={{ base: 'column', xl: 'row' }}
             gap={3}
             p={4}
             bg={cardBg}
@@ -984,13 +1121,27 @@ export const IeltsManageTab: FC<IeltsManageTabProps> = ({
               ))}
             </HStack>
 
-            <HStack spacing={2.5} flexWrap="wrap">
+            <HStack spacing={2} flexWrap="wrap">
               <Select
                 size="sm"
-                w={{ base: 'full', sm: '210px' }}
+                w={{ base: 'full', sm: '130px' }}
+                rounded="xl"
+                value={originFilter}
+                onChange={(e) => setOriginFilter(e.target.value as OriginFilter)}
+                aria-label="Filter by origin"
+              >
+                <option value="all">All Sources</option>
+                <option value="custom">Custom Only</option>
+                <option value="builtin">Built-in Only</option>
+              </Select>
+
+              <Select
+                size="sm"
+                w={{ base: 'full', sm: '195px' }}
                 rounded="xl"
                 value={collectionFilter}
                 onChange={(e) => setCollectionFilter(e.target.value)}
+                aria-label="Filter by collection"
               >
                 <option value="all">All Collections ({allRows.length})</option>
                 {collections.map((c) => {
@@ -1005,395 +1156,130 @@ export const IeltsManageTab: FC<IeltsManageTabProps> = ({
                 })}
               </Select>
 
-              <InputGroup size="sm" w={{ base: 'full', sm: '240px' }}>
+              <InputGroup size="sm" w={{ base: 'full', sm: '220px' }}>
                 <InputLeftElement pointerEvents="none" color="gray.400">
                   <IconSearch size={15} />
                 </InputLeftElement>
                 <Input
                   value={searchQuery}
                   onChange={(e) => onSearchQueryChange(e.target.value)}
-                  placeholder="Filter tests by title..."
+                  placeholder="Search title or collection..."
                   rounded="xl"
                 />
+                {searchQuery && (
+                  <InputRightElement>
+                    <IconButton
+                      size="xs"
+                      variant="ghost"
+                      aria-label="Clear search"
+                      icon={<IconX size={13} />}
+                      onClick={() => onSearchQueryChange('')}
+                    />
+                  </InputRightElement>
+                )}
               </InputGroup>
+
+              {hasActiveFilters && (
+                <Button size="xs" variant="ghost" colorScheme="blue" onClick={resetFilters}>
+                  Reset
+                </Button>
+              )}
             </HStack>
           </Flex>
 
-          {/* Bulk Action Bar */}
-          {selectedRows.length > 0 && (
-            <Flex
-              justify="space-between"
-              align={{ base: 'start', md: 'center' }}
-              direction={{ base: 'column', md: 'row' }}
-              gap={3}
-              p={3.5}
-              bg={bulkBg}
-              borderWidth="2px"
-              borderColor={bulkBorder}
-              rounded="xl"
-            >
-              <HStack spacing={3}>
-                <Checkbox
-                  isChecked={allFilteredSelected}
-                  onChange={toggleSelectAllFiltered}
-                  colorScheme="blue"
-                >
-                  <Text fontSize="sm" fontWeight={700}>
-                    {selectedRows.length} selected
-                  </Text>
-                </Checkbox>
-                <Button size="xs" variant="ghost" onClick={() => setSelectedKeys(new Set())}>
-                  Clear selection
-                </Button>
-              </HStack>
-
-              <HStack spacing={2} flexWrap="wrap">
-                <Select
-                  size="sm"
-                  w="190px"
-                  bg={cardBg}
-                  rounded="xl"
-                  value={bulkMoveTarget || collections[0]?.name || ''}
-                  onChange={(e) => setBulkMoveTarget(e.target.value)}
-                >
-                  {collections.map((c) => (
-                    <option key={c.id} value={c.name}>
-                      {c.name}
-                    </option>
-                  ))}
-                </Select>
-                <Button
-                  size="sm"
-                  colorScheme="blue"
-                  rounded="xl"
-                  isLoading={isBusy}
-                  onClick={() => void handleBulkMove()}
-                >
-                  Move Selected
-                </Button>
-                <Button
-                  size="sm"
-                  colorScheme="red"
-                  variant="solid"
-                  rounded="xl"
-                  leftIcon={<IconTrash size={15} />}
-                  isDisabled={isBusy}
-                  onClick={() => setConfirmAction({ type: 'bulk_delete', rows: selectedRows })}
-                >
-                  Delete Selected
-                </Button>
-              </HStack>
-            </Flex>
-          )}
-
-          {/* Select All Strip */}
-          {filteredRows.length > 0 && selectedRows.length === 0 && (
-            <HStack justify="space-between" px={2}>
-              <Checkbox
-                size="sm"
-                isChecked={allFilteredSelected}
-                onChange={toggleSelectAllFiltered}
-              >
-                <Text fontSize="xs" fontWeight={600} color={secondaryColor}>
-                  Select all {filteredRows.length} visible tests
-                </Text>
-              </Checkbox>
-              <Text fontSize="xs" color={secondaryColor}>
-                Showing {filteredRows.length} of {allRows.length} tests
-              </Text>
-            </HStack>
-          )}
-
-          {/* Tests List */}
-          {filteredRows.length === 0 ? (
-            <Box
-              p={10}
-              bg={cardBg}
-              borderWidth="2px"
-              borderColor={cardBorder}
-              rounded="2xl"
-              textAlign="center"
-            >
-              <Text fontSize="sm" color={secondaryColor} mb={3}>
-                No tests match the current filters.
-              </Text>
-              <Button
-                size="sm"
-                colorScheme="blue"
-                rounded="xl"
-                leftIcon={<IconPlus size={16} />}
-                onClick={() => onCreateManualExam(activeCollectionDefault, 'reading')}
-              >
-                Create New Test
-              </Button>
-            </Box>
-          ) : (
-            <Stack spacing={2.5}>
-              {filteredRows.map((row) => {
-                const { colorScheme, icon } = getSkillBadgeProps(row.skill);
-                const isChecked = selectedKeys.has(row.key);
-
-                return (
-                  <Flex
-                    key={row.key}
-                    p={4}
-                    bg={cardBg}
-                    borderWidth="2px"
-                    borderColor={isChecked ? 'blue.400' : cardBorder}
-                    rounded="xl"
-                    justify="space-between"
-                    align={{ base: 'start', md: 'center' }}
-                    direction={{ base: 'column', md: 'row' }}
-                    gap={3}
-                    transition="border-color 120ms ease"
-                    _hover={{ borderColor: 'blue.300' }}
-                  >
-                    <HStack spacing={3} flex={1} minW={0} align="start">
-                      <Checkbox
-                        mt={1}
-                        isChecked={isChecked}
-                        onChange={() => toggleRowSelection(row.key)}
-                        colorScheme="blue"
-                      />
-                      <Stack spacing={1} minW={0} flex={1}>
-                        <HStack spacing={2} flexWrap="wrap">
-                          <Badge
-                            colorScheme={colorScheme}
-                            variant="subtle"
-                            rounded="md"
-                            px={2}
-                            py={0.5}
-                            fontSize="xs"
-                          >
-                            <HStack spacing={1}>
-                              <Icon as={icon} boxSize={3.5} />
-                              <Text>{row.skill}</Text>
-                            </HStack>
-                          </Badge>
-                          <Text fontWeight={700} fontSize="sm" noOfLines={1}>
-                            {row.title}
-                          </Text>
-                        </HStack>
-                        <Text fontSize="xs" color={secondaryColor}>
-                          {row.meta}
-                        </Text>
-                      </Stack>
-                    </HStack>
-
-                    <HStack spacing={2} flexWrap="wrap" flexShrink={0}>
-                      <Select
-                        size="xs"
-                        w="155px"
-                        rounded="lg"
-                        bg={subtleBg}
-                        value={row.collection}
-                        isDisabled={isBusy}
-                        onChange={(e) => void handleMoveSingleTest(row, e.target.value)}
-                        aria-label={`Collection for ${row.title}`}
-                      >
-                        {!collections.some(
-                          (c) => c.name.toLowerCase() === row.collection.toLowerCase()
-                        ) && <option value={row.collection}>{row.collection}</option>}
-                        {collections.map((c) => (
-                          <option key={c.id} value={c.name}>
-                            {c.name}
-                          </option>
-                        ))}
-                      </Select>
-
-                      <Tooltip label="Edit test">
-                        <IconButton
-                          size="sm"
-                          variant="outline"
-                          rounded="lg"
-                          aria-label={`Edit ${row.title}`}
-                          icon={<IconEdit size={16} />}
-                          onClick={() => {
-                            if (row.rawExam) onEditExam(row.rawExam);
-                            else if (row.rawWriting) onEditWriting(row.rawWriting);
-                            else if (row.rawSpeaking) onEditSpeaking(row.rawSpeaking);
-                          }}
-                        />
-                      </Tooltip>
-
-                      <Tooltip label="Duplicate test">
-                        <IconButton
-                          size="sm"
-                          variant="outline"
-                          rounded="lg"
-                          aria-label={`Duplicate ${row.title}`}
-                          icon={<IconCopy size={16} />}
-                          isDisabled={isBusy}
-                          onClick={() => void handleDuplicateTest(row)}
-                        />
-                      </Tooltip>
-
-                      <Tooltip label="Export JSON">
-                        <IconButton
-                          size="sm"
-                          variant="outline"
-                          rounded="lg"
-                          aria-label={`Export ${row.title}`}
-                          icon={<IconDownload size={16} />}
-                          onClick={() => void handleExportTest(row)}
-                        />
-                      </Tooltip>
-
-                      <Tooltip label="Delete test">
-                        <IconButton
-                          size="sm"
-                          variant="outline"
-                          colorScheme="red"
-                          rounded="lg"
-                          aria-label={`Delete ${row.title}`}
-                          icon={<IconTrash size={16} />}
-                          isDisabled={isBusy}
-                          onClick={() => setConfirmAction({ type: 'delete_test', row })}
-                        />
-                      </Tooltip>
-                    </HStack>
-                  </Flex>
-                );
-              })}
-            </Stack>
-          )}
+          <ManageTestsTable
+            rows={filteredAndSortedRows}
+            totalRowsCount={allRows.length}
+            collections={collections}
+            selectedKeys={selectedKeys}
+            sortField={sortField}
+            sortDirection={sortDirection}
+            bulkMoveTarget={bulkMoveTarget}
+            isBusy={isBusy}
+            onSortChange={handleSortChange}
+            onToggleRow={toggleRowSelection}
+            onToggleSelectAllVisible={toggleSelectAllVisible}
+            onClearSelection={() => setSelectedKeys(new Set())}
+            onBulkMoveTargetChange={setBulkMoveTarget}
+            onBulkMove={() => void handleBulkMove()}
+            onBulkExport={(rowsToExport) => void handleBulkExport(rowsToExport)}
+            onBulkDelete={(rowsToDelete) =>
+              setConfirmAction({ type: 'bulk_delete', rows: rowsToDelete })
+            }
+            onMoveSingleTest={(row, col) => void handleMoveSingleTest(row, col)}
+            onQuickRenameTest={(row, title) => void handleQuickRenameTest(row, title)}
+            onPreviewTest={onPreviewTest}
+            onEditTest={(row) => {
+              if (row.rawExam) onEditExam(row.rawExam);
+              else if (row.rawWriting) onEditWriting(row.rawWriting);
+              else if (row.rawSpeaking) onEditSpeaking(row.rawSpeaking);
+            }}
+            onDuplicateTest={(row) => void handleDuplicateTest(row)}
+            onExportTest={(row) => void handleExportTest(row)}
+            onDeleteTest={(row) => setConfirmAction({ type: 'delete_test', row })}
+            onCreateNew={() => onOpenSmartImport(activeCollectionDefault)}
+            onResetFilters={resetFilters}
+            hasActiveFilters={hasActiveFilters}
+          />
         </Stack>
       )}
 
       {/* SUB-TAB 2: COLLECTIONS CRUD */}
       {subTab === 'collections' && (
-        <Grid templateColumns="repeat(auto-fill, minmax(min(100%, 300px), 1fr))" gap={4}>
-          {collections.map((col) => {
-            const colLower = col.name.toLowerCase();
-            const matchingRows = allRows.filter((r) => r.collection.toLowerCase() === colLower);
-            const rCount = matchingRows.filter((r) => r.skill === 'Reading').length;
-            const lCount = matchingRows.filter((r) => r.skill === 'Listening').length;
-            const wCount = matchingRows.filter((r) => r.skill === 'Writing').length;
-            const sCount = matchingRows.filter((r) => r.skill === 'Speaking').length;
-
-            return (
-              <GridItem key={col.name}>
-                <Box
-                  h="full"
-                  p={5}
-                  bg={cardBg}
-                  borderWidth="2px"
-                  borderColor={cardBorder}
-                  rounded="2xl"
-                  shadow="sm"
-                >
-                  <Flex direction="column" justify="space-between" h="full" gap={4}>
-                    <Stack spacing={2}>
-                      <HStack justify="space-between" align="start">
-                        <HStack spacing={2} minW={0}>
-                          <Icon as={IconFolder} boxSize={5} color="blue.400" flexShrink={0} />
-                          <Heading
-                            size="md"
-                            fontFamily={outfit.style.fontFamily}
-                            noOfLines={1}
-                          >
-                            {col.name}
-                          </Heading>
-                        </HStack>
-                        <Badge colorScheme="gray" variant="subtle" rounded="md" flexShrink={0}>
-                          {matchingRows.length} Tests
-                        </Badge>
-                      </HStack>
-
-                      <Text fontSize="sm" color={secondaryColor} noOfLines={2}>
-                        {col.description || 'IELTS practice test collection'}
-                      </Text>
-
-                      <HStack spacing={1.5} flexWrap="wrap" pt={1}>
-                        <Badge colorScheme="blue" variant="subtle" rounded="md">
-                          {rCount} Reading
-                        </Badge>
-                        <Badge colorScheme="purple" variant="subtle" rounded="md">
-                          {lCount} Listening
-                        </Badge>
-                        <Badge colorScheme="orange" variant="subtle" rounded="md">
-                          {wCount} Writing
-                        </Badge>
-                        <Badge colorScheme="pink" variant="subtle" rounded="md">
-                          {sCount} Speaking
-                        </Badge>
-                      </HStack>
-                    </Stack>
-
-                    <HStack justify="space-between" pt={2} borderTopWidth="1px" borderColor={cardBorder}>
-                      <Button
-                        size="xs"
-                        variant="ghost"
-                        colorScheme="blue"
-                        rounded="lg"
-                        onClick={() => {
-                          setCollectionFilter(col.name);
-                          setSubTab('tests');
-                        }}
-                      >
-                        View Tests
-                      </Button>
-
-                      <HStack spacing={1.5}>
-                        <Button
-                          size="xs"
-                          variant="outline"
-                          rounded="lg"
-                          leftIcon={<IconEdit size={14} />}
-                          onClick={() => openEditCollectionModal(col)}
-                        >
-                          Edit
-                        </Button>
-                        <Button
-                          size="xs"
-                          variant="outline"
-                          colorScheme="red"
-                          rounded="lg"
-                          leftIcon={<IconTrash size={14} />}
-                          onClick={() =>
-                            setConfirmAction({
-                              type: 'delete_collection',
-                              name: col.name,
-                              totalCount: matchingRows.length,
-                              rows: matchingRows,
-                            })
-                          }
-                        >
-                          Delete
-                        </Button>
-                      </HStack>
-                    </HStack>
-                  </Flex>
-                </Box>
-              </GridItem>
-            );
-          })}
-        </Grid>
+        <ManageCollectionsGrid
+          collections={collections}
+          allRows={allRows}
+          onViewTests={(colName) => {
+            setCollectionFilter(colName);
+            onSubTabChange('tests');
+          }}
+          onSmartAddToCollection={(colName) => onOpenSmartImport(colName)}
+          onEditCollection={openEditCollectionModal}
+          onDeleteCollection={(name, matchingRows) =>
+            setConfirmAction({
+              type: 'delete_collection',
+              name,
+              totalCount: matchingRows.length,
+              rows: matchingRows,
+            })
+          }
+          onNewCollection={openCreateCollectionModal}
+        />
       )}
 
-      {/* Create / Edit Collection Modal */}
+      {/* Create / Edit Collection Modal (with validate-input-after-interaction) */}
       <Modal isOpen={colModalMode !== null} onClose={() => setColModalMode(null)} isCentered>
         <ModalOverlay />
         <ModalContent>
-          <form onSubmit={(e) => void handleSubmitCollectionModal(e)}>
+          <form onSubmit={(e) => void handleSubmitCollectionModal(e)} noValidate>
             <ModalHeader fontFamily={outfit.style.fontFamily}>
               {colModalMode === 'edit' ? 'Edit Collection' : 'New Collection'}
             </ModalHeader>
             <ModalCloseButton />
             <ModalBody>
               <Stack spacing={4}>
-                <Box>
-                  <Text fontSize="xs" fontWeight={700} mb={1}>
+                <FormControl isInvalid={showColValidationError}>
+                  <FormLabel fontSize="xs" fontWeight={700} mb={1}>
                     Collection Name
-                  </Text>
+                  </FormLabel>
                   <Input
                     required
                     value={colFormName}
                     onChange={(e) => setColFormName(e.target.value)}
+                    onBlur={() => setColFormTouched(true)}
                     placeholder="e.g. Cambridge 21, Mock Pack..."
                     rounded="xl"
+                    aria-invalid={showColValidationError ? 'true' : 'false'}
+                    aria-describedby={showColValidationError ? colNameErrorId : undefined}
+                    autoFocus
                   />
-                </Box>
+                  {showColValidationError && (
+                    <FormErrorMessage id={colNameErrorId} fontSize="xs">
+                      {colValidationError}
+                    </FormErrorMessage>
+                  )}
+                </FormControl>
+
                 <Box>
                   <Text fontSize="xs" fontWeight={700} mb={1}>
                     Description (Optional)
@@ -1412,7 +1298,13 @@ export const IeltsManageTab: FC<IeltsManageTabProps> = ({
               <Button variant="ghost" onClick={() => setColModalMode(null)}>
                 Cancel
               </Button>
-              <Button type="submit" colorScheme="blue" rounded="xl" isLoading={isBusy}>
+              <Button
+                type="submit"
+                colorScheme="blue"
+                rounded="xl"
+                isLoading={isBusy}
+                isDisabled={Boolean(colValidationError)}
+              >
                 {colModalMode === 'edit' ? 'Save Changes' : 'Create Collection'}
               </Button>
             </ModalFooter>

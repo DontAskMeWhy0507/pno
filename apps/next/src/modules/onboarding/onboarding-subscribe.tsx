@@ -50,11 +50,11 @@ export const OnboardingSubscribe = () => {
             </Stack>
             <Button
               as={Link}
-              href="https://twitter.com/quentiapp"
+              href="https://twitter.com/pnoapp"
               leftIcon={<IconBrandX size={18} />}
               w={{ base: "full", md: "auto" }}
             >
-              @quentiapp
+              @pnoapp
             </Button>
           </Flex>
         </Card>

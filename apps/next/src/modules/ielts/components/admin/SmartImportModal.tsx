@@ -1,15 +1,28 @@
-import { useState, useEffect, useRef, type FC, type ChangeEvent } from 'react';
+import {
+  useState,
+  useEffect,
+  useRef,
+  useCallback,
+  type FC,
+  type ChangeEvent,
+} from 'react';
 import { outfit } from '@pno/lib/chakra-theme';
 import type { Exam } from '../../types/exam';
 import type { WritingExam } from '../../types/writing';
 import type { SpeakingExam } from '../../types/speaking';
-import { saveExam, getAllCollections, getExamCollection } from '../../utils/storage';
+import {
+  saveExam,
+  getAllCollections,
+  getExamCollection,
+  ensureCollectionExists,
+} from '../../utils/storage';
 import { saveWritingExam } from '../../data/writingExams';
 import { saveSpeakingExam } from '../../data/speakingExams';
 import {
   parseIELTSText,
   parseWritingText,
   parseSpeakingText,
+  detectSkillFromText,
   type SpeakingParseError,
   SAMPLE_TXT_TEMPLATE,
   SAMPLE_LISTENING_TXT_TEMPLATE,
@@ -22,6 +35,7 @@ import {
 } from '../../utils/textParser';
 import { parseQuickKeyText, mergeKeysIntoExam } from '../../utils/keyMatcher';
 import { uploadMediaFile } from '../../utils/mediaUploader';
+import { MediaEmbed } from '../exam/MediaEmbed';
 import {
   Upload,
   FileText,
@@ -38,26 +52,31 @@ import {
   Headphones,
   PenTool,
   Mic,
-  Folder,
-  FolderOpen,
   Music,
   KeyRound,
   Loader2,
   ChevronDown,
   ChevronUp,
+  Image as ImageIcon,
+  Video,
+  FolderPlus,
+  Trash2,
 } from 'lucide-react';
+
+export type SmartImportSkill = 'reading' | 'listening' | 'writing' | 'speaking';
 
 interface SmartImportModalProps {
   isOpen: boolean;
   initialCollection?: string;
-  defaultSkill?: 'reading' | 'listening' | 'writing' | 'speaking';
+  defaultSkill?: SmartImportSkill;
   onClose: () => void;
   onImportSuccess: (exam: Exam, action: 'save_only' | 'take_test' | 'edit') => void;
-  onOpenManualEditor: () => void;
-  onWritingImportSuccess?: (exam: WritingExam) => void;
-  onSpeakingImportSuccess?: (exam: SpeakingExam) => void;
-  onOpenWritingEditor?: (exam?: WritingExam | null) => void;
-  onOpenSpeakingEditor?: (exam?: SpeakingExam | null) => void;
+  onOpenManualEditor: (skill: 'reading' | 'listening', collection?: string) => void;
+  onWritingImportSuccess?: (exam: WritingExam, action?: 'save_only' | 'edit') => void;
+  onSpeakingImportSuccess?: (exam: SpeakingExam, action?: 'save_only' | 'edit') => void;
+  onOpenWritingEditor?: (exam?: WritingExam | null, collection?: string) => void;
+  onOpenSpeakingEditor?: (exam?: SpeakingExam | null, collection?: string) => void;
+  onCloudCreateCollection?: (col: { name: string; description?: string }) => void;
 }
 
 export const SmartImportModal: FC<SmartImportModalProps> = ({
@@ -71,50 +90,170 @@ export const SmartImportModal: FC<SmartImportModalProps> = ({
   onSpeakingImportSuccess,
   onOpenWritingEditor,
   onOpenSpeakingEditor,
+  onCloudCreateCollection,
 }) => {
-  const [selectedSkill, setSelectedSkill] = useState<'reading' | 'listening' | 'writing' | 'speaking'>(defaultSkill);
+  const [selectedSkill, setSelectedSkill] = useState<SmartImportSkill>(defaultSkill);
+  const [autoDetectedInfo, setAutoDetectedInfo] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'upload' | 'txt_paste' | 'guide'>('txt_paste');
   const [txtContent, setTxtContent] = useState('');
   const [answerKeyText, setAnswerKeyText] = useState('');
   const [showKeyMatcher, setShowKeyMatcher] = useState(false);
   const [isUploadingAudio, setIsUploadingAudio] = useState(false);
+  const [uploadingMediaKey, setUploadingMediaKey] = useState<string | null>(null);
   const [audioNotice, setAudioNotice] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [warningMsg, setWarningMsg] = useState<string | null>(null);
   const [speakingValidationErrors, setSpeakingValidationErrors] = useState<SpeakingParseError[]>([]);
+  const [showCloseConfirm, setShowCloseConfirm] = useState(false);
 
   // Previews
   const [successPreview, setSuccessPreview] = useState<Exam | null>(null);
   const [writingPreview, setWritingPreview] = useState<WritingExam | null>(null);
   const [speakingPreview, setSpeakingPreview] = useState<SpeakingExam | null>(null);
+  const [activeMediaPartIdx, setActiveMediaPartIdx] = useState<number>(0);
 
+  // Collection state (preserve user choice; support inline new collection)
   const [isDragOver, setIsDragOver] = useState(false);
   const [selectedCollection, setSelectedCollection] = useState<string>(initialCollection || 'My Tests');
+  const [hasUserPickedCollection, setHasUserPickedCollection] = useState<boolean>(Boolean(initialCollection));
+  const [showNewColInput, setShowNewColInput] = useState(false);
+  const [newColDraft, setNewColDraft] = useState('');
+
   const fileInputRef = useRef<HTMLInputElement>(null);
   const audioFileInputRef = useRef<HTMLInputElement>(null);
 
+  const resetAllState = useCallback(
+    (keepSkill?: SmartImportSkill) => {
+      setSuccessPreview(null);
+      setWritingPreview(null);
+      setSpeakingPreview(null);
+      setActiveMediaPartIdx(0);
+      setErrorMsg(null);
+      setWarningMsg(null);
+      setSpeakingValidationErrors([]);
+      setTxtContent('');
+      setAnswerKeyText('');
+      setShowKeyMatcher(false);
+      setAudioNotice(null);
+      setAutoDetectedInfo(null);
+      setShowCloseConfirm(false);
+      setShowNewColInput(false);
+      setNewColDraft('');
+      if (keepSkill) setSelectedSkill(keepSkill);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+      if (audioFileInputRef.current) audioFileInputRef.current.value = '';
+    },
+    []
+  );
 
+  // Reset clean state each time modal opens
   useEffect(() => {
     if (isOpen) {
-      if (initialCollection) {
-        setSelectedCollection(initialCollection);
-      }
-      if (defaultSkill) {
-        setSelectedSkill(defaultSkill);
-      }
+      resetAllState(defaultSkill || 'reading');
+      setSelectedCollection(initialCollection || 'My Tests');
+      setHasUserPickedCollection(Boolean(initialCollection));
+      setActiveTab('txt_paste');
     }
-  }, [isOpen, initialCollection, defaultSkill]);
+  }, [isOpen, initialCollection, defaultSkill, resetAllState]);
+
+  const hasUnsavedDraft = Boolean(
+    txtContent.trim() || successPreview || writingPreview || speakingPreview
+  );
+
+  const requestClose = useCallback(() => {
+    if (hasUnsavedDraft && !showCloseConfirm) {
+      setShowCloseConfirm(true);
+      return;
+    }
+    resetAllState();
+    onClose();
+  }, [hasUnsavedDraft, showCloseConfirm, resetAllState, onClose]);
+
+  const ensureAndSyncCollection = useCallback(
+    (colName: string): string => {
+      const target = colName.trim() || 'My Tests';
+      const { collection, created } = ensureCollectionExists(target);
+      if (created) {
+        onCloudCreateCollection?.(collection);
+      }
+      return collection.name;
+    },
+    [onCloudCreateCollection]
+  );
+
+  // Keyboard shortcuts: Esc to close (with unsaved check), Ctrl+Enter to Import & Edit
+  useEffect(() => {
+    if (!isOpen) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        if (showCloseConfirm) {
+          setShowCloseConfirm(false);
+        } else {
+          requestClose();
+        }
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [isOpen, showCloseConfirm, requestClose]);
+
+  // Clipboard image paste (Ctrl+V) when Preview card is open
+  useEffect(() => {
+    if (!isOpen) return;
+    const hasPreview = Boolean(successPreview || writingPreview || speakingPreview);
+    if (!hasPreview) return;
+
+    const handlePaste = async (e: ClipboardEvent) => {
+      const items = e.clipboardData?.items;
+      if (!items) return;
+      for (let i = 0; i < items.length; i++) {
+        const item = items[i];
+        if (item && item.type.startsWith('image/')) {
+          const file = item.getAsFile();
+          if (!file) continue;
+          e.preventDefault();
+          await handleAttachMediaFile(
+            file,
+            'image',
+            successPreview ? activeMediaPartIdx : undefined
+          );
+          break;
+        }
+      }
+    };
+    window.addEventListener('paste', handlePaste);
+    return () => window.removeEventListener('paste', handlePaste);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen, successPreview, writingPreview, speakingPreview, activeMediaPartIdx]);
 
   if (!isOpen) return null;
 
   const collections = getAllCollections();
-  const speakingValidation = selectedSkill === 'speaking' && txtContent.trim()
-    ? parseSpeakingText(txtContent)
-    : null;
-  const hasSpeakingValidationErrors = Boolean(speakingValidation && speakingValidation.errors.length > 0);
-  const displayedSpeakingErrors = speakingValidation?.errors ?? speakingValidationErrors;
+  const collectionExistsInList = collections.some(
+    (c) => c.name.toLowerCase() === selectedCollection.toLowerCase()
+  );
+
+  const speakingValidation =
+    selectedSkill === 'speaking' && txtContent.trim()
+      ? parseSpeakingText(txtContent)
+      : null;
+  const hasSpeakingValidationErrors = Boolean(
+    speakingValidation && speakingValidation.errors.length > 0
+  );
+  const displayedSpeakingErrors =
+    speakingValidation?.errors ?? speakingValidationErrors;
+
+  const applyCollectionFromParsed = (parsedCol?: string) => {
+    const trimmed = (parsedCol || '').trim();
+    if (!hasUserPickedCollection && trimmed) {
+      setSelectedCollection(trimmed);
+      return trimmed;
+    }
+    return selectedCollection;
+  };
 
   const applySpeakingParseResult = (text: string, collectionOverride?: string) => {
     const result = parseSpeakingText(text);
@@ -124,9 +263,91 @@ export const SmartImportModal: FC<SmartImportModalProps> = ({
       setActiveTab('txt_paste');
       return null;
     }
-    const exam = { ...result.exam, collection: collectionOverride ?? result.exam.collection ?? 'My Tests' };
+    const finalCol = collectionOverride ?? applyCollectionFromParsed(result.exam.collection);
+    const exam = { ...result.exam, collection: finalCol };
     setSpeakingPreview(exam);
     return exam;
+  };
+
+  const maybeAutoDetectSkill = (raw: string) => {
+    if (raw.trim().length < 25) {
+      setAutoDetectedInfo(null);
+      return selectedSkill;
+    }
+    const detected = detectSkillFromText(raw);
+    if (detected.confidence === 'high' && detected.skill !== selectedSkill) {
+      setSelectedSkill(detected.skill);
+      setAutoDetectedInfo(`Auto-detected ${detected.skill.toUpperCase()} (${detected.reason})`);
+      return detected.skill;
+    }
+    return selectedSkill;
+  };
+
+  // ── Attach Image / Audio / Video inside Preview ──────────────────────────────
+  const handleAttachMediaFile = async (
+    file: File,
+    kind: 'image' | 'audio' | 'video',
+    partIdx = 0
+  ) => {
+    const busyKey = `${kind}-${partIdx}`;
+    setUploadingMediaKey(busyKey);
+    setErrorMsg(null);
+
+    try {
+      const targetId =
+        successPreview?.id ||
+        writingPreview?.id ||
+        speakingPreview?.id ||
+        `${selectedSkill}_${Date.now()}`;
+      const res = await uploadMediaFile(file, selectedSkill, targetId);
+
+      if (successPreview) {
+        setSuccessPreview((prev) => {
+          if (!prev) return prev;
+          const nextParts = prev.parts.map((p, idx) => {
+            if (idx !== partIdx) return p;
+            if (kind === 'image') return { ...p, imageUrl: res.url };
+            if (kind === 'video') return { ...p, videoUrl: res.url };
+            return { ...p, audioUrl: res.url };
+          });
+          return { ...prev, parts: nextParts };
+        });
+      } else if (writingPreview && kind === 'image') {
+        setWritingPreview((prev) =>
+          prev ? { ...prev, task1: { ...prev.task1, imageUrl: res.url } } : prev
+        );
+      } else if (speakingPreview) {
+        setSpeakingPreview((prev) => {
+          if (!prev) return prev;
+          return {
+            ...prev,
+            part2Question: {
+              ...prev.part2Question,
+              ...(kind === 'image' ? { imageUrl: res.url } : {}),
+              ...(kind === 'video' ? { videoUrl: res.url } : {}),
+            },
+          };
+        });
+      }
+    } catch (err) {
+      setErrorMsg(err instanceof Error ? err.message : 'Failed to upload media file.');
+    } finally {
+      setUploadingMediaKey(null);
+    }
+  };
+
+  const handleUpdatePreviewPartMedia = (
+    partIdx: number,
+    field: 'audioUrl' | 'imageUrl' | 'videoUrl',
+    val: string
+  ) => {
+    setSuccessPreview((prev) => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        parts: prev.parts.map((p, idx) => (idx === partIdx ? { ...p, [field]: val } : p)),
+      };
+    });
   };
 
   // ── File Processing ──────────────────────────────────────────────────────────
@@ -152,41 +373,44 @@ export const SmartImportModal: FC<SmartImportModalProps> = ({
 
         if (parsed.task1 && parsed.task2) {
           setSelectedSkill('writing');
-          setWritingPreview(parsed);
-          setSelectedCollection(parsed.collection || 'My Tests');
+          const col = applyCollectionFromParsed(parsed.collection);
+          setWritingPreview({ ...parsed, collection: col });
         } else if (parsed.part1Questions && parsed.part2Question) {
           setSelectedSkill('speaking');
-          setSpeakingPreview(parsed);
-          setSelectedCollection(parsed.collection || 'My Tests');
+          const col = applyCollectionFromParsed(parsed.collection);
+          setSpeakingPreview({ ...parsed, collection: col });
         } else if (parsed.title && Array.isArray(parsed.parts)) {
-          const isListening = parsed.parts.some((p: any) => p.audioUrl || p.title?.toLowerCase().includes('section'));
+          const isListening = parsed.parts.some(
+            (p: { audioUrl?: string; title?: string }) =>
+              p.audioUrl || p.title?.toLowerCase().includes('section')
+          );
           setSelectedSkill(isListening ? 'listening' : 'reading');
-          setSuccessPreview(parsed);
-          setSelectedCollection(getExamCollection(parsed));
+          const col = applyCollectionFromParsed(getExamCollection(parsed));
+          setSuccessPreview({ ...parsed, collection: col });
         } else {
           throw new Error('JSON file is missing valid exam structure.');
         }
       } else if (fileName.endsWith('.txt')) {
         const text = await testFile.text();
         setTxtContent(text);
+        const skillToUse = maybeAutoDetectSkill(text);
 
-        if (selectedSkill === 'writing') {
+        if (skillToUse === 'writing') {
           const res = parseWritingText(text);
-          setWritingPreview(res.exam);
-          setSelectedCollection(res.exam.collection || 'My Tests');
+          const col = applyCollectionFromParsed(res.exam.collection);
+          setWritingPreview({ ...res.exam, collection: col });
           if (res.warning) setWarningMsg(res.warning);
-        } else if (selectedSkill === 'speaking') {
-          const exam = applySpeakingParseResult(text);
-          if (exam) setSelectedCollection(exam.collection || 'My Tests');
+        } else if (skillToUse === 'speaking') {
+          applySpeakingParseResult(text);
         } else {
           const result = parseIELTSText(text);
-          setSuccessPreview(result.exam);
-          setSelectedCollection(getExamCollection(result.exam));
+          const col = applyCollectionFromParsed(result.exam.collection);
+          setSuccessPreview({ ...result.exam, collection: col });
           if (result.warning) setWarningMsg(result.warning);
         }
       } else {
         throw new Error(
-          `Only clean standardized .txt and .json backup files are supported for import. If you have test content from Word or web, simply copy and paste the text into the "Paste TXT Content" tab.`
+          'Only standardized .txt and .json files are supported here. For Word/web text, copy & paste directly into "Paste Export Text".'
         );
       }
     } catch (err: unknown) {
@@ -198,7 +422,7 @@ export const SmartImportModal: FC<SmartImportModalProps> = ({
 
   const handleFileChange = (e: ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
-      processFiles(e.target.files);
+      void processFiles(e.target.files);
     }
   };
 
@@ -227,11 +451,11 @@ export const SmartImportModal: FC<SmartImportModalProps> = ({
     e.stopPropagation();
     setIsDragOver(false);
     if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
-      processFiles(e.dataTransfer.files);
+      void processFiles(e.dataTransfer.files);
     }
   };
 
-  // ── Audio Upload for Listening ───────────────────────────────────────────────
+  // ── Audio Upload for Listening (Paste tab) ───────────────────────────────────
   const handleAudioUpload = async (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -242,9 +466,8 @@ export const SmartImportModal: FC<SmartImportModalProps> = ({
     try {
       const examId = `listening_${Date.now()}`;
       const res = await uploadMediaFile(file, 'listening', examId);
-      setAudioNotice(`Audio uploaded successfully: ${res.filename}`);
+      setAudioNotice(`Audio uploaded: ${res.filename}`);
 
-      // Auto insert or update [AUDIO] in txtContent
       setTxtContent((prev) => {
         if (/^\[AUDIO\]/im.test(prev)) {
           return prev.replace(/^\[AUDIO\].*$/im, `[AUDIO] ${res.url}`);
@@ -254,18 +477,19 @@ export const SmartImportModal: FC<SmartImportModalProps> = ({
           return `[AUDIO] ${res.url}\n\n` + prev;
         }
       });
-    } catch (err: any) {
-      setErrorMsg(err.message || 'Failed to upload audio file.');
+    } catch (err) {
+      setErrorMsg(err instanceof Error ? err.message : 'Failed to upload audio file.');
     } finally {
       setIsUploadingAudio(false);
+      if (audioFileInputRef.current) audioFileInputRef.current.value = '';
     }
   };
 
-  // ── TXT Parse ────────────────────────────────────────────────────────────────
+  // ── TXT Parse (Step 1 -> Step 2 Preview + Quick Media Attach) ────────────────
   const handleParseTxt = () => {
     const trimmed = txtContent.trim();
     if (!trimmed) {
-      setErrorMsg('Please paste or type exam content before parsing.');
+      setErrorMsg('Please paste or type exam content before checking.');
       return;
     }
     setErrorMsg(null);
@@ -274,32 +498,36 @@ export const SmartImportModal: FC<SmartImportModalProps> = ({
     setSuccessPreview(null);
     setWritingPreview(null);
     setSpeakingPreview(null);
+    setActiveMediaPartIdx(0);
     setIsLoading(true);
 
     try {
-      if (selectedSkill === 'writing') {
+      const skillToUse = maybeAutoDetectSkill(trimmed);
+
+      if (skillToUse === 'writing') {
         const res = parseWritingText(trimmed);
-        const ex = { ...res.exam, collection: selectedCollection };
-        setWritingPreview(ex);
+        const col = applyCollectionFromParsed(res.exam.collection);
+        setWritingPreview({ ...res.exam, collection: col });
         if (res.warning) setWarningMsg(res.warning);
-      } else if (selectedSkill === 'speaking') {
-        applySpeakingParseResult(trimmed, selectedCollection);
+      } else if (skillToUse === 'speaking') {
+        applySpeakingParseResult(trimmed);
       } else {
         const result = parseIELTSText(trimmed);
         let finalExam = result.exam;
 
-        // Auto-merge separate answer keys & explanations if provided
         if (answerKeyText.trim()) {
           const parsedKeys = parseQuickKeyText(answerKeyText.trim());
           if (parsedKeys.length > 0) {
             const merged = mergeKeysIntoExam(finalExam, parsedKeys);
             finalExam = merged.exam;
-            setWarningMsg(`Attached ${merged.updatedCount} answers & explanations to the test questions!`);
+            setWarningMsg(
+              `Attached ${merged.updatedCount} answers & explanations to the test questions!`
+            );
           }
         }
 
-        setSuccessPreview(finalExam);
-        setSelectedCollection(getExamCollection(finalExam));
+        const col = applyCollectionFromParsed(finalExam.collection);
+        setSuccessPreview({ ...finalExam, collection: col });
         if (result.warning && !answerKeyText.trim()) setWarningMsg(result.warning);
       }
     } catch (err: unknown) {
@@ -309,7 +537,7 @@ export const SmartImportModal: FC<SmartImportModalProps> = ({
     }
   };
 
-  /** Parse inline, save, and immediately trigger an action */
+  // ── Direct Parse + Save + Action (Default = 'edit') ──────────────────────────
   const handleDirectAction = (action: 'save_only' | 'take_test' | 'edit') => {
     const trimmed = txtContent.trim();
     if (!trimmed) {
@@ -318,26 +546,30 @@ export const SmartImportModal: FC<SmartImportModalProps> = ({
     }
     setErrorMsg(null);
     try {
-      if (selectedSkill === 'writing') {
+      const skillToUse = maybeAutoDetectSkill(trimmed);
+
+      if (skillToUse === 'writing') {
         const res = parseWritingText(trimmed);
-        const exToSave = { ...res.exam, collection: selectedCollection };
+        const targetCol = ensureAndSyncCollection(applyCollectionFromParsed(res.exam.collection));
+        const exToSave = { ...res.exam, collection: targetCol };
         saveWritingExam(exToSave);
-        resetState();
-        onWritingImportSuccess?.(exToSave);
+        resetAllState();
+        onWritingImportSuccess?.(exToSave, action === 'edit' ? 'edit' : 'save_only');
         if (action === 'edit' && onOpenWritingEditor) {
-          onOpenWritingEditor(exToSave);
+          onOpenWritingEditor(exToSave, targetCol);
         }
         onClose();
-      } else if (selectedSkill === 'speaking') {
+      } else if (skillToUse === 'speaking') {
         const res = parseSpeakingText(trimmed);
         setSpeakingValidationErrors(res.errors);
         if (!res.exam) return;
-        const exToSave = { ...res.exam, collection: selectedCollection };
+        const targetCol = ensureAndSyncCollection(applyCollectionFromParsed(res.exam.collection));
+        const exToSave = { ...res.exam, collection: targetCol };
         saveSpeakingExam(exToSave);
-        resetState();
-        onSpeakingImportSuccess?.(exToSave);
+        resetAllState();
+        onSpeakingImportSuccess?.(exToSave, action === 'edit' ? 'edit' : 'save_only');
         if (action === 'edit' && onOpenSpeakingEditor) {
-          onOpenSpeakingEditor(exToSave);
+          onOpenSpeakingEditor(exToSave, targetCol);
         }
         onClose();
       } else {
@@ -352,14 +584,48 @@ export const SmartImportModal: FC<SmartImportModalProps> = ({
           }
         }
 
-        const examToSave = { ...finalExam, collection: selectedCollection };
+        const targetCol = ensureAndSyncCollection(applyCollectionFromParsed(finalExam.collection));
+        const examToSave = { ...finalExam, collection: targetCol };
         saveExam(examToSave);
-        resetState();
+        resetAllState();
         onImportSuccess(examToSave, action);
         onClose();
       }
     } catch (err: unknown) {
-      setErrorMsg(err instanceof Error ? err.message : 'Invalid TXT format — check the syntax guide.');
+      setErrorMsg(
+        err instanceof Error ? err.message : 'Invalid TXT format — check the syntax guide.'
+      );
+    }
+  };
+
+  // ── Save actions from Preview card ───────────────────────────────────────────
+  const finalizePreview = (action: 'save_only' | 'take_test' | 'edit') => {
+    const finalCol = ensureAndSyncCollection(selectedCollection);
+
+    if (successPreview) {
+      const examToSave = { ...successPreview, collection: finalCol };
+      saveExam(examToSave);
+      resetAllState();
+      onImportSuccess(examToSave, action);
+      onClose();
+    } else if (writingPreview) {
+      const examToSave = { ...writingPreview, collection: finalCol };
+      saveWritingExam(examToSave);
+      resetAllState();
+      onWritingImportSuccess?.(examToSave, action === 'edit' ? 'edit' : 'save_only');
+      if (action === 'edit' && onOpenWritingEditor) {
+        onOpenWritingEditor(examToSave, finalCol);
+      }
+      onClose();
+    } else if (speakingPreview) {
+      const examToSave = { ...speakingPreview, collection: finalCol };
+      saveSpeakingExam(examToSave);
+      resetAllState();
+      onSpeakingImportSuccess?.(examToSave, action === 'edit' ? 'edit' : 'save_only');
+      if (action === 'edit' && onOpenSpeakingEditor) {
+        onOpenSpeakingEditor(examToSave, finalCol);
+      }
+      onClose();
     }
   };
 
@@ -393,13 +659,15 @@ I. HEADER & GENERAL TAGS:
 --------------------------------------------------------------------------------
 [TITLE] <Exam Name - Example: CAMBRIDGE 19 - PRACTICE TEST 1 LISTENING>
 [TIME] 30
-[COLLECTION] <Collection Name - Example: Cambridge 19>
+[COLLECTION] <Collection Name - Auto-created if new, e.g. Cambridge 19>
 
 II. SECTION STRUCTURE:
 --------------------------------------------------------------------------------
 === SECTION 1 ===
 [SECTION_TITLE] Accommodation Booking Form
-[AUDIO] /audio/vol9/test1.mp4  <-- (Or web MP3 URL, or local file in public/audio/)
+[AUDIO] /audio/vol9/test1.mp4  <-- (Or web MP3 URL, or upload after pasting text)
+[IMAGE] <Optional map/diagram image URL>
+[VIDEO] <Optional MP4 / YouTube URL>
 
 --- Questions 1–10 ---
 Complete the notes below.
@@ -439,105 +707,24 @@ C. Section 3 (Methodology)
   };
 
   const handleCopySkillTemplate = () => {
-    navigator.clipboard.writeText(getSkillTemplate());
+    void navigator.clipboard.writeText(getSkillTemplate());
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
 
   const handleLoadSkillTemplateToEditor = () => {
     setTxtContent(getSkillTemplate());
+    setAutoDetectedInfo(null);
     setActiveTab('txt_paste');
   };
 
-
-  // ── State management ─────────────────────────────────────────────────────────
-  const resetState = () => {
-    setSuccessPreview(null);
-    setWritingPreview(null);
-    setSpeakingPreview(null);
-    setErrorMsg(null);
-    setWarningMsg(null);
-    setSpeakingValidationErrors([]);
-    setTxtContent('');
-    setAnswerKeyText('');
-    setShowKeyMatcher(false);
-    setAudioNotice(null);
-    if (fileInputRef.current) fileInputRef.current.value = '';
-    if (audioFileInputRef.current) audioFileInputRef.current.value = '';
-  };
-
-  const handleClose = () => {
-    resetState();
-    onClose();
-  };
-
-  // ── Save actions (from preview card) ─────────────────────────────────────────
-  const handleSaveAndReturn = () => {
-    if (successPreview) {
-      const examToSave = { ...successPreview, collection: selectedCollection };
-      saveExam(examToSave);
-      resetState();
-      onImportSuccess(examToSave, 'save_only');
-      onClose();
-    } else if (writingPreview) {
-      const examToSave = { ...writingPreview, collection: selectedCollection };
-      saveWritingExam(examToSave);
-      resetState();
-      onWritingImportSuccess?.(examToSave);
-      onClose();
-    } else if (speakingPreview) {
-      const examToSave = { ...speakingPreview, collection: selectedCollection };
-      saveSpeakingExam(examToSave);
-      resetState();
-      onSpeakingImportSuccess?.(examToSave);
-      onClose();
-    }
-  };
-
-  const handleSaveAndTakeTest = () => {
-    if (successPreview) {
-      const examToSave = { ...successPreview, collection: selectedCollection };
-      saveExam(examToSave);
-      resetState();
-      onImportSuccess(examToSave, 'take_test');
-      onClose();
-    } else if (writingPreview) {
-      const examToSave = { ...writingPreview, collection: selectedCollection };
-      saveWritingExam(examToSave);
-      resetState();
-      onWritingImportSuccess?.(examToSave);
-      onClose();
-    } else if (speakingPreview) {
-      const examToSave = { ...speakingPreview, collection: selectedCollection };
-      saveSpeakingExam(examToSave);
-      resetState();
-      onSpeakingImportSuccess?.(examToSave);
-      onClose();
-    }
-  };
-
-  const handleSaveAndEdit = () => {
-    if (successPreview) {
-      const examToSave = { ...successPreview, collection: selectedCollection };
-      saveExam(examToSave);
-      resetState();
-      onImportSuccess(examToSave, 'edit');
-      onClose();
-    } else if (writingPreview) {
-      const examToSave = { ...writingPreview, collection: selectedCollection };
-      saveWritingExam(examToSave);
-      resetState();
-      onWritingImportSuccess?.(examToSave);
-      if (onOpenWritingEditor) onOpenWritingEditor(examToSave);
-      onClose();
-    } else if (speakingPreview) {
-      const examToSave = { ...speakingPreview, collection: selectedCollection };
-      saveSpeakingExam(examToSave);
-      resetState();
-      onSpeakingImportSuccess?.(examToSave);
-      if (onOpenSpeakingEditor) onOpenSpeakingEditor(examToSave);
-      onClose();
-    }
+  const handleCreateInlineCollection = () => {
+    const trimmed = newColDraft.trim();
+    if (!trimmed) return;
+    setSelectedCollection(trimmed);
+    setHasUserPickedCollection(true);
+    setShowNewColInput(false);
+    setNewColDraft('');
   };
 
   // ── Derived stats ────────────────────────────────────────────────────────────
@@ -575,7 +762,9 @@ C. Section 3 (Methodology)
           acc +
           (p.questionGroups || []).reduce(
             (gAcc, g) =>
-              gAcc + (g.questions || []).filter((q) => q.explanation && q.explanation.trim().length > 0).length,
+              gAcc +
+              (g.questions || []).filter((q) => q.explanation && q.explanation.trim().length > 0)
+                .length,
             0
           ),
         0
@@ -584,50 +773,142 @@ C. Section 3 (Methodology)
 
   const charCount = txtContent.length;
 
+  const renderCollectionSelector = () => (
+    <div className="flex flex-wrap items-center gap-2">
+      <span className="text-xs font-bold text-gray-700 dark:text-gray-300 shrink-0">
+        Collection:
+      </span>
+      <select
+        value={selectedCollection}
+        onChange={(e) => {
+          setSelectedCollection(e.target.value);
+          setHasUserPickedCollection(true);
+        }}
+        className="bg-white dark:bg-gray-800 border-2 border-gray-200 dark:border-gray-700 rounded-xl px-3 py-1.5 text-xs text-gray-900 dark:text-gray-100 font-bold outline-none focus:border-blue-600 cursor-pointer"
+      >
+        {!collectionExistsInList && selectedCollection && (
+          <option value={selectedCollection}>
+            {selectedCollection} (New collection)
+          </option>
+        )}
+        {collections.map((c) => (
+          <option key={c.id} value={c.name}>
+            {c.name}
+          </option>
+        ))}
+      </select>
+
+      {!collectionExistsInList && selectedCollection && (
+        <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-emerald-100 dark:bg-emerald-900/50 text-emerald-800 dark:text-emerald-200 border border-emerald-300 dark:border-emerald-700">
+          Auto-creates &ldquo;{selectedCollection}&rdquo;
+        </span>
+      )}
+
+      {showNewColInput ? (
+        <div className="flex items-center gap-1.5">
+          <input
+            type="text"
+            value={newColDraft}
+            onChange={(e) => setNewColDraft(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                e.preventDefault();
+                handleCreateInlineCollection();
+              }
+            }}
+            placeholder="New collection name..."
+            className="px-2.5 py-1 text-xs rounded-lg border-2 border-blue-400 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 outline-none w-40"
+            autoFocus
+          />
+          <button
+            type="button"
+            onClick={handleCreateInlineCollection}
+            className="px-2 py-1 text-xs font-bold bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+          >
+            Set
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setShowNewColInput(false);
+              setNewColDraft('');
+            }}
+            className="px-2 py-1 text-xs font-bold text-gray-500 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-200"
+          >
+            Cancel
+          </button>
+        </div>
+      ) : (
+        <button
+          type="button"
+          onClick={() => setShowNewColInput(true)}
+          className="px-2.5 py-1 text-xs font-bold text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-900/40 hover:bg-blue-100 dark:hover:bg-blue-900/60 border border-blue-200 dark:border-blue-800 rounded-lg flex items-center gap-1 transition"
+          title="Type a brand-new collection name"
+        >
+          <FolderPlus className="w-3.5 h-3.5" />
+          <span>New</span>
+        </button>
+      )}
+    </div>
+  );
+
   return (
     <div
       onDragOver={(e) => e.preventDefault()}
       onDrop={(e) => e.preventDefault()}
-      className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4 font-sans"
+      className="fixed inset-0 z-50 bg-black/55 backdrop-blur-xs flex items-center justify-center p-4 font-sans"
     >
-      <div className="bg-white border-2 border-gray-200 rounded-2xl max-w-4xl w-full max-h-[92vh] flex flex-col overflow-hidden shadow-2xl animate-in fade-in zoom-in-95 text-slate-900">
-
-        {/* ── Header — PNO Quiz Modal Header Style ─────────────────────────────── */}
-        <div className="px-6 py-4 border-b-2 border-gray-200 flex items-center justify-between bg-white shrink-0">
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="smart-import-title"
+        className="bg-white dark:bg-gray-800 border-2 border-gray-200 dark:border-gray-700 rounded-2xl max-w-4xl w-full max-h-[92vh] flex flex-col overflow-hidden shadow-2xl animate-in fade-in zoom-in-95 text-slate-900 dark:text-gray-100 relative"
+      >
+        {/* ── Header ─────────────────────────────────────────────────────────── */}
+        <div className="px-6 py-4 border-b-2 border-gray-200 dark:border-gray-700 flex items-center justify-between bg-white dark:bg-gray-800 shrink-0">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-blue-600 text-white flex items-center justify-center shrink-0 shadow-xs">
               <Sparkles className="w-5 h-5" />
             </div>
             <div>
               <h3
-                className="text-lg font-extrabold text-gray-900 leading-tight"
+                id="smart-import-title"
+                className="text-lg font-extrabold text-gray-900 dark:text-gray-100 leading-tight"
                 style={{ fontFamily: outfit.style.fontFamily }}
               >
-                Add New IELTS Practice Test
+                Smart Add Test
               </h3>
-              <p className="text-xs font-medium text-gray-500 mt-0.5 leading-tight">
-                Select your skill below · Paste TXT or upload JSON · Live validation &amp; instant preview
+              <p className="text-xs font-medium text-gray-500 dark:text-gray-400 mt-0.5 leading-tight">
+                Paste TXT or drop JSON/TXT · Auto-detects skill &amp; creates collection · Attach images, audio &amp; video · Opens straight in Editor
               </p>
             </div>
           </div>
           <button
-            onClick={handleClose}
-            className="text-gray-400 hover:text-gray-700 p-2 rounded-xl hover:bg-gray-100 transition shrink-0"
-            title="Close"
+            type="button"
+            onClick={requestClose}
+            className="text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 p-2 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-700 transition shrink-0"
+            title="Close (Esc)"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
-        {/* ── 4 SKILL OPTIONS SELECTOR — PNO Quiz Card Style ───────────────────── */}
-        <div className="px-6 pt-3.5 pb-3.5 bg-slate-50/70 border-b-2 border-gray-200 shrink-0">
-          <div className="flex items-center justify-between mb-2.5">
-            <span className="text-xs font-extrabold text-gray-700 uppercase tracking-wider">
-              Step 1: Choose Test Type (4 Skills)
+        {/* ── 4 SKILL OPTIONS SELECTOR ────────────────────────────────────────── */}
+        <div className="px-6 pt-3.5 pb-3.5 bg-slate-50/80 dark:bg-gray-900/60 border-b-2 border-gray-200 dark:border-gray-700 shrink-0">
+          <div className="flex flex-wrap items-center justify-between gap-2 mb-2.5">
+            <span className="text-xs font-extrabold text-gray-700 dark:text-gray-300 uppercase tracking-wider">
+              Step 1: Skill Format (Auto-detected on paste)
             </span>
-            <span className="text-[11px] text-gray-500 font-semibold">
-              Click any skill card to load its format &amp; template
-            </span>
+            {autoDetectedInfo ? (
+              <span className="text-[11px] font-bold px-2.5 py-0.5 rounded-lg bg-blue-100 dark:bg-blue-900/60 text-blue-800 dark:text-blue-200 border border-blue-200 dark:border-blue-800 flex items-center gap-1.5">
+                <Sparkles className="w-3 h-3" />
+                <span>{autoDetectedInfo}</span>
+              </span>
+            ) : (
+              <span className="text-[11px] text-gray-500 dark:text-gray-400 font-semibold">
+                Click any skill card to switch manually
+              </span>
+            )}
           </div>
 
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
@@ -637,7 +918,6 @@ C. Section 3 (Methodology)
                 title: 'Reading Test',
                 subtitle: '3 Passages · 40 Qs · 60m',
                 icon: BookOpen,
-                activeCls: 'border-blue-600 bg-blue-50/70 text-blue-950 shadow-xs',
                 badge: '8 Question Types',
               },
               {
@@ -645,24 +925,21 @@ C. Section 3 (Methodology)
                 title: 'Listening Test',
                 subtitle: '4 Sections · 40 Qs · 30m',
                 icon: Headphones,
-                activeCls: 'border-blue-600 bg-blue-50/70 text-blue-950 shadow-xs',
-                badge: 'Audio MP3 Links',
+                badge: 'Audio + Maps',
               },
               {
                 id: 'writing' as const,
                 title: 'Writing Test',
                 subtitle: 'Task 1 (150w) & Task 2 (250w)',
                 icon: PenTool,
-                activeCls: 'border-blue-600 bg-blue-50/70 text-blue-950 shadow-xs',
-                badge: 'Band 8.5+ Essays',
+                badge: 'Chart Image',
               },
               {
                 id: 'speaking' as const,
                 title: 'Speaking Test',
                 subtitle: 'Parts 1, 2, 3 · Mic Studio',
                 icon: Mic,
-                activeCls: 'border-blue-600 bg-blue-50/70 text-blue-950 shadow-xs',
-                badge: 'Cue Card Timers',
+                badge: 'Cue Card Media',
               },
             ].map((skill) => {
               const Icon = skill.icon;
@@ -672,24 +949,33 @@ C. Section 3 (Methodology)
                   key={skill.id}
                   type="button"
                   onClick={() => {
-                    setSelectedSkill(skill.id);
-                    resetState();
+                    if (selectedSkill !== skill.id) {
+                      setSelectedSkill(skill.id);
+                      setAutoDetectedInfo(null);
+                      setSuccessPreview(null);
+                      setWritingPreview(null);
+                      setSpeakingPreview(null);
+                      setErrorMsg(null);
+                      setWarningMsg(null);
+                    }
                   }}
                   className={`p-3 rounded-2xl border-2 text-left transition-all flex flex-col justify-between gap-2 relative ${
                     isSelected
-                      ? skill.activeCls
-                      : 'bg-white border-gray-200 text-gray-700 hover:border-blue-300 hover:bg-white shadow-2xs'
+                      ? 'border-blue-600 bg-blue-50/80 dark:bg-blue-950/60 text-blue-950 dark:text-blue-100 shadow-xs'
+                      : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:border-blue-300 dark:hover:border-blue-600 shadow-2xs'
                   }`}
                 >
                   <div className="flex items-center justify-between w-full">
                     <div
                       className={`p-1.5 rounded-xl shrink-0 ${
-                        isSelected ? 'bg-blue-600 text-white shadow-2xs' : 'bg-gray-100 text-gray-600'
+                        isSelected
+                          ? 'bg-blue-600 text-white shadow-2xs'
+                          : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300'
                       }`}
                     >
                       <Icon className="w-4 h-4" />
                     </div>
-                    <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-lg bg-white border border-gray-200 text-gray-600">
+                    <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-lg bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300">
                       {skill.badge}
                     </span>
                   </div>
@@ -700,7 +986,9 @@ C. Section 3 (Methodology)
                     >
                       {skill.title}
                     </div>
-                    <div className="text-[10px] font-medium text-gray-500 mt-0.5">{skill.subtitle}</div>
+                    <div className="text-[10px] font-medium text-gray-500 dark:text-gray-400 mt-0.5">
+                      {skill.subtitle}
+                    </div>
                   </div>
                 </button>
               );
@@ -708,23 +996,24 @@ C. Section 3 (Methodology)
           </div>
         </div>
 
-        {/* ── Workflow Tabs — PNO Quiz Soft-Rounded Pill Tabs ──────────────────── */}
-        <div className="px-6 py-2.5 border-b-2 border-gray-200 flex flex-wrap items-center justify-between gap-2 bg-white shrink-0">
-          <div className="flex items-center gap-1 bg-gray-100 p-1 rounded-xl border-2 border-gray-200">
+        {/* ── Workflow Tabs ──────────────────────────────────────────────────── */}
+        <div className="px-6 py-2.5 border-b-2 border-gray-200 dark:border-gray-700 flex flex-wrap items-center justify-between gap-2 bg-white dark:bg-gray-800 shrink-0">
+          <div className="flex items-center gap-1 bg-gray-100 dark:bg-gray-900 p-1 rounded-xl border-2 border-gray-200 dark:border-gray-700">
             {(
               [
-                { key: 'txt_paste', icon: FileText, label: 'Paste Export Text' },
+                { key: 'txt_paste', icon: FileText, label: 'Paste TXT' },
                 { key: 'upload', icon: Upload, label: 'Upload TXT / JSON' },
                 { key: 'guide', icon: HelpCircle, label: 'Syntax Guide' },
               ] as const
             ).map(({ key, icon: Icon, label }) => (
               <button
                 key={key}
+                type="button"
                 onClick={() => setActiveTab(key)}
                 className={`px-3.5 py-1.5 text-xs font-bold rounded-lg flex items-center gap-1.5 transition whitespace-nowrap ${
                   activeTab === key
                     ? 'bg-blue-600 text-white shadow-2xs'
-                    : 'text-gray-600 hover:text-gray-900'
+                    : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
                 }`}
               >
                 <Icon className="w-3.5 h-3.5" />
@@ -733,24 +1022,22 @@ C. Section 3 (Methodology)
             ))}
           </div>
 
-          {/* Quick Load Template Button */}
           <button
             type="button"
             onClick={handleLoadSkillTemplateToEditor}
-            className="text-xs text-blue-700 bg-blue-50 hover:bg-blue-100 border-2 border-blue-200 font-bold px-3 py-1.5 rounded-xl transition flex items-center gap-1.5 shadow-2xs"
+            className="text-xs text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-950/60 hover:bg-blue-100 dark:hover:bg-blue-900/60 border-2 border-blue-200 dark:border-blue-800 font-bold px-3 py-1.5 rounded-xl transition flex items-center gap-1.5 shadow-2xs"
             title={`Load standard template for ${selectedSkill}`}
           >
-            <Sparkles className="w-3.5 h-3.5 text-blue-600" />
-            <span>Load {selectedSkill.toUpperCase()} Sample Template</span>
+            <Sparkles className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
+            <span>Load {selectedSkill.toUpperCase()} Template</span>
           </button>
         </div>
 
         {/* ── Scrollable Body ────────────────────────────────────────────────── */}
-        <div className="flex-1 overflow-y-auto p-6 space-y-4 bg-white text-slate-800">
-
+        <div className="flex-1 overflow-y-auto p-6 space-y-4 bg-white dark:bg-gray-800 text-slate-800 dark:text-gray-200">
           {/* Error banner */}
           {errorMsg && (
-            <div className="p-3.5 bg-rose-50 border-2 border-rose-200 rounded-xl text-xs font-medium text-rose-800 flex items-start gap-2 animate-in fade-in">
+            <div className="p-3.5 bg-rose-50 dark:bg-rose-950/50 border-2 border-rose-200 dark:border-rose-800 rounded-xl text-xs font-medium text-rose-800 dark:text-rose-200 flex items-start gap-2 animate-in fade-in">
               <AlertCircle className="w-4 h-4 shrink-0 text-rose-500 mt-0.5" />
               <span className="leading-relaxed">{errorMsg}</span>
             </div>
@@ -758,19 +1045,19 @@ C. Section 3 (Methodology)
 
           {/* Warning banner */}
           {warningMsg && !errorMsg && (
-            <div className="p-3.5 bg-amber-50 border-2 border-amber-200 rounded-xl text-xs font-medium text-amber-800 flex items-start gap-2 animate-in fade-in">
+            <div className="p-3.5 bg-amber-50 dark:bg-amber-950/50 border-2 border-amber-200 dark:border-amber-800 rounded-xl text-xs font-medium text-amber-800 dark:text-amber-200 flex items-start gap-2 animate-in fade-in">
               <AlertTriangle className="w-4 h-4 shrink-0 text-amber-500 mt-0.5" />
               <span className="leading-relaxed">{warningMsg}</span>
             </div>
           )}
 
           {selectedSkill === 'speaking' && displayedSpeakingErrors.length > 0 && (
-            <div className="p-3.5 bg-rose-50 border-2 border-rose-200 rounded-xl text-xs text-rose-900 animate-in fade-in">
+            <div className="p-3.5 bg-rose-50 dark:bg-rose-950/50 border-2 border-rose-200 dark:border-rose-800 rounded-xl text-xs text-rose-900 dark:text-rose-200 animate-in fade-in">
               <div className="flex items-start gap-2 font-bold">
                 <AlertCircle className="w-4 h-4 shrink-0 text-rose-500 mt-0.5" />
                 <span>Speaking TXT needs correction before it can be saved.</span>
               </div>
-              <ul className="mt-2 space-y-1 pl-6 list-disc text-rose-800">
+              <ul className="mt-2 space-y-1 pl-6 list-disc">
                 {displayedSpeakingErrors.map((error, index) => (
                   <li key={`${error.line}-${error.message}-${index}`}>
                     Line {error.line}: {error.message}
@@ -780,228 +1067,504 @@ C. Section 3 (Methodology)
             </div>
           )}
 
-          {/* ── Reading / Listening Success Preview Card ──────────────────────── */}
+          {/* ── Reading / Listening Preview + Quick Media Attach ──────────────── */}
           {successPreview && (
-            <div className="p-5 bg-emerald-50/70 border-2 border-emerald-200 rounded-2xl text-xs text-emerald-900 space-y-3.5 animate-in fade-in shadow-2xs">
-              <div className="flex items-center justify-between border-b-2 border-emerald-200/60 pb-2.5">
-                <span className="font-extrabold text-sm text-emerald-900 flex items-center gap-2">
-                  <Check className="w-4 h-4 text-emerald-600" />
-                  {selectedSkill === 'listening' ? 'Listening Test Parsed Successfully!' : 'Reading Test Parsed Successfully!'}
+            <div className="p-5 bg-emerald-50/70 dark:bg-emerald-950/30 border-2 border-emerald-200 dark:border-emerald-800 rounded-2xl text-xs text-emerald-950 dark:text-emerald-100 space-y-4 animate-in fade-in shadow-2xs">
+              <div className="flex flex-wrap items-center justify-between gap-2 border-b-2 border-emerald-200/60 dark:border-emerald-800/60 pb-2.5">
+                <span className="font-extrabold text-sm flex items-center gap-2">
+                  <Check className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+                  {selectedSkill === 'listening'
+                    ? 'Listening Test Ready — Attach Audio / Images / Video'
+                    : 'Reading Test Ready — Attach Images / Video (Optional)'}
                 </span>
-                <span className="text-[11px] bg-emerald-100 text-emerald-800 px-2.5 py-0.5 rounded-lg border border-emerald-200 font-bold">
+                <span className="text-[11px] bg-emerald-100 dark:bg-emerald-900 text-emerald-800 dark:text-emerald-200 px-2.5 py-0.5 rounded-lg border border-emerald-200 dark:border-emerald-700 font-bold">
                   {successPreview.category}
                 </span>
               </div>
 
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
-                <div className="bg-white rounded-xl border-2 border-emerald-200/60 p-3 text-center">
-                  <div className="text-lg font-extrabold text-emerald-700">{successPreview.parts.length}</div>
-                  <div className="text-[10px] text-slate-500 font-bold">{selectedSkill === 'listening' ? 'Sections' : 'Parts'}</div>
+                <div className="bg-white dark:bg-gray-900 rounded-xl border-2 border-emerald-200/60 dark:border-emerald-800/60 p-3 text-center">
+                  <div className="text-lg font-extrabold text-emerald-700 dark:text-emerald-400">
+                    {successPreview.parts.length}
+                  </div>
+                  <div className="text-[10px] text-slate-500 dark:text-gray-400 font-bold">
+                    {selectedSkill === 'listening' ? 'Sections' : 'Parts'}
+                  </div>
                 </div>
-                <div className="bg-white rounded-xl border-2 border-emerald-200/60 p-3 text-center">
-                  <div className="text-lg font-extrabold text-emerald-700">{totalQuestions}</div>
-                  <div className="text-[10px] text-slate-500 font-bold">Questions</div>
+                <div className="bg-white dark:bg-gray-900 rounded-xl border-2 border-emerald-200/60 dark:border-emerald-800/60 p-3 text-center">
+                  <div className="text-lg font-extrabold text-emerald-700 dark:text-emerald-400">
+                    {totalQuestions}
+                  </div>
+                  <div className="text-[10px] text-slate-500 dark:text-gray-400 font-bold">
+                    Questions
+                  </div>
                 </div>
-                <div className="bg-white rounded-xl border-2 border-emerald-200/60 p-3 text-center">
-                  <div className={`text-lg font-extrabold ${answeredQuestionsCount === totalQuestions ? 'text-emerald-700' : 'text-amber-600'}`}>
+                <div className="bg-white dark:bg-gray-900 rounded-xl border-2 border-emerald-200/60 dark:border-emerald-800/60 p-3 text-center">
+                  <div
+                    className={`text-lg font-extrabold ${
+                      answeredQuestionsCount === totalQuestions
+                        ? 'text-emerald-700 dark:text-emerald-400'
+                        : 'text-amber-600 dark:text-amber-400'
+                    }`}
+                  >
                     {answeredQuestionsCount} / {totalQuestions}
                   </div>
-                  <div className="text-[10px] text-slate-500 font-bold">Answers Set</div>
+                  <div className="text-[10px] text-slate-500 dark:text-gray-400 font-bold">
+                    Answers Set
+                  </div>
                 </div>
-                <div className="bg-white rounded-xl border-2 border-emerald-200/60 p-3 text-center">
-                  <div className="text-lg font-extrabold text-emerald-700">
+                <div className="bg-white dark:bg-gray-900 rounded-xl border-2 border-emerald-200/60 dark:border-emerald-800/60 p-3 text-center">
+                  <div className="text-lg font-extrabold text-emerald-700 dark:text-emerald-400">
                     {explainedQuestionsCount} / {totalQuestions}
                   </div>
-                  <div className="text-[10px] text-slate-500 font-bold">Explanations</div>
+                  <div className="text-[10px] text-slate-500 dark:text-gray-400 font-bold">
+                    Explanations
+                  </div>
                 </div>
               </div>
 
               {answeredQuestionsCount < totalQuestions && (
-                <div className="p-3 bg-amber-50 border-2 border-amber-200 rounded-xl text-amber-900 text-xs flex items-center gap-2">
-                  <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
+                <div className="p-3 bg-amber-50 dark:bg-amber-950/50 border-2 border-amber-200 dark:border-amber-800 rounded-xl text-amber-900 dark:text-amber-200 text-xs flex items-center gap-2">
+                  <AlertTriangle className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0" />
                   <span>
-                    <strong>Heads up:</strong> {totalQuestions - answeredQuestionsCount} question(s) are missing an answer key. You can attach an answer key below or set them in the editor.
+                    <strong>Heads up:</strong> {totalQuestions - answeredQuestionsCount} question(s) are missing an answer key. Click <strong>Save &amp; Open Editor</strong> to fill them in quickly.
                   </span>
                 </div>
               )}
 
-              <div className="space-y-2 text-xs">
-                <div className="flex items-baseline gap-1.5">
-                  <span className="font-bold text-slate-600 shrink-0">Title:</span>
-                  <span className="font-extrabold text-slate-900 truncate">{successPreview.title}</span>
+              {/* Quick Media Attach per Part/Section */}
+              <div className="bg-white dark:bg-gray-900 rounded-xl border-2 border-emerald-200/60 dark:border-emerald-800/60 p-3.5 space-y-3">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <span className="font-extrabold text-xs text-slate-900 dark:text-gray-100">
+                    Attach Images, Audio or Video per {selectedSkill === 'listening' ? 'Section' : 'Part'}
+                  </span>
+                  <span className="text-[11px] text-slate-500 dark:text-gray-400">
+                    Tip: Press <kbd className="px-1.5 py-0.5 rounded bg-gray-100 dark:bg-gray-800 border border-gray-300 dark:border-gray-600 font-mono text-[10px]">Ctrl+V</kbd> to paste a screenshot into the selected part
+                  </span>
                 </div>
-                <div className="flex items-center gap-2">
-                  <span className="font-bold text-slate-600 shrink-0">Save to Collection:</span>
-                  <select
-                    value={selectedCollection}
-                    onChange={(e) => setSelectedCollection(e.target.value)}
-                    className="flex-1 bg-white border-2 border-slate-200 rounded-xl px-3 py-1.5 text-xs text-slate-900 font-bold outline-none focus:border-blue-600"
-                  >
-                    {collections.map((c) => (
-                      <option key={c.id} value={c.name}>
-                        {c.name}
-                      </option>
-                    ))}
-                  </select>
+
+                <div className="flex flex-wrap gap-1.5">
+                  {successPreview.parts.map((p, idx) => {
+                    const qCount = (p.questionGroups || []).reduce(
+                      (s, g) => s + (g.questions || []).length,
+                      0
+                    );
+                    const hasMedia = Boolean(p.audioUrl || p.imageUrl || p.videoUrl);
+                    return (
+                      <button
+                        key={p.id || idx}
+                        type="button"
+                        onClick={() => setActiveMediaPartIdx(idx)}
+                        className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition flex items-center gap-1.5 ${
+                          activeMediaPartIdx === idx
+                            ? 'bg-blue-600 text-white border-blue-600'
+                            : 'bg-slate-50 dark:bg-gray-800 text-slate-700 dark:text-gray-300 border-gray-200 dark:border-gray-700 hover:border-blue-400'
+                        }`}
+                      >
+                        <span>
+                          {selectedSkill === 'listening' ? `Sec ${p.partNumber}` : `Part ${p.partNumber}`} ({qCount} Qs)
+                        </span>
+                        {hasMedia && (
+                          <span className="w-2 h-2 rounded-full bg-emerald-400" title="Has media" />
+                        )}
+                      </button>
+                    );
+                  })}
                 </div>
+
+                {successPreview.parts[activeMediaPartIdx] && (() => {
+                  const p = successPreview.parts[activeMediaPartIdx]!;
+                  return (
+                    <div className="p-3 rounded-xl bg-slate-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 space-y-2.5">
+                      <div className="text-xs font-bold text-slate-800 dark:text-gray-200">
+                        {p.title || `Part ${p.partNumber}`}
+                      </div>
+
+                      {selectedSkill === 'listening' && (
+                        <div className="flex flex-col sm:flex-row gap-2">
+                          <input
+                            type="text"
+                            value={p.audioUrl || ''}
+                            onChange={(e) =>
+                              handleUpdatePreviewPartMedia(activeMediaPartIdx, 'audioUrl', e.target.value)
+                            }
+                            placeholder="Audio URL (.mp3, .m4a, .mp4)..."
+                            className="flex-1 px-2.5 py-1.5 text-xs rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 font-mono"
+                          />
+                          <label className="px-3 py-1.5 text-xs font-bold rounded-lg bg-blue-600 hover:bg-blue-700 text-white cursor-pointer flex items-center justify-center gap-1.5 shrink-0">
+                            {uploadingMediaKey === `audio-${activeMediaPartIdx}` ? (
+                              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                            ) : (
+                              <Music className="w-3.5 h-3.5" />
+                            )}
+                            <span>Upload Audio</span>
+                            <input
+                              type="file"
+                              accept="audio/*,video/mp4"
+                              className="hidden"
+                              onChange={(e) => {
+                                const f = e.target.files?.[0];
+                                if (f) void handleAttachMediaFile(f, 'audio', activeMediaPartIdx);
+                                e.target.value = '';
+                              }}
+                            />
+                          </label>
+                        </div>
+                      )}
+
+                      <div className="flex flex-col sm:flex-row gap-2">
+                        <input
+                          type="text"
+                          value={p.imageUrl || ''}
+                          onChange={(e) =>
+                            handleUpdatePreviewPartMedia(activeMediaPartIdx, 'imageUrl', e.target.value)
+                          }
+                          placeholder="Image / Map / Diagram URL (or press Ctrl+V)..."
+                          className="flex-1 px-2.5 py-1.5 text-xs rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 font-mono"
+                        />
+                        <label className="px-3 py-1.5 text-xs font-bold rounded-lg bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-600 hover:border-blue-500 text-slate-700 dark:text-gray-200 cursor-pointer flex items-center justify-center gap-1.5 shrink-0">
+                          {uploadingMediaKey === `image-${activeMediaPartIdx}` ? (
+                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                          ) : (
+                            <ImageIcon className="w-3.5 h-3.5" />
+                          )}
+                          <span>Upload Image</span>
+                          <input
+                            type="file"
+                            accept="image/*"
+                            className="hidden"
+                            onChange={(e) => {
+                              const f = e.target.files?.[0];
+                              if (f) void handleAttachMediaFile(f, 'image', activeMediaPartIdx);
+                              e.target.value = '';
+                            }}
+                          />
+                        </label>
+                      </div>
+
+                      <div className="flex flex-col sm:flex-row gap-2">
+                        <input
+                          type="text"
+                          value={p.videoUrl || ''}
+                          onChange={(e) =>
+                            handleUpdatePreviewPartMedia(activeMediaPartIdx, 'videoUrl', e.target.value)
+                          }
+                          placeholder="Video URL (YouTube, .mp4, .webm)..."
+                          className="flex-1 px-2.5 py-1.5 text-xs rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 font-mono"
+                        />
+                        <label className="px-3 py-1.5 text-xs font-bold rounded-lg bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-600 hover:border-blue-500 text-slate-700 dark:text-gray-200 cursor-pointer flex items-center justify-center gap-1.5 shrink-0">
+                          {uploadingMediaKey === `video-${activeMediaPartIdx}` ? (
+                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                          ) : (
+                            <Video className="w-3.5 h-3.5" />
+                          )}
+                          <span>Upload Video</span>
+                          <input
+                            type="file"
+                            accept="video/mp4,video/webm,video/quicktime"
+                            className="hidden"
+                            onChange={(e) => {
+                              const f = e.target.files?.[0];
+                              if (f) void handleAttachMediaFile(f, 'video', activeMediaPartIdx);
+                              e.target.value = '';
+                            }}
+                          />
+                        </label>
+                      </div>
+
+                      {(p.imageUrl || p.videoUrl) && (
+                        <MediaEmbed imageUrl={p.imageUrl} videoUrl={p.videoUrl} alt={p.title} />
+                      )}
+                    </div>
+                  );
+                })()}
               </div>
 
-              <div className="pt-2 border-t-2 border-emerald-200/60 flex flex-wrap items-center justify-end gap-2">
+              <div className="space-y-2.5 text-xs">
+                <div className="flex items-baseline gap-1.5">
+                  <span className="font-bold text-slate-600 dark:text-gray-400 shrink-0">Title:</span>
+                  <span className="font-extrabold text-slate-900 dark:text-gray-100 truncate">
+                    {successPreview.title}
+                  </span>
+                </div>
+                {renderCollectionSelector()}
+              </div>
+
+              <div className="pt-2 border-t-2 border-emerald-200/60 dark:border-emerald-800/60 flex flex-wrap items-center justify-end gap-2">
                 <button
                   type="button"
-                  onClick={resetState}
-                  className="px-3 py-1.5 text-xs text-slate-500 hover:text-slate-800 transition mr-auto font-bold flex items-center gap-1"
+                  onClick={() => {
+                    setSuccessPreview(null);
+                    setActiveTab('txt_paste');
+                  }}
+                  className="px-3 py-1.5 text-xs text-slate-600 dark:text-gray-300 hover:text-slate-900 dark:hover:text-white transition mr-auto font-bold flex items-center gap-1"
                 >
-                  ← Back
+                  ← Back to Text
                 </button>
                 <button
                   type="button"
-                  onClick={handleSaveAndEdit}
-                  className="px-3.5 py-2 bg-white hover:bg-slate-50 text-slate-700 border-2 border-slate-200 text-xs font-bold rounded-xl shadow-2xs transition flex items-center gap-1.5"
-                >
-                  <Edit3 className="w-3.5 h-3.5" />
-                  <span>Edit in Visual Editor</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={handleSaveAndReturn}
-                  className="px-3.5 py-2 bg-slate-800 hover:bg-slate-900 text-white text-xs font-bold rounded-xl shadow-xs transition flex items-center gap-1.5"
+                  onClick={() => finalizePreview('save_only')}
+                  className="px-3.5 py-2 bg-white dark:bg-gray-900 hover:bg-slate-50 dark:hover:bg-gray-800 text-slate-700 dark:text-gray-200 border-2 border-slate-200 dark:border-gray-700 text-xs font-bold rounded-xl shadow-2xs transition flex items-center gap-1.5"
                 >
                   <Check className="w-3.5 h-3.5" />
                   <span>Save &amp; Finish</span>
                 </button>
                 <button
                   type="button"
-                  onClick={handleSaveAndTakeTest}
-                  className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl shadow-xs transition flex items-center gap-1.5"
+                  onClick={() => finalizePreview('take_test')}
+                  className="px-3.5 py-2 bg-slate-800 dark:bg-gray-700 hover:bg-slate-900 dark:hover:bg-gray-600 text-white text-xs font-bold rounded-xl shadow-xs transition flex items-center gap-1.5"
                 >
                   <Play className="w-3.5 h-3.5 fill-white" />
                   <span>Save &amp; Start Test</span>
                 </button>
+                <button
+                  type="button"
+                  onClick={() => finalizePreview('edit')}
+                  className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl shadow-xs transition flex items-center gap-1.5"
+                >
+                  <Edit3 className="w-3.5 h-3.5" />
+                  <span>Save &amp; Open Editor</span>
+                </button>
               </div>
             </div>
           )}
 
-          {/* ── Writing Success Preview Card ──────────────────────────────────── */}
+          {/* ── Writing Preview + Chart Image Attach ──────────────────────────── */}
           {writingPreview && (
-            <div className="p-5 bg-emerald-50/70 border-2 border-emerald-200 rounded-2xl text-xs text-emerald-900 space-y-3.5 animate-in fade-in shadow-2xs">
-              <div className="flex items-center justify-between border-b-2 border-emerald-200/60 pb-2.5">
-                <span className="font-extrabold text-sm text-emerald-900 flex items-center gap-2">
-                  <Check className="w-4 h-4 text-emerald-600" />
-                  Writing Test Parsed Successfully!
+            <div className="p-5 bg-emerald-50/70 dark:bg-emerald-950/30 border-2 border-emerald-200 dark:border-emerald-800 rounded-2xl text-xs text-emerald-950 dark:text-emerald-100 space-y-3.5 animate-in fade-in shadow-2xs">
+              <div className="flex items-center justify-between border-b-2 border-emerald-200/60 dark:border-emerald-800/60 pb-2.5">
+                <span className="font-extrabold text-sm flex items-center gap-2">
+                  <Check className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+                  Writing Test Ready — Attach Task 1 Chart Image
                 </span>
-                <span className="text-[11px] bg-emerald-100 text-emerald-800 px-2.5 py-0.5 rounded-lg border border-emerald-200 font-bold">
-                  Task 1 &amp; Task 2 Ready
+                <span className="text-[11px] bg-emerald-100 dark:bg-emerald-900 text-emerald-800 dark:text-emerald-200 px-2.5 py-0.5 rounded-lg border border-emerald-200 dark:border-emerald-700 font-bold">
+                  Task 1 &amp; Task 2
                 </span>
               </div>
 
-              <div className="grid grid-cols-3 gap-3">
-                <div className="bg-white rounded-xl border-2 border-emerald-200/60 p-3 text-center">
-                  <div className="text-lg font-extrabold text-emerald-700">2 Tasks</div>
-                  <div className="text-[10px] text-slate-500 font-bold">Task 1 + Task 2</div>
-                </div>
-                <div className="bg-white rounded-xl border-2 border-emerald-200/60 p-3 text-center">
-                  <div className="text-lg font-extrabold text-emerald-700">400+</div>
-                  <div className="text-[10px] text-slate-500 font-bold">Target Words (150+250)</div>
-                </div>
-                <div className="bg-white rounded-xl border-2 border-emerald-200/60 p-3 text-center">
-                  <div className="text-lg font-extrabold text-emerald-700">{writingPreview.durationMinutes || 60}</div>
-                  <div className="text-[10px] text-slate-500 font-bold">Minutes</div>
-                </div>
+              <div className="space-y-1.5 bg-white dark:bg-gray-900 p-3.5 rounded-xl border-2 border-emerald-200/60 dark:border-emerald-800/60 text-xs">
+                <div><strong>Title:</strong> {writingPreview.title}</div>
+                <div><strong>Task 1:</strong> {writingPreview.task1.title} ({writingPreview.task1.chartType || 'bar'})</div>
+                <div><strong>Task 2:</strong> {writingPreview.task2.title}</div>
               </div>
 
-              <div className="space-y-1.5 bg-white p-3.5 rounded-xl border-2 border-emerald-200/60 text-xs">
-                <div><strong className="text-slate-900">Title:</strong> {writingPreview.title}</div>
-                <div><strong className="text-slate-900">Task 1:</strong> {writingPreview.task1.title} ({writingPreview.task1.chartType || 'bar'} chart)</div>
-                <div><strong className="text-slate-900">Task 2:</strong> {writingPreview.task2.title}</div>
-                <div><strong className="text-slate-900">Collection:</strong> {selectedCollection}</div>
+              {/* Quick Chart Image Upload */}
+              <div className="bg-white dark:bg-gray-900 p-3.5 rounded-xl border-2 border-emerald-200/60 dark:border-emerald-800/60 space-y-2.5">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <span className="font-bold text-xs">Task 1 Chart / Diagram Image (or press Ctrl+V)</span>
+                  {writingPreview.task1.imageUrl && (
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setWritingPreview((prev) =>
+                          prev ? { ...prev, task1: { ...prev.task1, imageUrl: undefined } } : prev
+                        )
+                      }
+                      className="text-rose-600 hover:underline flex items-center gap-1 text-[11px] font-bold"
+                    >
+                      <Trash2 className="w-3 h-3" />
+                      <span>Remove</span>
+                    </button>
+                  )}
+                </div>
+                <div className="flex flex-col sm:flex-row gap-2">
+                  <input
+                    type="text"
+                    value={writingPreview.task1.imageUrl || ''}
+                    onChange={(e) =>
+                      setWritingPreview((prev) =>
+                        prev ? { ...prev, task1: { ...prev.task1, imageUrl: e.target.value } } : prev
+                      )
+                    }
+                    placeholder="Paste image URL or upload chart file..."
+                    className="flex-1 px-2.5 py-1.5 text-xs rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 font-mono"
+                  />
+                  <label className="px-3 py-1.5 text-xs font-bold rounded-lg bg-blue-600 hover:bg-blue-700 text-white cursor-pointer flex items-center justify-center gap-1.5 shrink-0">
+                    {uploadingMediaKey === 'image-0' ? (
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    ) : (
+                      <ImageIcon className="w-3.5 h-3.5" />
+                    )}
+                    <span>Upload Chart</span>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={(e) => {
+                        const f = e.target.files?.[0];
+                        if (f) void handleAttachMediaFile(f, 'image', 0);
+                        e.target.value = '';
+                      }}
+                    />
+                  </label>
+                </div>
+                {writingPreview.task1.imageUrl && (
+                  <MediaEmbed imageUrl={writingPreview.task1.imageUrl} alt="Task 1 chart" />
+                )}
               </div>
 
-              <div className="pt-2 border-t-2 border-emerald-200/60 flex flex-wrap items-center justify-end gap-2">
+              {renderCollectionSelector()}
+
+              <div className="pt-2 border-t-2 border-emerald-200/60 dark:border-emerald-800/60 flex flex-wrap items-center justify-end gap-2">
                 <button
                   type="button"
-                  onClick={resetState}
-                  className="px-3 py-1.5 text-xs text-slate-500 hover:text-slate-800 transition mr-auto font-bold"
+                  onClick={() => {
+                    setWritingPreview(null);
+                    setActiveTab('txt_paste');
+                  }}
+                  className="px-3 py-1.5 text-xs text-slate-600 dark:text-gray-300 hover:text-slate-900 dark:hover:text-white transition mr-auto font-bold"
                 >
-                  ← Back
+                  ← Back to Text
                 </button>
                 <button
                   type="button"
-                  onClick={handleSaveAndEdit}
-                  className="px-3.5 py-2 bg-white hover:bg-slate-50 text-slate-700 border-2 border-slate-200 text-xs font-bold rounded-xl shadow-2xs transition flex items-center gap-1.5"
-                >
-                  <Edit3 className="w-3.5 h-3.5" />
-                  <span>Open in Visual Writing Editor</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={handleSaveAndReturn}
-                  className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl shadow-xs transition flex items-center gap-1.5"
+                  onClick={() => finalizePreview('save_only')}
+                  className="px-3.5 py-2 bg-white dark:bg-gray-900 hover:bg-slate-50 dark:hover:bg-gray-800 text-slate-700 dark:text-gray-200 border-2 border-slate-200 dark:border-gray-700 text-xs font-bold rounded-xl shadow-2xs transition flex items-center gap-1.5"
                 >
                   <Check className="w-3.5 h-3.5" />
-                  <span>Save Writing Test</span>
+                  <span>Save &amp; Finish</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => finalizePreview('edit')}
+                  className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl shadow-xs transition flex items-center gap-1.5"
+                >
+                  <Edit3 className="w-3.5 h-3.5" />
+                  <span>Save &amp; Open Editor</span>
                 </button>
               </div>
             </div>
           )}
 
-          {/* ── Speaking Success Preview Card ─────────────────────────────────── */}
+          {/* ── Speaking Preview + Cue Card Media Attach ──────────────────────── */}
           {speakingPreview && (
-            <div className="p-5 bg-emerald-50/70 border-2 border-emerald-200 rounded-2xl text-xs text-emerald-900 space-y-3.5 animate-in fade-in shadow-2xs">
-              <div className="flex items-center justify-between border-b-2 border-emerald-200/60 pb-2.5">
-                <span className="font-extrabold text-sm text-emerald-900 flex items-center gap-2">
-                  <Check className="w-4 h-4 text-emerald-600" />
-                  Speaking Test Parsed Successfully!
+            <div className="p-5 bg-emerald-50/70 dark:bg-emerald-950/30 border-2 border-emerald-200 dark:border-emerald-800 rounded-2xl text-xs text-emerald-950 dark:text-emerald-100 space-y-3.5 animate-in fade-in shadow-2xs">
+              <div className="flex items-center justify-between border-b-2 border-emerald-200/60 dark:border-emerald-800/60 pb-2.5">
+                <span className="font-extrabold text-sm flex items-center gap-2">
+                  <Check className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+                  Speaking Test Ready — Optional Cue Card Media
                 </span>
-                <span className="text-[11px] bg-emerald-100 text-emerald-800 px-2.5 py-0.5 rounded-lg border border-emerald-200 font-bold">
-                  Parts 1, 2 &amp; 3 Ready
+                <span className="text-[11px] bg-emerald-100 dark:bg-emerald-900 text-emerald-800 dark:text-emerald-200 px-2.5 py-0.5 rounded-lg border border-emerald-200 dark:border-emerald-700 font-bold">
+                  Parts 1, 2 &amp; 3
                 </span>
               </div>
 
-              <div className="grid grid-cols-3 gap-3">
-                <div className="bg-white rounded-xl border-2 border-emerald-200/60 p-3 text-center">
-                  <div className="text-lg font-extrabold text-emerald-700">{speakingPreview.part1Questions.length}</div>
-                  <div className="text-[10px] text-slate-500 font-bold">Part 1 Questions</div>
+              <div className="space-y-1.5 bg-white dark:bg-gray-900 p-3.5 rounded-xl border-2 border-emerald-200/60 dark:border-emerald-800/60 text-xs">
+                <div><strong>Title:</strong> {speakingPreview.title}</div>
+                <div>
+                  <strong>Part 1:</strong> {speakingPreview.part1Questions.length} Qs ·{' '}
+                  <strong>Part 3:</strong> {speakingPreview.part3Questions.length} Qs
                 </div>
-                <div className="bg-white rounded-xl border-2 border-emerald-200/60 p-3 text-center">
-                  <div className="text-lg font-extrabold text-emerald-700">1 Cue Card</div>
-                  <div className="text-[10px] text-slate-500 font-bold">Part 2 with Bullets</div>
-                </div>
-                <div className="bg-white rounded-xl border-2 border-emerald-200/60 p-3 text-center">
-                  <div className="text-lg font-extrabold text-emerald-700">{speakingPreview.part3Questions.length}</div>
-                  <div className="text-[10px] text-slate-500 font-bold">Part 3 Questions</div>
-                </div>
+                <div><strong>Cue Card:</strong> &ldquo;{speakingPreview.part2Question.questionText}&rdquo;</div>
               </div>
 
-              <div className="space-y-1.5 bg-white p-3.5 rounded-xl border-2 border-emerald-200/60 text-xs">
-                <div><strong className="text-slate-900">Title:</strong> {speakingPreview.title}</div>
-                <div><strong className="text-slate-900">Part 2 Cue Card:</strong> &ldquo;{speakingPreview.part2Question.questionText}&rdquo;</div>
-                <div><strong className="text-slate-900">Collection:</strong> {selectedCollection}</div>
+              {/* Optional Cue Card Image / Video */}
+              <div className="bg-white dark:bg-gray-900 p-3.5 rounded-xl border-2 border-emerald-200/60 dark:border-emerald-800/60 space-y-2.5">
+                <span className="font-bold text-xs block">
+                  Part 2 Visual / Video Prompt (Optional · Ctrl+V for image)
+                </span>
+                <div className="flex flex-col sm:flex-row gap-2">
+                  <input
+                    type="text"
+                    value={speakingPreview.part2Question.imageUrl || ''}
+                    onChange={(e) =>
+                      setSpeakingPreview((prev) =>
+                        prev
+                          ? {
+                              ...prev,
+                              part2Question: { ...prev.part2Question, imageUrl: e.target.value },
+                            }
+                          : prev
+                      )
+                    }
+                    placeholder="Image URL..."
+                    className="flex-1 px-2.5 py-1.5 text-xs rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 font-mono"
+                  />
+                  <label className="px-3 py-1.5 text-xs font-bold rounded-lg bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 hover:border-blue-500 cursor-pointer flex items-center justify-center gap-1.5 shrink-0">
+                    <ImageIcon className="w-3.5 h-3.5" />
+                    <span>Upload Image</span>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={(e) => {
+                        const f = e.target.files?.[0];
+                        if (f) void handleAttachMediaFile(f, 'image', 0);
+                        e.target.value = '';
+                      }}
+                    />
+                  </label>
+                </div>
+                <div className="flex flex-col sm:flex-row gap-2">
+                  <input
+                    type="text"
+                    value={speakingPreview.part2Question.videoUrl || ''}
+                    onChange={(e) =>
+                      setSpeakingPreview((prev) =>
+                        prev
+                          ? {
+                              ...prev,
+                              part2Question: { ...prev.part2Question, videoUrl: e.target.value },
+                            }
+                          : prev
+                      )
+                    }
+                    placeholder="Video URL (YouTube, .mp4, .webm)..."
+                    className="flex-1 px-2.5 py-1.5 text-xs rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 font-mono"
+                  />
+                  <label className="px-3 py-1.5 text-xs font-bold rounded-lg bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 hover:border-blue-500 cursor-pointer flex items-center justify-center gap-1.5 shrink-0">
+                    <Video className="w-3.5 h-3.5" />
+                    <span>Upload Video</span>
+                    <input
+                      type="file"
+                      accept="video/mp4,video/webm,video/quicktime"
+                      className="hidden"
+                      onChange={(e) => {
+                        const f = e.target.files?.[0];
+                        if (f) void handleAttachMediaFile(f, 'video', 0);
+                        e.target.value = '';
+                      }}
+                    />
+                  </label>
+                </div>
+                {(speakingPreview.part2Question.imageUrl ||
+                  speakingPreview.part2Question.videoUrl) && (
+                  <MediaEmbed
+                    imageUrl={speakingPreview.part2Question.imageUrl}
+                    videoUrl={speakingPreview.part2Question.videoUrl}
+                    alt="Speaking visual"
+                  />
+                )}
               </div>
 
-              <div className="pt-2 border-t-2 border-emerald-200/60 flex flex-wrap items-center justify-end gap-2">
+              {renderCollectionSelector()}
+
+              <div className="pt-2 border-t-2 border-emerald-200/60 dark:border-emerald-800/60 flex flex-wrap items-center justify-end gap-2">
                 <button
                   type="button"
-                  onClick={resetState}
-                  className="px-3 py-1.5 text-xs text-slate-500 hover:text-slate-800 transition mr-auto font-bold"
+                  onClick={() => {
+                    setSpeakingPreview(null);
+                    setActiveTab('txt_paste');
+                  }}
+                  className="px-3 py-1.5 text-xs text-slate-600 dark:text-gray-300 hover:text-slate-900 dark:hover:text-white transition mr-auto font-bold"
                 >
-                  ← Back
+                  ← Back to Text
                 </button>
                 <button
                   type="button"
-                  onClick={handleSaveAndEdit}
-                  className="px-3.5 py-2 bg-white hover:bg-slate-50 text-slate-700 border-2 border-slate-200 text-xs font-bold rounded-xl shadow-2xs transition flex items-center gap-1.5"
-                >
-                  <Edit3 className="w-3.5 h-3.5" />
-                  <span>Open in Visual Speaking Editor</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={handleSaveAndReturn}
-                  className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl shadow-xs transition flex items-center gap-1.5"
+                  onClick={() => finalizePreview('save_only')}
+                  className="px-3.5 py-2 bg-white dark:bg-gray-900 hover:bg-slate-50 dark:hover:bg-gray-800 text-slate-700 dark:text-gray-200 border-2 border-slate-200 dark:border-gray-700 text-xs font-bold rounded-xl shadow-2xs transition flex items-center gap-1.5"
                 >
                   <Check className="w-3.5 h-3.5" />
-                  <span>Save Speaking Test</span>
+                  <span>Save &amp; Finish</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => finalizePreview('edit')}
+                  className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl shadow-xs transition flex items-center gap-1.5"
+                >
+                  <Edit3 className="w-3.5 h-3.5" />
+                  <span>Save &amp; Open Editor</span>
                 </button>
               </div>
             </div>
@@ -1018,8 +1581,8 @@ C. Section 3 (Methodology)
                 onClick={() => fileInputRef.current?.click()}
                 className={`border-2 border-dashed rounded-2xl p-8 text-center cursor-pointer transition flex flex-col items-center justify-center space-y-3 ${
                   isDragOver
-                    ? 'border-blue-500 bg-blue-50/50'
-                    : 'border-gray-300 hover:border-blue-400 bg-slate-50/50 hover:bg-slate-50'
+                    ? 'border-blue-500 bg-blue-50/50 dark:bg-blue-950/30'
+                    : 'border-gray-300 dark:border-gray-600 hover:border-blue-400 bg-slate-50/50 dark:bg-gray-900/40 hover:bg-slate-50 dark:hover:bg-gray-900/70'
                 }`}
               >
                 <input
@@ -1029,27 +1592,20 @@ C. Section 3 (Methodology)
                   onChange={handleFileChange}
                   className="hidden"
                 />
-                <div className="w-12 h-12 rounded-2xl bg-blue-100 text-blue-600 flex items-center justify-center shadow-xs">
+                <div className="w-12 h-12 rounded-2xl bg-blue-100 dark:bg-blue-900/60 text-blue-600 dark:text-blue-300 flex items-center justify-center shadow-xs">
                   <Upload className="w-6 h-6" />
                 </div>
                 <div>
                   <h4
-                    className="text-sm font-extrabold text-gray-900"
+                    className="text-sm font-extrabold text-gray-900 dark:text-gray-100"
                     style={{ fontFamily: outfit.style.fontFamily }}
                   >
-                    Click to browse or drop your {selectedSkill.toUpperCase()} file here
+                    Click to browse or drop your .txt / .json file here
                   </h4>
-                  <p className="text-xs text-gray-500 mt-1">
-                    Accepts standard <code className="bg-gray-100 px-1.5 py-0.5 rounded-md text-gray-700 font-mono">.txt</code> or JSON backup files
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                    Skill &amp; media tags are detected automatically — then attach images, audio or video on the next screen
                   </p>
                 </div>
-              </div>
-
-              {/* Supported formats guidance */}
-              <div className="p-4 bg-slate-50 border-2 border-gray-200 rounded-2xl text-xs space-y-1 text-gray-600">
-                <span className="font-extrabold text-gray-800 block">Accepted File Types:</span>
-                <div>• <strong>.txt:</strong> Clean text formatted according to the {selectedSkill.toUpperCase()} syntax guide.</div>
-                <div>• <strong>.json:</strong> Exported JSON backup files.</div>
               </div>
             </div>
           )}
@@ -1057,15 +1613,17 @@ C. Section 3 (Methodology)
           {/* ── TAB 2: PASTE TXT CONTENT ──────────────────────────────────────── */}
           {activeTab === 'txt_paste' && !successPreview && !writingPreview && !speakingPreview && (
             <div className="space-y-3.5">
-              {/* Audio Upload Bar for Listening */}
               {selectedSkill === 'listening' && (
-                <div className="p-3.5 bg-blue-50/70 border-2 border-blue-200 rounded-2xl flex items-center justify-between gap-3 text-xs">
+                <div className="p-3.5 bg-blue-50/70 dark:bg-blue-950/40 border-2 border-blue-200 dark:border-blue-800 rounded-2xl flex items-center justify-between gap-3 text-xs">
                   <div className="flex items-center gap-2.5 min-w-0">
-                    <Music className="w-4 h-4 text-blue-600 shrink-0" />
+                    <Music className="w-4 h-4 text-blue-600 dark:text-blue-400 shrink-0" />
                     <div>
-                      <span className="font-extrabold text-slate-800 block">Audio Recording Track:</span>
-                      <span className="text-[11px] text-slate-500 truncate block">
-                        {audioNotice || 'Upload an audio recording file (.mp3 / .m4a / .wav) to save directly to web folder'}
+                      <span className="font-extrabold text-slate-800 dark:text-gray-100 block">
+                        Quick Listening Audio Upload:
+                      </span>
+                      <span className="text-[11px] text-slate-500 dark:text-gray-400 truncate block">
+                        {audioNotice ||
+                          'Upload an audio file (.mp3 / .m4a / .wav) now or attach per-section after clicking Check & Preview'}
                       </span>
                     </div>
                   </div>
@@ -1100,42 +1658,57 @@ C. Section 3 (Methodology)
               )}
 
               <div className="flex flex-wrap items-center justify-between gap-2">
-                <label className="text-xs font-bold text-gray-700">
-                  Copy &amp; paste {selectedSkill.toUpperCase()} text content:
+                <label className="text-xs font-bold text-gray-700 dark:text-gray-300">
+                  Paste {selectedSkill.toUpperCase()} text content (supports [COLLECTION], [IMAGE], [VIDEO], [AUDIO]):
                 </label>
                 <div className="flex items-center gap-2">
                   <button
                     type="button"
                     onClick={handleCopySkillTemplate}
-                    className="text-xs text-gray-600 hover:text-gray-900 flex items-center gap-1 font-bold transition"
+                    className="text-xs text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white flex items-center gap-1 font-bold transition"
                   >
-                    {copied ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
-                    <span>{copied ? 'Copied Template!' : 'Copy Template'}</span>
+                    {copied ? (
+                      <Check className="w-3.5 h-3.5 text-emerald-600" />
+                    ) : (
+                      <Copy className="w-3.5 h-3.5" />
+                    )}
+                    <span>{copied ? 'Copied!' : 'Copy Template'}</span>
                   </button>
-                  <span className="text-gray-300">|</span>
+                  <span className="text-gray-300 dark:text-gray-600">|</span>
                   <button
                     type="button"
                     onClick={handleLoadSkillTemplateToEditor}
-                    className="text-xs text-blue-600 hover:text-blue-800 flex items-center gap-1 font-bold transition"
+                    className="text-xs text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 flex items-center gap-1 font-bold transition"
                   >
-                    <Sparkles className="w-3.5 h-3.5 text-blue-600" />
-                    <span>Insert Sample Content</span>
+                    <Sparkles className="w-3.5 h-3.5" />
+                    <span>Insert Sample</span>
                   </button>
                 </div>
               </div>
 
-              {/* Textarea */}
               <div className="relative">
                 <textarea
                   value={txtContent}
-                  onChange={(e) => setTxtContent(e.target.value)}
+                  onChange={(e) => {
+                    const nextVal = e.target.value;
+                    setTxtContent(nextVal);
+                    if (Math.abs(nextVal.length - txtContent.length) > 20) {
+                      maybeAutoDetectSkill(nextVal);
+                    }
+                  }}
+                  onKeyDown={(e) => {
+                    if ((e.ctrlKey || e.metaKey) && e.key === 'Enter' && txtContent.trim()) {
+                      e.preventDefault();
+                      handleDirectAction('edit');
+                    }
+                  }}
                   rows={12}
                   spellCheck={false}
-                  placeholder={`Paste ${selectedSkill} text formatted with tags. Click "Insert Sample Content" above to see the official structure.`}
-                  className="w-full font-mono text-xs p-3.5 bg-slate-50 text-slate-900 border-2 border-gray-200 rounded-xl focus:outline-none focus:bg-white focus:border-blue-600 leading-relaxed resize-y"
+                  placeholder={`Paste ${selectedSkill} text here. Skill is auto-detected! Use Check & Preview to attach images, audio or video afterwards, or press Ctrl+Enter to Import & Edit right away.`}
+                  className="w-full font-mono text-xs p-3.5 bg-slate-50 dark:bg-gray-900 text-slate-900 dark:text-gray-100 border-2 border-gray-200 dark:border-gray-700 rounded-xl focus:outline-none focus:bg-white dark:focus:bg-gray-950 focus:border-blue-600 leading-relaxed resize-y"
                 />
                 {charCount > 0 && (
-                  <div className="absolute bottom-2.5 right-3 text-[10px] font-bold text-slate-500 bg-white/90 border border-gray-200 px-2 py-0.5 rounded-lg pointer-events-none">
+                  <div className="absolute bottom-2.5 right-3 text-[10px] font-bold text-slate-500 dark:text-gray-400 bg-white/90 dark:bg-gray-800/90 border border-gray-200 dark:border-gray-700 px-2 py-0.5 rounded-lg pointer-events-none">
                     {charCount.toLocaleString()} chars
                   </div>
                 )}
@@ -1143,38 +1716,38 @@ C. Section 3 (Methodology)
 
               {/* Optional Attached Answer Key & Explanations Matcher */}
               {(selectedSkill === 'reading' || selectedSkill === 'listening') && (
-                <div className="border-2 border-gray-200 rounded-2xl bg-slate-50/70 p-3.5 space-y-2">
+                <div className="border-2 border-gray-200 dark:border-gray-700 rounded-2xl bg-slate-50/70 dark:bg-gray-900/50 p-3.5 space-y-2">
                   <div
                     className="flex items-center justify-between cursor-pointer select-none"
                     onClick={() => setShowKeyMatcher(!showKeyMatcher)}
                   >
                     <div className="flex items-center gap-2">
-                      <KeyRound className="w-4 h-4 text-blue-600" />
-                      <span className="text-xs font-extrabold text-gray-800">
+                      <KeyRound className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+                      <span className="text-xs font-extrabold text-gray-800 dark:text-gray-200">
                         Attach Separate Answer Key &amp; Explanations (Optional)
                       </span>
                       {answerKeyText.trim() && (
-                        <span className="text-[10px] bg-blue-100 text-blue-800 px-2 py-0.5 rounded-full font-bold">
+                        <span className="text-[10px] bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200 px-2 py-0.5 rounded-full font-bold">
                           {parseQuickKeyText(answerKeyText).length} answers loaded
                         </span>
                       )}
                     </div>
-                    <button type="button" className="text-gray-400 hover:text-gray-600">
+                    <button type="button" className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200">
                       {showKeyMatcher ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
                     </button>
                   </div>
 
                   {showKeyMatcher && (
                     <div className="space-y-2 pt-1 animate-in fade-in">
-                      <p className="text-[11px] text-gray-600 leading-relaxed">
-                        Have an answer sheet or AI explanation output? Paste it here (e.g. <code className="bg-white px-1 py-0.5 rounded border">1. TRUE | Paragraph 1 states...</code>, <code className="bg-white px-1 py-0.5 rounded border">2. FALSE</code>, <code className="bg-white px-1 py-0.5 rounded border">21-22. A, C</code>). The system will automatically match each answer and explanation to its question number.
+                      <p className="text-[11px] text-gray-600 dark:text-gray-400 leading-relaxed">
+                        Paste raw answers (e.g. <code className="bg-white dark:bg-gray-800 px-1 py-0.5 rounded border border-gray-200 dark:border-gray-700">1. TRUE | Paragraph 1...</code> or <code className="bg-white dark:bg-gray-800 px-1 py-0.5 rounded border border-gray-200 dark:border-gray-700">21-22. A, C</code>). They merge automatically on import.
                       </p>
                       <textarea
                         value={answerKeyText}
                         onChange={(e) => setAnswerKeyText(e.target.value)}
-                        rows={5}
-                        placeholder="1. TRUE | Paragraph 1 confirms...&#10;2. FALSE - line 24 contradicts...&#10;3. NOT GIVEN&#10;4. B&#10;21-22. A, C"
-                        className="w-full font-mono text-xs p-3 bg-white border-2 border-gray-200 rounded-xl focus:border-blue-500 focus:outline-none"
+                        rows={4}
+                        placeholder="1. TRUE | Paragraph 1 confirms...&#10;2. FALSE&#10;3. NOT GIVEN&#10;21-22. A, C"
+                        className="w-full font-mono text-xs p-3 bg-white dark:bg-gray-900 text-slate-900 dark:text-gray-100 border-2 border-gray-200 dark:border-gray-700 rounded-xl focus:border-blue-500 focus:outline-none"
                       />
                     </div>
                   )}
@@ -1182,82 +1755,75 @@ C. Section 3 (Methodology)
               )}
 
               {/* Action row */}
-              <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
-                {/* Collection selector */}
-                <div className="flex items-center gap-2">
-                  <span className="text-xs font-bold text-gray-700 shrink-0">Collection:</span>
-                  <select
-                    value={selectedCollection}
-                    onChange={(e) => setSelectedCollection(e.target.value)}
-                    className="bg-white border-2 border-gray-200 rounded-xl px-3 py-1.5 text-xs text-gray-900 font-bold outline-none focus:border-blue-600 cursor-pointer"
-                  >
-                    {collections.map((c) => (
-                      <option key={c.id} value={c.name}>
-                        {c.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
+              <div className="flex flex-wrap items-center justify-between gap-3 pt-1">
+                {renderCollectionSelector()}
 
-                {/* Buttons */}
                 <div className="flex items-center gap-2 flex-wrap">
-                  {/* Parse & Preview */}
                   <button
                     type="button"
                     onClick={handleParseTxt}
                     disabled={isLoading || !txtContent.trim()}
-                    className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 border-2 border-gray-200 text-xs font-bold rounded-xl transition flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
-                    title="Parse and show a preview of the test structure"
+                    className="px-3.5 py-2 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200 border-2 border-gray-200 dark:border-gray-600 text-xs font-bold rounded-xl transition flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
+                    title="Parse and attach images, audio or video before saving"
                   >
-                    <Sparkles className="w-3.5 h-3.5 text-blue-600" />
-                    <span>Check &amp; Preview</span>
+                    <ImageIcon className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
+                    <span>Check &amp; Attach Media</span>
                   </button>
 
-                  {/* Direct Save */}
                   <button
                     type="button"
                     onClick={() => handleDirectAction('save_only')}
                     disabled={isLoading || !txtContent.trim() || hasSpeakingValidationErrors}
-                    className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl shadow-xs transition flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
-                    title="Parse, save to bank and return"
+                    className="px-3.5 py-2 bg-white dark:bg-gray-900 hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200 border-2 border-gray-200 dark:border-gray-600 text-xs font-bold rounded-xl transition flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
+                    title="Parse and save directly to library"
                   >
                     <Check className="w-3.5 h-3.5" />
-                    <span>Import {selectedSkill.toUpperCase()} Test</span>
+                    <span>Quick Save</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => handleDirectAction('edit')}
+                    disabled={isLoading || !txtContent.trim() || hasSpeakingValidationErrors}
+                    className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl shadow-xs transition flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
+                    title="Parse, save, and immediately open Visual Editor (Ctrl+Enter)"
+                  >
+                    <Sparkles className="w-3.5 h-3.5" />
+                    <span>Import &amp; Edit</span>
                   </button>
                 </div>
               </div>
             </div>
           )}
 
-          {/* ── TAB 3: SYNTAX GUIDE & INSTRUCTIONS ────────────────────────────── */}
+          {/* ── TAB 3: SYNTAX GUIDE ───────────────────────────────────────────── */}
           {activeTab === 'guide' && (
-            <div className="space-y-4 text-xs text-slate-700">
-              {/* Header Info */}
-              <div className="flex items-center justify-between border-b-2 border-gray-100 pb-2.5">
+            <div className="space-y-4 text-xs text-slate-700 dark:text-gray-300">
+              <div className="flex flex-wrap items-center justify-between gap-2 border-b-2 border-gray-100 dark:border-gray-700 pb-2.5">
                 <div>
                   <h4
-                    className="text-sm font-extrabold text-gray-900 flex items-center gap-1.5"
+                    className="text-sm font-extrabold text-gray-900 dark:text-gray-100 flex items-center gap-1.5"
                     style={{ fontFamily: outfit.style.fontFamily }}
                   >
-                    <HelpCircle className="w-4 h-4 text-blue-600" />
+                    <HelpCircle className="w-4 h-4 text-blue-600 dark:text-blue-400" />
                     <span>Syntax Specification for {selectedSkill.toUpperCase()} Tests</span>
                   </h4>
-                  <p className="text-[11px] text-gray-500 mt-0.5">
-                    Copy complete syntax tags or load them directly into the paste editor
+                  <p className="text-[11px] text-gray-500 dark:text-gray-400 mt-0.5">
+                    Includes [COLLECTION], [AUDIO], [IMAGE], and [VIDEO] tags
                   </p>
                 </div>
                 <div className="flex items-center gap-2">
                   <button
                     type="button"
                     onClick={() => {
-                      navigator.clipboard.writeText(getSkillSyntaxSpec());
+                      void navigator.clipboard.writeText(getSkillSyntaxSpec());
                       setCopied(true);
                       setTimeout(() => setCopied(false), 2000);
                     }}
-                    className="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 border-2 border-gray-200 rounded-xl text-xs font-bold text-gray-700 flex items-center gap-1.5 transition"
+                    className="px-3 py-1.5 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 border-2 border-gray-200 dark:border-gray-600 rounded-xl text-xs font-bold text-gray-700 dark:text-gray-200 flex items-center gap-1.5 transition"
                   >
                     {copied ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
-                    <span>{copied ? 'Copied Guide!' : 'Copy Guide'}</span>
+                    <span>{copied ? 'Copied!' : 'Copy Guide'}</span>
                   </button>
                   <button
                     type="button"
@@ -1270,7 +1836,6 @@ C. Section 3 (Methodology)
                 </div>
               </div>
 
-              {/* Skill-Specific Syntax Code Block */}
               <div className="bg-slate-900 text-slate-100 p-4 rounded-2xl font-mono text-[11px] leading-relaxed overflow-x-auto max-h-[380px] shadow-inner">
                 <pre>{getSkillSyntaxSpec()}</pre>
               </div>
@@ -1279,37 +1844,84 @@ C. Section 3 (Methodology)
         </div>
 
         {/* ── Footer ─────────────────────────────────────────────────────────── */}
-        <div className="px-6 py-3.5 border-t-2 border-gray-200 bg-slate-50/70 flex flex-wrap items-center justify-between gap-2 shrink-0">
-          <span className="text-xs font-medium text-gray-500">
-            Prefer building {selectedSkill} tests with interactive form fields?
+        <div className="px-6 py-3.5 border-t-2 border-gray-200 dark:border-gray-700 bg-slate-50/70 dark:bg-gray-900/60 flex flex-wrap items-center justify-between gap-2 shrink-0">
+          <span className="text-xs font-medium text-gray-500 dark:text-gray-400">
+            Prefer building from scratch with blank form fields?
           </span>
           <div className="flex items-center gap-2">
             <button
-              onClick={handleClose}
-              className="px-3.5 py-2 text-xs font-bold text-gray-600 hover:text-gray-900 rounded-xl hover:bg-gray-200/60 transition"
+              type="button"
+              onClick={requestClose}
+              className="px-3.5 py-2 text-xs font-bold text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white rounded-xl hover:bg-gray-200/60 dark:hover:bg-gray-700 transition"
             >
               Cancel
             </button>
             <button
+              type="button"
               onClick={() => {
+                const col = ensureAndSyncCollection(selectedCollection);
+                resetAllState();
                 onClose();
                 if (selectedSkill === 'writing') {
-                  if (onOpenWritingEditor) onOpenWritingEditor(null);
+                  onOpenWritingEditor?.(null, col);
                 } else if (selectedSkill === 'speaking') {
-                  if (onOpenSpeakingEditor) onOpenSpeakingEditor(null);
+                  onOpenSpeakingEditor?.(null, col);
                 } else {
-                  onOpenManualEditor();
+                  onOpenManualEditor(selectedSkill, col);
                 }
               }}
-              className="px-4 py-2 bg-white hover:bg-gray-100 text-gray-800 border-2 border-gray-200 text-xs font-bold rounded-xl shadow-2xs flex items-center gap-1.5 transition"
+              className="px-4 py-2 bg-white dark:bg-gray-800 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-100 border-2 border-gray-200 dark:border-gray-600 text-xs font-bold rounded-xl shadow-2xs flex items-center gap-1.5 transition"
             >
-              <Edit3 className="w-3.5 h-3.5 text-blue-600" />
-              <span>Open Visual {selectedSkill.toUpperCase()} Editor</span>
+              <Edit3 className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
+              <span>Open Blank {selectedSkill.toUpperCase()} Editor</span>
             </button>
           </div>
         </div>
+
+        {/* Unsaved Draft Confirm Overlay */}
+        {showCloseConfirm && (
+          <div className="absolute inset-0 z-30 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4">
+            <div
+              role="alertdialog"
+              aria-modal="true"
+              aria-labelledby="smart-discard-title"
+              className="bg-white dark:bg-gray-800 border-2 border-gray-200 dark:border-gray-700 rounded-2xl max-w-sm w-full p-5 shadow-2xl space-y-4"
+            >
+              <h4
+                id="smart-discard-title"
+                className="text-base font-extrabold text-gray-900 dark:text-gray-100"
+              >
+                Discard pasted draft?
+              </h4>
+              <p className="text-xs text-gray-600 dark:text-gray-300">
+                You have unsaved text or preview changes in Smart Add Test. Closing now will discard them.
+              </p>
+              <div className="flex justify-end gap-2">
+                <button
+                  type="button"
+                  autoFocus
+                  onClick={() => setShowCloseConfirm(false)}
+                  className="px-3.5 py-2 text-xs font-bold rounded-xl bg-blue-600 hover:bg-blue-700 text-white"
+                >
+                  Keep Editing
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    resetAllState();
+                    onClose();
+                  }}
+                  className="px-3.5 py-2 text-xs font-bold rounded-xl bg-rose-600 hover:bg-rose-700 text-white"
+                >
+                  Discard
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
 };
+
 export default SmartImportModal;

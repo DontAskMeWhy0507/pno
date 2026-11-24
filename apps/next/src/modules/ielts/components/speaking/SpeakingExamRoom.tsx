@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, type FC } from 'react';
 import { useColorMode, useToast } from '@chakra-ui/react';
 import type { SpeakingExam, SpeakingQuestion } from '../../types/speaking';
 import { AiCoachPromptModal } from '../common/AiCoachPromptModal';
+import { MediaEmbed } from '../exam/MediaEmbed';
 import {
   loadSpeakingProgress,
   saveSpeakingProgress,
@@ -452,6 +453,15 @@ export const SpeakingExamRoom: FC<SpeakingExamRoomProps> = ({
                   ))}
                 </ul>
               </div>
+            )}
+
+            {(currentQuestion.imageUrl || currentQuestion.videoUrl) && (
+              <MediaEmbed
+                imageUrl={currentQuestion.imageUrl}
+                videoUrl={currentQuestion.videoUrl}
+                alt={currentQuestion.topic || 'Speaking cue card visual'}
+                className="mt-3"
+              />
             )}
           </div>
 

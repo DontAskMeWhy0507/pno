@@ -8,6 +8,8 @@ export interface SpeakingQuestion {
   speakTimeSeconds?: number; // 120s for Part 2
   sampleAnswer: string; // Band 8.0+ Model Answer
   audioSampleUrl?: string;
+  imageUrl?: string;
+  videoUrl?: string;
   keyVocabulary?: { word: string; meaning: string; phonetic?: string }[];
   tips?: string[];
 }

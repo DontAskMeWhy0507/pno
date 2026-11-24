@@ -21,7 +21,8 @@ const ALLOWED_AUDIO_EXTS = new Set([
   ".webm",
   ".mp4",
 ]);
-const ALLOWED_IMAGE_EXTS = new Set([".png", ".jpg", ".jpeg", ".webp", ".gif"]);
+const ALLOWED_VIDEO_EXTS = new Set([".mp4", ".webm", ".mov"]);
+const ALLOWED_IMAGE_EXTS = new Set([".png", ".jpg", ".jpeg", ".webp", ".gif", ".svg"]);
 const MAX_UPLOAD_BYTES = 25 * 1024 * 1024; // 25 MB
 
 const UPLOAD_WINDOW_MS = 10 * 60 * 1000;
@@ -87,17 +88,18 @@ export default async function handler(
   const ext = path.extname(baseFilename).toLowerCase();
 
   const isImage = ALLOWED_IMAGE_EXTS.has(ext);
+  const isVideo = ALLOWED_VIDEO_EXTS.has(ext);
   const isAudio = ALLOWED_AUDIO_EXTS.has(ext);
-  if (!isImage && !isAudio) {
+  if (!isImage && !isAudio && !isVideo) {
     return res.status(400).json({
       error:
-        "Unsupported file type. Allowed audio: mp3, wav, m4a, ogg, webm, mp4. Allowed images: png, jpg, jpeg, webp, gif.",
+        "Unsupported file type. Allowed audio: mp3, wav, m4a, ogg. Allowed video: mp4, webm, mov. Allowed images: png, jpg, jpeg, webp, gif, svg.",
     });
   }
 
   // Unique prefix prevents overwriting built-in or other users' assets
   const filename = `${Date.now()}_${baseFilename}`;
-  const subFolder = isImage || skill === "writing" ? "pic" : "audio";
+  const subFolder = isImage || skill === "writing" ? "pic" : isVideo && skill !== "listening" ? "video" : "audio";
 
   const contentLength = Number(req.headers["content-length"] || 0);
   if (contentLength > MAX_UPLOAD_BYTES) {

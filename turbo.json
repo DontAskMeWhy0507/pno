@@ -42,9 +42,7 @@
   },
   "globalDependencies": [
     "**/.env",
-    "bun.lockb",
-    "packages/console/**/*",
-    "packages/integrations/**/*"
+    "bun.lockb"
   ],
   "globalEnv": [
     "NODE_ENV",

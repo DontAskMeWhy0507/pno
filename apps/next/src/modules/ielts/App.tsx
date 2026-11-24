@@ -6,6 +6,7 @@ import { gradeExam } from './utils/scoring';
 import { ExamHeader } from './components/exam/ExamHeader';
 import { PartTabs } from './components/exam/PartTabs';
 import { PassageViewer } from './components/exam/PassageViewer';
+import { MediaEmbed } from './components/exam/MediaEmbed';
 import { ListeningAudioBar } from './components/exam/ListeningAudioBar';
 import { QuestionGroupRenderer } from './components/exam/QuestionGroupRenderer';
 import { SplitPane } from './components/exam/SplitPane';
@@ -19,6 +20,12 @@ import { getAllSpeakingExams, sampleSpeakingExams, saveSpeakingExam } from './da
 import { ChevronLeft, ChevronRight, FileText, Headphones } from 'lucide-react';
 import { clearExamProgress, loadExamProgress, saveExamProgress } from './utils/examProgress';
 import { clearSpeakingProgress, clearWritingProgress } from './utils/writingProgress';
+import {
+  buildIeltsHomePath,
+  parseIeltsLocation,
+  pushIeltsHistory,
+  type IeltsHomeRoute,
+} from './utils/ieltsRoutes';
 import {
   buildLocalSyncPayload,
   CLOUD_MIGRATION_FLAG,
@@ -158,11 +165,24 @@ export function App() {
   const [editingExam, setEditingExam] = useState<Exam | null>(null);
   const [editorDefaultCollection, setEditorDefaultCollection] = useState<string | undefined>(undefined);
   const [editorDefaultSkill, setEditorDefaultSkill] = useState<'reading' | 'listening' | undefined>(undefined);
+  const [editorDefaultViewMode, setEditorDefaultViewMode] = useState<'all' | 'tabs'>('all');
 
   const [isWritingEditorOpen, setIsWritingEditorOpen] = useState(false);
   const [editingWritingExam, setEditingWritingExam] = useState<WritingExam | null>(null);
+  const [writingDefaultCol, setWritingDefaultCol] = useState<string | undefined>(undefined);
   const [isSpeakingEditorOpen, setIsSpeakingEditorOpen] = useState(false);
   const [editingSpeakingExam, setEditingSpeakingExam] = useState<SpeakingExam | null>(null);
+  const [speakingDefaultCol, setSpeakingDefaultCol] = useState<string | undefined>(undefined);
+  const [openNewCollectionSignal, setOpenNewCollectionSignal] = useState(0);
+
+  const [homeRoute, setHomeRoute] = useState<IeltsHomeRoute>(() => {
+    if (typeof window === 'undefined') return { tab: 'collections' };
+    const parsed = parseIeltsLocation(window.location.pathname, window.location.search);
+    return parsed.view === 'home' ? parsed.home : { tab: 'collections' };
+  });
+  const lastHomePathRef = useRef<string>(
+    typeof window !== 'undefined' ? buildIeltsHomePath(homeRoute) : '/ielts/collections'
+  );
   const listeningContentRef = useRef<HTMLDivElement>(null);
 
   // tRPC Cloud Sync queries & mutations
@@ -343,6 +363,14 @@ export function App() {
     isReviewMode,
   };
 
+  const navigateHomeRoute = useCallback((route: IeltsHomeRoute, replace = false) => {
+    const path = buildIeltsHomePath(route);
+    lastHomePathRef.current = path;
+    pushIeltsHistory(path, replace);
+    setHomeRoute(route);
+    setCurrentView('home');
+  }, []);
+
   const navigateHome = useCallback(
     (replace = false) => {
       const s = latestExamStateRef.current;
@@ -371,7 +399,8 @@ export function App() {
           lastSavedAt: Date.now(),
         });
       }
-      window.history[replace ? 'replaceState' : 'pushState']({}, '', '/ielts');
+      const targetPath = lastHomePathRef.current || '/ielts/collections';
+      pushIeltsHistory(targetPath, replace);
       setCurrentView('home');
       if (wasInExamRoom && !s.isCompleted && !s.isReviewMode) {
         toast({
@@ -405,21 +434,18 @@ export function App() {
   useEffect(() => {
     let cancelled = false;
     const applyRoute = async () => {
-      const routePath = window.location.pathname.replace(/^\/ielts\/?/, '/');
-      const parts = routePath.split('/').filter(Boolean);
-      const skill = parts[0];
-      const examId = parts[1] ? decodeURIComponent(parts[1]) : '';
+      const parsed = parseIeltsLocation(window.location.pathname, window.location.search);
 
-      if ((skill === 'reading' || skill === 'listening') && examId) {
-        const candidate = getAllExams().find((ex) => ex.id === examId);
-        if (candidate && (skill === 'listening') === isListeningExam(candidate)) {
+      if (parsed.view === 'exam') {
+        const candidate = getAllExams().find((ex) => ex.id === parsed.examId);
+        if (candidate && (parsed.skill === 'listening') === isListeningExam(candidate)) {
           setIsLoadingExamData(true);
           try {
             const fullExam = (await loadFullExam(candidate)) ?? candidate;
             if (cancelled || !fullExam.parts?.length) return;
             const savedProgress = loadExamProgress(fullExam.id);
             const slicedExam = sliceExamParts(fullExam, savedProgress?.selectedParts);
-            const requestedPart = Number(parts[3]);
+            const requestedPart = parsed.partNumber ?? 0;
             const partNumber = slicedExam.parts.some((p) => p.partNumber === requestedPart)
               ? requestedPart
               : slicedExam.parts[0]?.partNumber ?? 1;
@@ -453,11 +479,11 @@ export function App() {
         }
       }
 
-      if (skill === 'writing' && examId) {
+      if (parsed.view === 'writing') {
         const allWriting = getAllWritingExams();
         const exam =
-          allWriting.find((c) => c.id === examId) ||
-          sampleWritingExams.find((c) => c.id === examId);
+          allWriting.find((c) => c.id === parsed.examId) ||
+          sampleWritingExams.find((c) => c.id === parsed.examId);
         if (exam) {
           setCurrentWritingExam(exam);
           setCurrentView('writing');
@@ -465,11 +491,11 @@ export function App() {
         }
       }
 
-      if (skill === 'speaking' && examId) {
+      if (parsed.view === 'speaking') {
         const allSpeaking = getAllSpeakingExams();
         const exam =
-          allSpeaking.find((c) => c.id === examId) ||
-          sampleSpeakingExams.find((c) => c.id === examId);
+          allSpeaking.find((c) => c.id === parsed.examId) ||
+          sampleSpeakingExams.find((c) => c.id === parsed.examId);
         if (exam) {
           setCurrentSpeakingExam(exam);
           setCurrentView('speaking');
@@ -477,13 +503,31 @@ export function App() {
         }
       }
 
+      const resolvedHome: IeltsHomeRoute =
+        parsed.view === 'home' ? parsed.home : { tab: 'collections' };
+      const cleanHome: IeltsHomeRoute =
+        resolvedHome.tab === 'manage'
+          ? { tab: 'manage', subTab: resolvedHome.subTab }
+          : resolvedHome;
+      const cleanPath = buildIeltsHomePath(cleanHome);
+      lastHomePathRef.current = cleanPath;
+      setHomeRoute(cleanHome);
       setCurrentView('home');
+
+      if (resolvedHome.tab === 'manage' && resolvedHome.action) {
+        pushIeltsHistory(cleanPath, true);
+        if (resolvedHome.action === 'smart_import') {
+          setIsSmartImportOpen(true);
+        } else if (resolvedHome.action === 'new_collection') {
+          setOpenNewCollectionSignal((v) => v + 1);
+        }
+      }
     };
 
     void applyRoute();
     const onPopState = () => void applyRoute();
     const onIeltsNavigate = (path: string) => {
-      window.history.pushState({}, '', path);
+      pushIeltsHistory(path);
       void applyRoute();
     };
     window.addEventListener('popstate', onPopState);
@@ -501,13 +545,19 @@ export function App() {
       const pending = sessionStorage.getItem('pno_pending_ielts_action');
       if (!pending) return;
       sessionStorage.removeItem('pno_pending_ielts_action');
-      if (pending === 'add_test' || pending === 'test_bank' || pending === 'new_collection') {
-        window.setTimeout(() => {
-          menuEventChannel.emit('openIeltsManage');
-        }, 100);
-      }
+      window.setTimeout(() => {
+        if (pending === 'add_test') {
+          navigateHomeRoute({ tab: 'manage', subTab: 'tests' }, true);
+          setIsSmartImportOpen(true);
+        } else if (pending === 'test_bank') {
+          navigateHomeRoute({ tab: 'manage', subTab: 'tests' }, true);
+        } else if (pending === 'new_collection') {
+          navigateHomeRoute({ tab: 'manage', subTab: 'collections' }, true);
+          setOpenNewCollectionSignal((v) => v + 1);
+        }
+      }, 80);
     } catch {}
-  }, []);
+  }, [navigateHomeRoute]);
 
   // Debounced save ONLY when answers, flags, part, or question changes (NOT on 1s timer ticks)
   useEffect(() => {
@@ -1037,10 +1087,24 @@ export function App() {
                 exams={allExams}
                 recentAttempts={recentAttempts}
                 syncStatus={syncStatus}
+                homeRoute={homeRoute}
+                openNewCollectionSignal={openNewCollectionSignal}
+                onNavigateHomeRoute={navigateHomeRoute}
                 onSelectExam={(exam, options) => void handleStartExam(exam, options)}
-                onOpenEditor={(examToEdit, defaultCol, defaultSkill) =>
-                  void handleOpenExamEditor(examToEdit, defaultCol, defaultSkill)
-                }
+                onOpenEditor={(examToEdit, defaultCol, defaultSkill) => {
+                  setEditorDefaultViewMode('all');
+                  void handleOpenExamEditor(examToEdit, defaultCol, defaultSkill);
+                }}
+                onEditWriting={(examToEdit, defaultCol) => {
+                  setEditingWritingExam(examToEdit ?? null);
+                  setWritingDefaultCol(defaultCol);
+                  setIsWritingEditorOpen(true);
+                }}
+                onEditSpeaking={(examToEdit, defaultCol) => {
+                  setEditingSpeakingExam(examToEdit ?? null);
+                  setSpeakingDefaultCol(defaultCol);
+                  setIsSpeakingEditorOpen(true);
+                }}
                 onOpenSmartImport={(collection, skill) => {
                   setSmartImportCollection(collection);
                   setSmartImportSkill(skill);
@@ -1057,25 +1121,128 @@ export function App() {
                 onCloudSaveExam={cloudSyncExam}
                 onCloudDeleteExam={cloudDeleteExam}
                 onCloudCreateCollection={(col) => {
-                  upsertCollectionMutation.mutate({
-                    name: col.name,
-                    description: col.description,
-                  });
+                  setSyncStatus('saving');
+                  upsertCollectionMutation.mutate(
+                    {
+                      name: col.name,
+                      description: col.description,
+                    },
+                    {
+                      onSuccess: () => setSyncStatus('synced'),
+                      onError: () => {
+                        setSyncStatus('offline');
+                        toast({
+                          title: 'Cloud sync failed for collection',
+                          status: 'warning',
+                          duration: 2400,
+                          isClosable: true,
+                          position: 'bottom-right',
+                        });
+                      },
+                    }
+                  );
                 }}
-                onCloudRenameCollection={(payload) => {
-                  renameCollectionMutation.mutate(payload);
+                onCloudRenameCollection={async (payload) => {
+                  setSyncStatus('saving');
+                  try {
+                    await renameCollectionMutation.mutateAsync({
+                      oldName: payload.oldName,
+                      newName: payload.newName,
+                      description: payload.description,
+                      movedExams: [],
+                    });
+                    for (let i = 0; i < payload.movedExams.length; i += 5) {
+                      await bulkMoveExamsMutation.mutateAsync({
+                        targetCollection: payload.newName,
+                        items: payload.movedExams.slice(i, i + 5),
+                      });
+                    }
+                    setSyncStatus('synced');
+                  } catch {
+                    setSyncStatus('offline');
+                    toast({
+                      title: 'Cloud sync failed while renaming collection',
+                      status: 'warning',
+                      duration: 2600,
+                      isClosable: true,
+                      position: 'bottom-right',
+                    });
+                  }
                 }}
                 onCloudDeleteCollection={(name, examsToTombstone) => {
-                  deleteCollectionMutation.mutate({ name, examsToTombstone });
+                  setSyncStatus('saving');
+                  deleteCollectionMutation.mutate(
+                    { name, examsToTombstone },
+                    {
+                      onSuccess: () => setSyncStatus('synced'),
+                      onError: () => {
+                        setSyncStatus('offline');
+                        toast({
+                          title: 'Cloud sync failed while deleting collection',
+                          status: 'warning',
+                          duration: 2500,
+                          isClosable: true,
+                          position: 'bottom-right',
+                        });
+                      },
+                    }
+                  );
                 }}
                 onCloudBulkDeleteExams={(items) => {
-                  bulkDeleteExamsMutation.mutate({ items });
+                  setSyncStatus('saving');
+                  bulkDeleteExamsMutation.mutate(
+                    { items },
+                    {
+                      onSuccess: () => setSyncStatus('synced'),
+                      onError: () => {
+                        setSyncStatus('offline');
+                        toast({
+                          title: 'Cloud sync failed for bulk delete',
+                          status: 'warning',
+                          duration: 2500,
+                          isClosable: true,
+                          position: 'bottom-right',
+                        });
+                      },
+                    }
+                  );
                 }}
-                onCloudBulkMoveExams={(targetCollection, items) => {
-                  bulkMoveExamsMutation.mutate({ targetCollection, items });
+                onCloudBulkMoveExams={async (targetCollection, items) => {
+                  setSyncStatus('saving');
+                  try {
+                    for (let i = 0; i < items.length; i += 5) {
+                      await bulkMoveExamsMutation.mutateAsync({
+                        targetCollection,
+                        items: items.slice(i, i + 5),
+                      });
+                    }
+                    setSyncStatus('synced');
+                  } catch {
+                    setSyncStatus('offline');
+                    toast({
+                      title: 'Cloud sync failed for bulk move',
+                      status: 'warning',
+                      duration: 2600,
+                      isClosable: true,
+                      position: 'bottom-right',
+                    });
+                  }
                 }}
                 onCloudRestoreDefaults={() => {
-                  restoreDefaultsMutation.mutate();
+                  setSyncStatus('saving');
+                  restoreDefaultsMutation.mutate(undefined, {
+                    onSuccess: () => setSyncStatus('synced'),
+                    onError: () => {
+                      setSyncStatus('offline');
+                      toast({
+                        title: 'Cloud sync failed while restoring defaults',
+                        status: 'warning',
+                        duration: 2500,
+                        isClosable: true,
+                        position: 'bottom-right',
+                      });
+                    },
+                  });
                 }}
                 onCloudClearProgress={cloudClearProgress}
               />
@@ -1266,6 +1433,15 @@ export function App() {
                     </div>
                   )}
 
+                  {(activePart.imageUrl || activePart.videoUrl) && (
+                    <MediaEmbed
+                      imageUrl={activePart.imageUrl}
+                      videoUrl={activePart.videoUrl}
+                      alt={activePart.title || `Section ${activePart.partNumber}`}
+                      className="mb-6"
+                    />
+                  )}
+
                   {activePart.questionGroups.length === 0 ? (
                     <div className="text-center py-8 text-gray-400 text-sm">
                       No questions for this section yet.
@@ -1316,12 +1492,14 @@ export function App() {
                     subtitle={activePart.subtitle}
                     passage={activePart.passage}
                     footnotes={activePart.footnotes}
+                    imageUrl={activePart.imageUrl}
+                    videoUrl={activePart.videoUrl}
                     fontSize={fontSize}
                   />
                 }
                 right={
                   <div className="relative w-full min-h-full pb-20">
-                    {activePart.questionGroups.length === 0 ? (
+                  {activePart.questionGroups.length === 0 ? (
                       <div className="text-center py-16 text-gray-400 text-sm">
                         No questions for this part yet. Click &quot;+ Add Test&quot; to import questions.
                       </div>
@@ -1480,6 +1658,16 @@ export function App() {
             setSmartImportCollection(undefined);
             setSmartImportSkill(undefined);
           }}
+          onCloudCreateCollection={(col) => {
+            setSyncStatus('saving');
+            upsertCollectionMutation.mutate(
+              { name: col.name, description: col.description },
+              {
+                onSuccess: () => setSyncStatus('synced'),
+                onError: () => setSyncStatus('offline'),
+              }
+            );
+          }}
           onImportSuccess={(savedExam: Exam, action: 'save_only' | 'take_test' | 'edit') => {
             cloudSyncExam(
               getExamSkillLabel(savedExam),
@@ -1495,6 +1683,7 @@ export function App() {
             if (action === 'take_test') {
               void handleStartExam(savedExam);
             } else if (action === 'edit') {
+              setEditorDefaultViewMode('all');
               setEditingExam(savedExam);
               setIsEditorOpen(true);
             }
@@ -1529,25 +1718,30 @@ export function App() {
             setSmartImportSkill(undefined);
             handleRefreshExams();
           }}
-          onOpenManualEditor={() => {
+          onOpenManualEditor={(skill, col) => {
             setIsSmartImportOpen(false);
             setSmartImportCollection(undefined);
             setSmartImportSkill(undefined);
             setEditingExam(null);
+            setEditorDefaultSkill(skill);
+            setEditorDefaultCollection(col);
+            setEditorDefaultViewMode('all');
             setIsEditorOpen(true);
           }}
-          onOpenWritingEditor={(exam) => {
+          onOpenWritingEditor={(exam, col) => {
             setIsSmartImportOpen(false);
             setSmartImportCollection(undefined);
             setSmartImportSkill(undefined);
             setEditingWritingExam(exam || null);
+            setWritingDefaultCol(col);
             setIsWritingEditorOpen(true);
           }}
-          onOpenSpeakingEditor={(exam) => {
+          onOpenSpeakingEditor={(exam, col) => {
             setIsSmartImportOpen(false);
             setSmartImportCollection(undefined);
             setSmartImportSkill(undefined);
             setEditingSpeakingExam(exam || null);
+            setSpeakingDefaultCol(col);
             setIsSpeakingEditorOpen(true);
           }}
         />
@@ -1559,6 +1753,7 @@ export function App() {
           initialExam={editingExam}
           defaultCollection={editorDefaultCollection}
           defaultSkill={editorDefaultSkill}
+          defaultViewMode={editorDefaultViewMode}
           onSave={handleSaveExamFromEditor}
           onCancel={() => {
             setIsEditorOpen(false);
@@ -1574,9 +1769,12 @@ export function App() {
           key={editingWritingExam?.id || 'new-writing'}
           isOpen={isWritingEditorOpen}
           initialExam={editingWritingExam}
+          defaultCollection={writingDefaultCol}
+          defaultViewMode="all"
           onClose={() => {
             setIsWritingEditorOpen(false);
             setEditingWritingExam(null);
+            setWritingDefaultCol(undefined);
           }}
           onSave={(saved) => {
             saveWritingExam(saved);
@@ -1589,7 +1787,15 @@ export function App() {
             );
             setIsWritingEditorOpen(false);
             setEditingWritingExam(null);
+            setWritingDefaultCol(undefined);
             handleRefreshExams();
+            toast({
+              title: 'Writing test saved',
+              status: 'success',
+              duration: 2200,
+              isClosable: true,
+              position: 'bottom-right',
+            });
           }}
         />
       )}
@@ -1599,9 +1805,12 @@ export function App() {
           key={editingSpeakingExam?.id || 'new-speaking'}
           isOpen={isSpeakingEditorOpen}
           initialExam={editingSpeakingExam}
+          defaultCollection={speakingDefaultCol}
+          defaultViewMode="all"
           onClose={() => {
             setIsSpeakingEditorOpen(false);
             setEditingSpeakingExam(null);
+            setSpeakingDefaultCol(undefined);
           }}
           onSave={(saved) => {
             saveSpeakingExam(saved);
@@ -1614,7 +1823,15 @@ export function App() {
             );
             setIsSpeakingEditorOpen(false);
             setEditingSpeakingExam(null);
+            setSpeakingDefaultCol(undefined);
             handleRefreshExams();
+            toast({
+              title: 'Speaking test saved',
+              status: 'success',
+              duration: 2200,
+              isClosable: true,
+              position: 'bottom-right',
+            });
           }}
         />
       )}

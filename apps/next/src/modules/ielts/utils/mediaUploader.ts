@@ -11,6 +11,79 @@ export interface UploadMediaResult {
   source: 'server' | 'base64';
 }
 
+export interface MediaEmbedInfo {
+  kind: 'youtube' | 'video' | 'audio' | 'image';
+  embedUrl: string;
+}
+
+const YOUTUBE_ID_RE = /^[a-zA-Z0-9_-]{11}$/;
+
+/**
+ * Normalizes image, audio, direct video, or YouTube URLs into safe embed metadata.
+ * Only permits relative paths (`/`) or `http:` / `https:` / `data:image/` URLs.
+ */
+export function extractMediaEmbedInfo(
+  rawUrl: string,
+  hint?: 'image' | 'video' | 'audio'
+): MediaEmbedInfo | null {
+  const trimmed = (rawUrl || '').trim();
+  if (!trimmed) return null;
+
+  if (trimmed.startsWith('data:image/')) {
+    return { kind: 'image', embedUrl: trimmed };
+  }
+  if (trimmed.startsWith('data:video/')) {
+    return { kind: 'video', embedUrl: trimmed };
+  }
+  if (trimmed.startsWith('data:audio/')) {
+    return { kind: 'audio', embedUrl: trimmed };
+  }
+
+  const isRelative = trimmed.startsWith('/');
+  if (!isRelative) {
+    try {
+      const parsed = new URL(trimmed);
+      if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+        return null;
+      }
+      const host = parsed.hostname.replace(/^www\./, '').toLowerCase();
+      if (host === 'youtube.com' || host === 'm.youtube.com') {
+        if (parsed.pathname === '/watch') {
+          const id = parsed.searchParams.get('v') || '';
+          if (YOUTUBE_ID_RE.test(id)) {
+            return { kind: 'youtube', embedUrl: `https://www.youtube.com/embed/${id}` };
+          }
+        }
+        const embedMatch = parsed.pathname.match(/^\/(?:embed|shorts)\/([a-zA-Z0-9_-]{11})/);
+        if (embedMatch?.[1]) {
+          return { kind: 'youtube', embedUrl: `https://www.youtube.com/embed/${embedMatch[1]}` };
+        }
+      } else if (host === 'youtu.be') {
+        const id = parsed.pathname.slice(1).split('/')[0] || '';
+        if (YOUTUBE_ID_RE.test(id)) {
+          return { kind: 'youtube', embedUrl: `https://www.youtube.com/embed/${id}` };
+        }
+      } else if (host === 'youtube-nocookie.com') {
+        const embedMatch = parsed.pathname.match(/^\/embed\/([a-zA-Z0-9_-]{11})/);
+        if (embedMatch?.[1]) {
+          return { kind: 'youtube', embedUrl: `https://www.youtube.com/embed/${embedMatch[1]}` };
+        }
+      }
+    } catch {
+      return null;
+    }
+  }
+
+  const lower = trimmed.split('?')[0]?.toLowerCase() || '';
+  if (hint === 'video' || /\.(mp4|webm|mov|m4v)$/.test(lower)) {
+    return { kind: 'video', embedUrl: trimmed };
+  }
+  if (hint === 'audio' || /\.(mp3|wav|m4a|ogg)$/.test(lower)) {
+    return { kind: 'audio', embedUrl: trimmed };
+  }
+  return { kind: hint || 'image', embedUrl: trimmed };
+}
+
 const MAX_LOCAL_MEDIA_BYTES = 1024 * 1024;
 
 export async function uploadMediaFile(

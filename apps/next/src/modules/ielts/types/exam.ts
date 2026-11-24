@@ -29,6 +29,8 @@ export interface QuestionGroup {
   instructions: string; // e.g. "Do the following statements agree with the information given in the text? Choose TRUE if... FALSE if... NOT GIVEN if..."
   summaryTitle?: string; // e.g. "Early European reaction to the discovery of Easter Island"
   sharedContent?: string; // Optional context: text with blanks e.g. {{7}}, {{8}} or summary/table
+  imageUrl?: string; // Optional diagram / map / chart image
+  videoUrl?: string; // Optional video URL (MP4 / WebM / YouTube)
   wordBank?: QuestionOption[]; // e.g. [{ id: "A", text: "poverty" }, ...]
   questions: Question[];
 }
@@ -41,6 +43,8 @@ export interface Part {
   passage: string; // Passage text (Reading) or transcript/context (Listening)
   footnotes?: string;
   audioUrl?: string; // Optional audio URL for Listening sections (MP3/YouTube)
+  imageUrl?: string; // Optional part-level illustration / map / diagram
+  videoUrl?: string; // Optional part-level video (MP4 / WebM / YouTube)
   questionGroups: QuestionGroup[];
 }
 

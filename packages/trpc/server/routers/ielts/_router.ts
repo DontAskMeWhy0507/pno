@@ -73,6 +73,7 @@ export const ieltsRouter = createTRPCRouter({
     .input(ZExamInput)
     .mutation(async ({ ctx, input }) => {
       const userId = ctx.session.user.id;
+      const collectionName = input.collection.trim() || "My Tests";
       return ctx.prisma.ieltsCustomExam.upsert({
         where: {
           userId_examId_skill: {
@@ -85,14 +86,14 @@ export const ieltsRouter = createTRPCRouter({
           userId,
           examId: input.examId,
           skill: input.skill,
-          title: input.title,
-          collection: input.collection,
+          title: input.title.trim(),
+          collection: collectionName,
           data: input.data as Prisma.InputJsonValue,
           deleted: false,
         },
         update: {
-          title: input.title,
-          collection: input.collection,
+          title: input.title.trim(),
+          collection: collectionName,
           data: input.data as Prisma.InputJsonValue,
           deleted: false,
         },
@@ -300,13 +301,13 @@ export const ieltsRouter = createTRPCRouter({
               userId,
               examId: ex.examId,
               skill: ex.skill,
-              title: ex.title,
+              title: ex.title.trim(),
               collection: newTrim,
               data: ex.data as Prisma.InputJsonValue,
               deleted: false,
             },
             update: {
-              title: ex.title,
+              title: ex.title.trim(),
               collection: newTrim,
               data: ex.data as Prisma.InputJsonValue,
               deleted: false,
@@ -413,13 +414,13 @@ export const ieltsRouter = createTRPCRouter({
               userId,
               examId: ex.examId,
               skill: ex.skill,
-              title: ex.title,
+              title: ex.title.trim(),
               collection: targetCol,
               data: ex.data as Prisma.InputJsonValue,
               deleted: false,
             },
             update: {
-              title: ex.title,
+              title: ex.title.trim(),
               collection: targetCol,
               data: ex.data as Prisma.InputJsonValue,
               deleted: false,

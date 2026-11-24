@@ -7,6 +7,63 @@ export interface ParseResult {
   warning?: string;
 }
 
+export interface DetectedSkillResult {
+  skill: 'reading' | 'listening' | 'writing' | 'speaking';
+  confidence: 'high' | 'medium' | 'low';
+  reason: string;
+}
+
+export function detectSkillFromText(rawText: string): DetectedSkillResult {
+  const text = (rawText || '').trim();
+  if (!text) {
+    return { skill: 'reading', confidence: 'low', reason: 'Empty input' };
+  }
+
+  // 1. Writing signals
+  if (
+    /^={2,}\s*TASK\s*[12]\s*={2,}/im.test(text) ||
+    /^\[CHART_TYPE\]/im.test(text) ||
+    /^\[PROMPT\]/im.test(text)
+  ) {
+    return { skill: 'writing', confidence: 'high', reason: 'Detected TASK 1 / TASK 2 / PROMPT tags' };
+  }
+
+  // 2. Speaking signals
+  if (
+    /^\[CUE_CARD\]/im.test(text) ||
+    /^\[BULLETS\]/im.test(text) ||
+    (/^===\s*PART\s*1\s*===/im.test(text) &&
+      /^===\s*PART\s*2\s*===/im.test(text) &&
+      /^\[TOPIC\]/im.test(text))
+  ) {
+    return { skill: 'speaking', confidence: 'high', reason: 'Detected Speaking PART / TOPIC / CUE_CARD tags' };
+  }
+
+  // 3. Listening signals
+  if (
+    /^\[AUDIO\]/im.test(text) ||
+    /^={2,}\s*SECTION\s*[1-4]\s*={2,}/im.test(text) ||
+    /^\[SECTION_TITLE\]/im.test(text) ||
+    /^\[CATEGORY\]\s*.*listening/im.test(text) ||
+    /^\[TITLE\]\s*.*\blistening\b/im.test(text)
+  ) {
+    return { skill: 'listening', confidence: 'high', reason: 'Detected SECTION / AUDIO / Listening headers' };
+  }
+
+  // 4. Reading signals
+  if (
+    /^\[PASSAGE\]/im.test(text) ||
+    /^\[PASSAGE_TITLE\]/im.test(text) ||
+    /^={2,}\s*(?:PASSAGE|PART)\s*[1-3]\s*={2,}/im.test(text) ||
+    /^\[CATEGORY\]\s*.*reading/im.test(text) ||
+    /^\[TITLE\]\s*.*\breading\b/im.test(text)
+  ) {
+    return { skill: 'reading', confidence: 'high', reason: 'Detected PASSAGE / Reading tags' };
+  }
+
+  return { skill: 'reading', confidence: 'low', reason: 'Defaulted to Reading' };
+}
+
 export interface QuestionPatternGuide {
   id: string;
   name: string;
@@ -32,7 +89,10 @@ export function parseIELTSText(rawText: string): ParseResult {
 
   let title = 'Custom IELTS Practice Test';
   let durationMinutes = 60;
+  let hasExplicitTime = false;
   let category = 'IELTS Academic Reading';
+  let hasExplicitCategory = false;
+  let collection = '';
   let description = '';
 
   const parts: Part[] = [];
@@ -110,11 +170,19 @@ export function parseIELTSText(rawText: string): ParseResult {
     }
     if (line.toUpperCase().startsWith('[TIME]')) {
       const parsedTime = parseInt(line.substring(6).trim(), 10);
-      if (!isNaN(parsedTime)) durationMinutes = parsedTime;
+      if (!isNaN(parsedTime) && parsedTime > 0) {
+        durationMinutes = parsedTime;
+        hasExplicitTime = true;
+      }
       continue;
     }
     if (line.toUpperCase().startsWith('[CATEGORY]')) {
       category = line.substring(10).trim();
+      hasExplicitCategory = true;
+      continue;
+    }
+    if (line.toUpperCase().startsWith('[COLLECTION]')) {
+      collection = line.substring(12).trim();
       continue;
     }
     if (line.toUpperCase().startsWith('[DESC]')) {
@@ -132,6 +200,11 @@ export function parseIELTSText(rawText: string): ParseResult {
       readingWordBankMode = false;
       readingHeadingsMode = false;
       readingOptionsMode = false;
+
+      if (/\bSECTION\b/i.test(line) && !hasExplicitCategory) {
+        category = 'IELTS Listening';
+        if (!hasExplicitTime) durationMinutes = 30;
+      }
 
       const pNum = parseInt(partMatch[1]!, 10);
       currentPart = ensurePart(pNum);
@@ -156,11 +229,31 @@ export function parseIELTSText(rawText: string): ParseResult {
     if (line.toUpperCase().startsWith('[SECTION_TITLE]')) {
       flushPassage();
       flushSummary();
+      if (!hasExplicitCategory) {
+        category = 'IELTS Listening';
+        if (!hasExplicitTime) durationMinutes = 30;
+      }
       currentPart.title = line.substring(15).trim();
       continue;
     }
     if (line.toUpperCase().startsWith('[AUDIO]')) {
+      if (!hasExplicitCategory) {
+        category = 'IELTS Listening';
+        if (!hasExplicitTime) durationMinutes = 30;
+      }
       currentPart.audioUrl = line.substring(7).trim();
+      continue;
+    }
+    if (line.toUpperCase().startsWith('[IMAGE]')) {
+      const imgUrl = line.substring(7).trim();
+      if (currentGroup) currentGroup.imageUrl = imgUrl;
+      else currentPart.imageUrl = imgUrl;
+      continue;
+    }
+    if (line.toUpperCase().startsWith('[VIDEO]')) {
+      const vidUrl = line.substring(7).trim();
+      if (currentGroup) currentGroup.videoUrl = vidUrl;
+      else currentPart.videoUrl = vidUrl;
       continue;
     }
     if (line.toUpperCase().startsWith('[SUBTITLE]')) {
@@ -656,6 +749,7 @@ export function parseIELTSText(rawText: string): ParseResult {
       title,
       description,
       category,
+      collection: collection || undefined,
       durationMinutes,
       parts,
       createdAt: Date.now(),
@@ -970,12 +1064,15 @@ I. OVERALL EXAM STRUCTURE:
 --------------------------------------------------------------------------------
 [TITLE] <Exam Name - Example: CAMBRIDGE 19 - PRACTICE TEST 1 READING>
 [TIME] 60
+[COLLECTION] <Collection Name - Auto-created if new, e.g. Cambridge 19>
 [CATEGORY] IELTS Academic Reading
 [DESC] <Short description of the exam>
 
 === PART 1 ===
 [PASSAGE_TITLE] <Passage 1 Title>
 [SUBTITLE] <Passage summary/subtitle (optional)>
+[IMAGE] <Diagram/Illustration URL (optional)>
+[VIDEO] <MP4 or YouTube URL (optional)>
 [PASSAGE]
 <Passage 1 text content...>
 [FOOTNOTE] <* Difficult vocabulary notes (optional)>
@@ -2028,6 +2125,8 @@ export function parseSpeakingText(rawText: string): SpeakingParseResult {
 
   const part1Questions: SpeakingQuestion[] = [];
   let part2CueCard = '';
+  let part2ImageUrl = '';
+  let part2VideoUrl = '';
   const part2Bullets: string[] = [];
   const part2SampleLines: string[] = [];
   const part3Questions: SpeakingQuestion[] = [];
@@ -2138,6 +2237,10 @@ export function parseSpeakingText(rawText: string): SpeakingParseResult {
       if (!cueCard) addError(lineNumber, '[CUE_CARD] cannot be empty.');
       part2CueCard = cueCard;
       currentMode = 'none';
+    } else if (line.toUpperCase().startsWith('[IMAGE]')) {
+      part2ImageUrl = line.substring(7).trim();
+    } else if (line.toUpperCase().startsWith('[VIDEO]')) {
+      part2VideoUrl = line.substring(7).trim();
     } else if (line === '[BULLETS]') {
       if (currentMode === 'bullets' || part2Bullets.length > 0) addError(lineNumber, 'PART 2 has more than one [BULLETS] tag.');
       currentMode = 'bullets';
@@ -2191,6 +2294,8 @@ export function parseSpeakingText(rawText: string): SpeakingParseResult {
       prepTimeSeconds: 60,
       speakTimeSeconds: 120,
       sampleAnswer: part2SampleLines.join('\n').trim(),
+      imageUrl: part2ImageUrl || undefined,
+      videoUrl: part2VideoUrl || undefined,
     },
     part3Questions,
   };

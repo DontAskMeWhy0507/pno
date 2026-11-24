@@ -218,10 +218,13 @@ export const CommandMenu: React.FC<CommandMenuProps> = ({
       if (router.pathname.startsWith("/ielts")) {
         menuEventChannel.emit(eventName);
       } else {
-        try {
-          sessionStorage.setItem("pno_pending_ielts_action", actionName);
-        } catch {}
-        void router.push("/ielts");
+        const targetPath =
+          actionName === "add_test"
+            ? "/ielts/manage/tests?action=smart_import"
+            : actionName === "new_collection"
+              ? "/ielts/manage/collections?action=new_collection"
+              : "/ielts/manage/tests";
+        void router.push(targetPath);
       }
     },
     [router],

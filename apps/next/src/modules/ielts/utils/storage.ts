@@ -1,5 +1,9 @@
 import rawCatalog from '../data/builtinCatalog.json';
+import { saveSpeakingExam } from '../data/speakingExams';
+import { saveWritingExam } from '../data/writingExams';
 import type { Exam } from '../types/exam';
+import type { SpeakingExam } from '../types/speaking';
+import type { WritingExam } from '../types/writing';
 
 interface BuiltinCatalogItem {
   id: string;
@@ -200,6 +204,14 @@ export function saveExam(exam: Exam): void {
     }
   } catch (error) {
     console.error('Failed to save exam', error);
+    const isQuotaExceeded =
+      error instanceof DOMException &&
+      (error.name === 'QuotaExceededError' || error.code === 22);
+    if (isQuotaExceeded) {
+      throw new Error(
+        'Browser storage limit reached (5 MB). Please export & delete unused custom tests before saving.'
+      );
+    }
     throw new Error('Unable to save this test. Check available browser storage and try again.');
   }
 }
@@ -222,33 +234,135 @@ export function deleteExam(id: string): boolean {
   }
 }
 
-export function exportExamAsJSON(exam: Exam): void {
-  const dataStr = 'data:text/json;charset=utf-8,' + encodeURIComponent(JSON.stringify(exam, null, 2));
+export function exportJsonBlob(filename: string, data: unknown): void {
+  const jsonText = JSON.stringify(data, null, 2);
+  const blob = new Blob([jsonText], { type: 'application/json;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
   const downloadAnchor = document.createElement('a');
-  downloadAnchor.setAttribute('href', dataStr);
-  const cleanTitle = (exam.title || 'ielts-exam').replace(/[^a-z0-9]/gi, '_').toLowerCase();
-  downloadAnchor.setAttribute('download', `${cleanTitle}.json`);
+  downloadAnchor.setAttribute('href', url);
+  downloadAnchor.setAttribute('download', filename.endsWith('.json') ? filename : `${filename}.json`);
   document.body.appendChild(downloadAnchor);
   downloadAnchor.click();
   downloadAnchor.remove();
+  window.setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
-export function importExamFromJSON(jsonString: string): Exam {
+export function exportExamAsJSON(exam: Exam): void {
+  const cleanTitle = (exam.title || 'ielts-exam').replace(/[^a-z0-9]/gi, '_').toLowerCase();
+  exportJsonBlob(`${cleanTitle}.json`, exam);
+}
+
+export function importExamFromJSON(jsonString: string, defaultCollection?: string): Exam {
   const parsed = JSON.parse(jsonString);
-  if (!parsed.title || !Array.isArray(parsed.parts)) {
-    throw new Error('Invalid exam format. Required "title" and "parts" array.');
+  if (
+    !parsed ||
+    typeof parsed.title !== 'string' ||
+    !parsed.title.trim() ||
+    !Array.isArray(parsed.parts)
+  ) {
+    throw new Error('Invalid exam format. Required non-empty "title" and "parts" array.');
   }
+
+  const resolvedCollection =
+    (typeof parsed.collection === 'string' && parsed.collection.trim()) ||
+    defaultCollection?.trim() ||
+    'My Tests';
 
   const newExam: Exam = {
     ...parsed,
     id: 'exam_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7),
+    title: parsed.title.trim(),
+    collection: resolvedCollection,
     createdAt: Date.now(),
     updatedAt: Date.now(),
     isBuiltin: false,
   };
+  delete newExam.dataFile;
 
   saveExam(newExam);
   return newExam;
+}
+
+export interface ImportedBundleResult {
+  exams: Exam[];
+  writingExams: WritingExam[];
+  speakingExams: SpeakingExam[];
+}
+
+export function importTestsBundleFromJSON(
+  jsonString: string,
+  defaultCollection?: string
+): ImportedBundleResult {
+  const parsed = JSON.parse(jsonString);
+  const items: unknown[] = Array.isArray(parsed)
+    ? parsed
+    : parsed && typeof parsed === 'object' && Array.isArray((parsed as { tests?: unknown[] }).tests)
+      ? (parsed as { tests: unknown[] }).tests
+      : [parsed];
+
+  if (items.length === 0) {
+    throw new Error('JSON bundle contains no tests.');
+  }
+
+  const exams: Exam[] = [];
+  const writingExams: WritingExam[] = [];
+  const speakingExams: SpeakingExam[] = [];
+  const fallbackCol = defaultCollection?.trim() || 'My Tests';
+
+  for (let idx = 0; idx < items.length; idx++) {
+    const raw = items[idx] as Record<string, unknown> | null;
+    if (!raw || typeof raw !== 'object') {
+      throw new Error(`Item #${idx + 1} is not a valid test object.`);
+    }
+    const rawTitle = typeof raw.title === 'string' ? raw.title.trim() : '';
+    if (!rawTitle) {
+      throw new Error(`Item #${idx + 1} is missing a non-empty "title".`);
+    }
+    const col =
+      (typeof raw.collection === 'string' && raw.collection.trim()) || fallbackCol;
+    const suffix = `${Date.now()}_${idx}_${Math.random().toString(36).substring(2, 6)}`;
+
+    if (raw.task1 && raw.task2) {
+      const writing: WritingExam = {
+        ...(raw as unknown as WritingExam),
+        id: `writing_${suffix}`,
+        title: rawTitle,
+        collection: col,
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+      };
+      saveWritingExam(writing);
+      writingExams.push(writing);
+    } else if (raw.part2Question && Array.isArray(raw.part1Questions)) {
+      const speaking: SpeakingExam = {
+        ...(raw as unknown as SpeakingExam),
+        id: `speaking_${suffix}`,
+        title: rawTitle,
+        collection: col,
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+      };
+      saveSpeakingExam(speaking);
+      speakingExams.push(speaking);
+    } else if (Array.isArray(raw.parts)) {
+      const exam: Exam = {
+        ...(raw as unknown as Exam),
+        id: `exam_${suffix}`,
+        title: rawTitle,
+        collection: col,
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+        isBuiltin: false,
+      };
+      delete exam.dataFile;
+      saveExam(exam);
+      exams.push(exam);
+    } else {
+      throw new Error(`Item "${rawTitle}" does not match Reading/Listening/Writing/Speaking schema.`);
+    }
+  }
+
+  return { exams, writingExams, speakingExams };
 }
 
 export function getExamCollection(exam: Exam): string {
@@ -313,10 +427,15 @@ export function getAllCollections(): { id: string; name: string; description?: s
     colMap.set(c.name.toLowerCase(), c);
   }
 
-  for (const c of getCustomCollections()) {
+  const customList = getCustomCollections();
+  const customNames = new Set<string>();
+  for (const c of customList) {
     let name = c.name;
     if (name === 'Bộ đề của tôi') name = 'My Tests';
-    colMap.set(name.toLowerCase(), { ...c, name, isBuiltin: false });
+    const lower = name.toLowerCase();
+    customNames.add(lower);
+    const existing = colMap.get(lower);
+    colMap.set(lower, { ...c, name, isBuiltin: existing?.isBuiltin ?? false });
   }
 
   const exams = getAllExams();
@@ -340,13 +459,24 @@ export function getAllCollections(): { id: string; name: string; description?: s
   const deletedSet = getDeletedCollections();
   return Array.from(colMap.values()).filter((c) => {
     const lower = c.name.toLowerCase();
-    return !deletedSet.has(lower) && !lower.startsWith('vol ') && !legacyCollections.has(lower);
+    return (
+      !deletedSet.has(lower) &&
+      (!lower.startsWith('vol ') || customNames.has(lower)) &&
+      !legacyCollections.has(lower)
+    );
   });
 }
 
 export function createCollection(name: string, description?: string): { id: string; name: string; description?: string } {
   const trimmed = name.trim();
   if (!trimmed) throw new Error('Collection name cannot be empty.');
+
+  const existingActive = getAllCollections().find(
+    (c) => c.name.toLowerCase() === trimmed.toLowerCase()
+  );
+  if (existingActive) {
+    throw new Error(`Collection "${existingActive.name}" already exists.`);
+  }
 
   const deletedSet = getDeletedCollections();
   if (deletedSet.has(trimmed.toLowerCase())) {
@@ -358,16 +488,31 @@ export function createCollection(name: string, description?: string): { id: stri
   const newCol = { id, name: trimmed, description: description?.trim() || `${trimmed} Collection` };
 
   try {
-    const list = getCustomCollections();
-    if (!list.some((c) => c.name.toLowerCase() === trimmed.toLowerCase())) {
-      list.push(newCol);
-      localStorage.setItem(STORAGE_KEY_COLLECTIONS, JSON.stringify(list));
-    }
+    const list = getCustomCollections().filter(
+      (c) => c.name.toLowerCase() !== trimmed.toLowerCase()
+    );
+    list.push(newCol);
+    localStorage.setItem(STORAGE_KEY_COLLECTIONS, JSON.stringify(list));
   } catch (err) {
     console.error('Failed to create collection', err);
   }
 
   return newCol;
+}
+
+export function ensureCollectionExists(
+  name: string,
+  description?: string
+): { collection: { id: string; name: string; description?: string }; created: boolean } {
+  const trimmed = name.trim() || 'My Tests';
+  const existing = getAllCollections().find(
+    (c) => c.name.toLowerCase() === trimmed.toLowerCase()
+  );
+  if (existing) {
+    return { collection: existing, created: false };
+  }
+  const created = createCollection(trimmed, description);
+  return { collection: created, created: true };
 }
 
 export function setExamCollection(examId: string, collectionName: string): void {
@@ -412,6 +557,15 @@ export function renameCollection(
   const oldTrim = oldName.trim();
   const newTrim = newName.trim();
   if (!newTrim) throw new Error('Collection name cannot be empty.');
+
+  if (oldTrim.toLowerCase() !== newTrim.toLowerCase()) {
+    const duplicate = getAllCollections().find(
+      (c) => c.name.toLowerCase() === newTrim.toLowerCase()
+    );
+    if (duplicate) {
+      throw new Error(`Collection "${duplicate.name}" already exists.`);
+    }
+  }
 
   const deletedSet = getDeletedCollections();
   if (oldTrim.toLowerCase() !== newTrim.toLowerCase()) {

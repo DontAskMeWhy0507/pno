@@ -158,11 +158,11 @@ export const ErrorPage = () => {
             </Button>
             <Button
               as={Link}
-              href="https://status.quenti.io"
+              href="/"
               variant="ghost"
               colorScheme="gray"
             >
-              System status
+              IELTS Practice
             </Button>
             <Button
               as={Link}

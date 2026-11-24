@@ -1,5 +1,4 @@
-import dynamic from 'next/dynamic';
-import React, { useCallback, useMemo, useState, useEffect, type FC } from 'react';
+import React, { useCallback, useMemo, useState, useEffect, useRef, type FC } from 'react';
 import { outfit } from '@pno/lib/chakra-theme';
 import {
   Badge,
@@ -44,21 +43,17 @@ import { MenuOption } from '../../../../components/menu-option';
 import type { Exam } from '../../types/exam';
 import type { WritingExam } from '../../types/writing';
 import type { SpeakingExam } from '../../types/speaking';
-import {
-  getAllWritingExams,
-  saveWritingExam,
-} from '../../data/writingExams';
-import {
-  getAllSpeakingExams,
-  saveSpeakingExam,
-} from '../../data/speakingExams';
+import { getAllWritingExams } from '../../data/writingExams';
+import { getAllSpeakingExams } from '../../data/speakingExams';
 import {
   getAllCollections,
+  getDeletedCollections,
   getExamCollection,
   getExamPartCount,
   getExamQuestionCount,
   isListeningExam,
 } from '../../utils/storage';
+import type { IeltsHomeRoute, IeltsSkillSlug } from '../../utils/ieltsRoutes';
 import type { CloudAttemptRow, CloudIeltsSkill } from '../../utils/cloudSync';
 import {
   getSavedExamSummary,
@@ -80,29 +75,21 @@ import {
   type CloudExamPayload,
 } from '../admin/IeltsManageTab';
 
-const WritingEditorModal = dynamic(
-  () =>
-    import('../admin/WritingEditorModal').then((mod) => mod.WritingEditorModal),
-  { ssr: false }
-);
-const SpeakingEditorModal = dynamic(
-  () =>
-    import('../admin/SpeakingEditorModal').then(
-      (mod) => mod.SpeakingEditorModal
-    ),
-  { ssr: false }
-);
-
 interface HomePageProps {
   exams: Exam[];
   recentAttempts?: CloudAttemptRow[];
   syncStatus?: 'synced' | 'saving' | 'offline';
+  homeRoute: IeltsHomeRoute;
+  openNewCollectionSignal?: number;
+  onNavigateHomeRoute: (route: IeltsHomeRoute, replace?: boolean) => void;
   onSelectExam: (exam: Exam, options?: StartExamOptions) => void;
   onOpenEditor: (
     exam?: Exam | null,
     defaultCollection?: string,
     defaultSkill?: 'reading' | 'listening'
   ) => void;
+  onEditWriting: (exam?: WritingExam | null, defaultCollection?: string) => void;
+  onEditSpeaking: (exam?: SpeakingExam | null, defaultCollection?: string) => void;
   onOpenSmartImport: (
     collection?: string,
     skill?: 'reading' | 'listening' | 'writing' | 'speaking'
@@ -374,8 +361,13 @@ export const HomePage: FC<HomePageProps> = ({
   exams,
   recentAttempts = [],
   syncStatus = 'synced',
+  homeRoute,
+  openNewCollectionSignal = 0,
+  onNavigateHomeRoute,
   onSelectExam,
   onOpenEditor,
+  onEditWriting,
+  onEditSpeaking,
   onOpenSmartImport,
   onRefreshExams,
   onStartWritingExam,
@@ -392,13 +384,10 @@ export const HomePage: FC<HomePageProps> = ({
   onCloudRestoreDefaults,
   onCloudClearProgress,
 }) => {
-  const [primaryTab, setPrimaryTab] = useState<PrimaryTab>('collections');
-  const [selectedCollectionName, setSelectedCollectionName] = useState<string | null>(null);
-  const [activeSkillTab, setActiveSkillTab] = useState<SkillTab>('all');
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
   const [historySkillFilter, setHistorySkillFilter] = useState<HistorySkillFilter>('all');
   const [historyStatusFilter, setHistoryStatusFilter] = useState<HistoryStatusFilter>('all');
-  const [selectedTestTarget, setSelectedTestTarget] = useState<DetailTarget | null>(null);
+  const [localNewColSignal, setLocalNewColSignal] = useState(0);
 
   const [searchQuery, setSearchQuery] = useState('');
   const [progressVersion, setProgressVersion] = useState(0);
@@ -410,12 +399,20 @@ export const HomePage: FC<HomePageProps> = ({
     getAllSpeakingExams()
   );
 
-  const [isWritingEditorOpen, setIsWritingEditorOpen] = useState(false);
-  const [editingWritingExam, setEditingWritingExam] = useState<WritingExam | null>(null);
-  const [writingDefaultCol, setWritingDefaultCol] = useState<string | undefined>(undefined);
-  const [isSpeakingEditorOpen, setIsSpeakingEditorOpen] = useState(false);
-  const [editingSpeakingExam, setEditingSpeakingExam] = useState<SpeakingExam | null>(null);
-  const [speakingDefaultCol, setSpeakingDefaultCol] = useState<string | undefined>(undefined);
+  const lastBackRouteRef = useRef<IeltsHomeRoute | null>(null);
+
+  const primaryTab: PrimaryTab =
+    homeRoute.tab === 'history'
+      ? 'history'
+      : homeRoute.tab === 'manage'
+        ? 'manage'
+        : 'collections';
+  const selectedCollectionName =
+    homeRoute.tab === 'collections' ? (homeRoute.collectionName ?? null) : null;
+  const activeSkillTab: SkillTab =
+    homeRoute.tab === 'collections' && homeRoute.skill ? homeRoute.skill : 'all';
+  const manageSubTab: 'tests' | 'collections' =
+    homeRoute.tab === 'manage' ? homeRoute.subTab : 'tests';
 
   const toast = useToast();
   const cardBg = useColorModeValue('white', 'gray.800');
@@ -428,28 +425,35 @@ export const HomePage: FC<HomePageProps> = ({
     setSpeakingExams(getAllSpeakingExams());
   }, [exams]);
 
-  // Listen to unified PNO Navbar events
+  // Listen to unified PNO Navbar / CommandMenu events
   useEffect(() => {
     const handleOpenManage = () => {
-      setPrimaryTab('manage');
-      setSelectedTestTarget(null);
+      onNavigateHomeRoute({ tab: 'manage', subTab: 'tests' });
+    };
+    const handleAddTest = () => {
+      onNavigateHomeRoute({ tab: 'manage', subTab: 'tests' });
+      onOpenSmartImport();
+    };
+    const handleNewCollection = () => {
+      onNavigateHomeRoute({ tab: 'manage', subTab: 'collections' });
+      setLocalNewColSignal((v) => v + 1);
     };
     const handleSearch = (q: string) => setSearchQuery(q);
 
     menuEventChannel.on('openIeltsManage', handleOpenManage);
     menuEventChannel.on('openIeltsTestBank', handleOpenManage);
-    menuEventChannel.on('openIeltsAddTest', handleOpenManage);
-    menuEventChannel.on('openIeltsNewCollection', handleOpenManage);
+    menuEventChannel.on('openIeltsAddTest', handleAddTest);
+    menuEventChannel.on('openIeltsNewCollection', handleNewCollection);
     menuEventChannel.on('ieltsSearchChange', handleSearch);
 
     return () => {
       menuEventChannel.off('openIeltsManage', handleOpenManage);
       menuEventChannel.off('openIeltsTestBank', handleOpenManage);
-      menuEventChannel.off('openIeltsAddTest', handleOpenManage);
-      menuEventChannel.off('openIeltsNewCollection', handleOpenManage);
+      menuEventChannel.off('openIeltsAddTest', handleAddTest);
+      menuEventChannel.off('openIeltsNewCollection', handleNewCollection);
       menuEventChannel.off('ieltsSearchChange', handleSearch);
     };
-  }, []);
+  }, [onNavigateHomeRoute, onOpenSmartImport]);
 
   const refreshAll = useCallback(() => {
     onRefreshExams();
@@ -458,9 +462,10 @@ export const HomePage: FC<HomePageProps> = ({
     setProgressVersion((v) => v + 1);
   }, [onRefreshExams]);
 
-  // Combine collections from Reading/Listening + Writing + Speaking
+  // Combine collections from Reading/Listening + Writing + Speaking (aligned to 'My Tests' & respecting deleted collections)
   const collections = useMemo(() => {
     const base = getAllCollections();
+    const deletedCols = getDeletedCollections();
     const map = new Map<
       string,
       { id: string; name: string; description?: string; isBuiltin?: boolean }
@@ -470,9 +475,10 @@ export const HomePage: FC<HomePageProps> = ({
     }
     for (const ex of exams) {
       const colName = getExamCollection(ex).trim();
-      if (!map.has(colName.toLowerCase())) {
-        map.set(colName.toLowerCase(), {
-          id: `col_e_${colName.toLowerCase()}`,
+      const lower = colName.toLowerCase();
+      if (!deletedCols.has(lower) && !map.has(lower)) {
+        map.set(lower, {
+          id: `col_e_${lower}`,
           name: colName,
           description: `${colName} Collection`,
           isBuiltin: false,
@@ -480,10 +486,11 @@ export const HomePage: FC<HomePageProps> = ({
       }
     }
     for (const w of writingExams) {
-      const colName = (w.collection || 'IELTS Writing').trim();
-      if (!map.has(colName.toLowerCase())) {
-        map.set(colName.toLowerCase(), {
-          id: `col_w_${colName.toLowerCase()}`,
+      const colName = (w.collection || 'My Tests').trim();
+      const lower = colName.toLowerCase();
+      if (!deletedCols.has(lower) && !map.has(lower)) {
+        map.set(lower, {
+          id: `col_w_${lower}`,
           name: colName,
           description: `${colName} Collection`,
           isBuiltin: false,
@@ -491,10 +498,11 @@ export const HomePage: FC<HomePageProps> = ({
       }
     }
     for (const s of speakingExams) {
-      const colName = (s.collection || 'IELTS Speaking').trim();
-      if (!map.has(colName.toLowerCase())) {
-        map.set(colName.toLowerCase(), {
-          id: `col_s_${colName.toLowerCase()}`,
+      const colName = (s.collection || 'My Tests').trim();
+      const lower = colName.toLowerCase();
+      if (!deletedCols.has(lower) && !map.has(lower)) {
+        map.set(lower, {
+          id: `col_s_${lower}`,
           name: colName,
           description: `${colName} Collection`,
           isBuiltin: false,
@@ -533,49 +541,13 @@ export const HomePage: FC<HomePageProps> = ({
   };
 
   // Handlers
-  const handleSaveWriting = (examToSave: WritingExam) => {
-    saveWritingExam(examToSave);
-    onCloudSaveExam?.(
-      'Writing',
-      examToSave.id,
-      examToSave.title,
-      examToSave.collection || 'My Tests',
-      examToSave as unknown as Record<string, unknown>
-    );
-    setIsWritingEditorOpen(false);
-    setEditingWritingExam(null);
-    setWritingDefaultCol(undefined);
-    refreshAll();
-    toast({
-      title: 'Writing test saved',
-      status: 'success',
-      duration: 2200,
-      isClosable: true,
-      position: 'bottom-right',
-    });
-  };
-
-  const handleSaveSpeaking = (examToSave: SpeakingExam) => {
-    saveSpeakingExam(examToSave);
-    onCloudSaveExam?.(
-      'Speaking',
-      examToSave.id,
-      examToSave.title,
-      examToSave.collection || 'My Tests',
-      examToSave as unknown as Record<string, unknown>
-    );
-    setIsSpeakingEditorOpen(false);
-    setEditingSpeakingExam(null);
-    setSpeakingDefaultCol(undefined);
-    refreshAll();
-    toast({
-      title: 'Speaking test saved',
-      status: 'success',
-      duration: 2200,
-      isClosable: true,
-      position: 'bottom-right',
-    });
-  };
+  const openTestDetail = useCallback(
+    (skill: IeltsSkillSlug, examId: string) => {
+      lastBackRouteRef.current = homeRoute;
+      onNavigateHomeRoute({ tab: 'test_detail', skill, examId });
+    },
+    [homeRoute, onNavigateHomeRoute]
+  );
 
   const handleDiscardExam = (exam: Exam) => {
     clearExamProgress(exam.id);
@@ -683,7 +655,7 @@ export const HomePage: FC<HomePageProps> = ({
         key: `Writing:${w.id}`,
         examId: w.id,
         title: w.title,
-        collection: w.collection || 'IELTS Writing',
+        collection: w.collection || 'My Tests',
         skill: 'writing',
         skillLabel: 'Writing',
         isInProgress: Boolean(saved),
@@ -711,7 +683,7 @@ export const HomePage: FC<HomePageProps> = ({
         key: `Speaking:${s.id}`,
         examId: s.id,
         title: s.title,
-        collection: s.collection || 'IELTS Speaking',
+        collection: s.collection || 'My Tests',
         skill: 'speaking',
         skillLabel: 'Speaking',
         isInProgress: Boolean(saved),
@@ -752,10 +724,8 @@ export const HomePage: FC<HomePageProps> = ({
 
   // Helper to open a collection defaulting to the "All" skill tab
   const handleOpenCollection = (colName: string) => {
-    setSelectedCollectionName(colName);
-    setActiveSkillTab('all');
     setStatusFilter('all');
-    setSelectedTestTarget(null);
+    onNavigateHomeRoute({ tab: 'collections', collectionName: colName, skill: 'all' });
   };
 
   // Status matcher for a test
@@ -807,7 +777,9 @@ export const HomePage: FC<HomePageProps> = ({
           }
           attemptCount={attempts.length}
           bestBand={bestBand}
-          onOpenDetail={() => setSelectedTestTarget({ kind: 'exam', exam: test })}
+          onOpenDetail={() =>
+            openTestDetail(isListen ? 'listening' : 'reading', test.id)
+          }
           onQuickStart={() => onSelectExam(test)}
           onDiscardProgress={
             savedProgress ? () => handleDiscardExam(test) : undefined
@@ -830,7 +802,7 @@ export const HomePage: FC<HomePageProps> = ({
       <GridItem key={`${test.id}-${progressVersion}`}>
         <UnifiedIeltsCard
           title={test.title}
-          collectionName={test.collection || 'IELTS Writing'}
+          collectionName={test.collection || 'My Tests'}
           metaText={
             savedW
               ? `${Math.ceil(savedW.timeRemaining / 60)}m left • T1: ${savedW.task1Words}w • T2: ${savedW.task2Words}w`
@@ -843,7 +815,7 @@ export const HomePage: FC<HomePageProps> = ({
           statusType={statusType}
           statusBadgeLabel="In Progress"
           attemptCount={attempts.length}
-          onOpenDetail={() => setSelectedTestTarget({ kind: 'writing', exam: test })}
+          onOpenDetail={() => openTestDetail('writing', test.id)}
           onQuickStart={() => onStartWritingExam(test)}
           onDiscardProgress={
             savedW ? () => handleDiscardWriting(test.id, test.title) : undefined
@@ -866,7 +838,7 @@ export const HomePage: FC<HomePageProps> = ({
       <GridItem key={`${test.id}-${progressVersion}`}>
         <UnifiedIeltsCard
           title={test.title}
-          collectionName={test.collection || 'IELTS Speaking'}
+          collectionName={test.collection || 'My Tests'}
           metaText={`Part 1 (${test.part1Questions.length} Qs) • Part 2 • Part 3 (${test.part3Questions.length} Qs)`}
           subText={`Cue Card: "${test.part2Question.questionText}"`}
           skillColor="pink.400"
@@ -875,7 +847,7 @@ export const HomePage: FC<HomePageProps> = ({
           statusType={statusType}
           statusBadgeLabel="In Progress"
           attemptCount={attempts.length}
-          onOpenDetail={() => setSelectedTestTarget({ kind: 'speaking', exam: test })}
+          onOpenDetail={() => openTestDetail('speaking', test.id)}
           onQuickStart={() => onStartSpeakingExam(test)}
           onDiscardProgress={
             savedS ? () => handleDiscardSpeaking(test.id, test.title) : undefined
@@ -898,10 +870,10 @@ export const HomePage: FC<HomePageProps> = ({
       (e) => getExamCollection(e).toLowerCase() === colLower
     );
     const wAll = writingExams.filter(
-      (w) => (w.collection || 'IELTS Writing').toLowerCase() === colLower
+      (w) => (w.collection || 'My Tests').toLowerCase() === colLower
     );
     const sAll = speakingExams.filter(
-      (s) => (s.collection || 'IELTS Speaking').toLowerCase() === colLower
+      (s) => (s.collection || 'My Tests').toLowerCase() === colLower
     );
 
     const searchMatch = (title: string) =>
@@ -1058,18 +1030,18 @@ export const HomePage: FC<HomePageProps> = ({
     : { allCount: 0, unstarted: 0, inProgress: 0, completed: 0 };
 
   const effectiveSelectedTarget = useMemo<DetailTarget | null>(() => {
-    if (!selectedTestTarget) return null;
-    if (selectedTestTarget.kind === 'exam') {
-      const fresh = exams.find((e) => e.id === selectedTestTarget.exam.id);
-      return fresh ? { kind: 'exam', exam: fresh } : null;
-    }
-    if (selectedTestTarget.kind === 'writing') {
-      const fresh = writingExams.find((w) => w.id === selectedTestTarget.exam.id);
+    if (homeRoute.tab !== 'test_detail') return null;
+    if (homeRoute.skill === 'writing') {
+      const fresh = writingExams.find((w) => w.id === homeRoute.examId);
       return fresh ? { kind: 'writing', exam: fresh } : null;
     }
-    const fresh = speakingExams.find((s) => s.id === selectedTestTarget.exam.id);
-    return fresh ? { kind: 'speaking', exam: fresh } : null;
-  }, [exams, selectedTestTarget, speakingExams, writingExams]);
+    if (homeRoute.skill === 'speaking') {
+      const fresh = speakingExams.find((s) => s.id === homeRoute.examId);
+      return fresh ? { kind: 'speaking', exam: fresh } : null;
+    }
+    const fresh = exams.find((e) => e.id === homeRoute.examId);
+    return fresh ? { kind: 'exam', exam: fresh } : null;
+  }, [exams, homeRoute, speakingExams, writingExams]);
 
   return (
     <Container maxW="7xl" py={{ base: 4, md: 6 }} flex="1">
@@ -1092,10 +1064,7 @@ export const HomePage: FC<HomePageProps> = ({
               rounded="xl"
               fontWeight={700}
               size="md"
-              onClick={() => {
-                setPrimaryTab('collections');
-                setSelectedTestTarget(null);
-              }}
+              onClick={() => onNavigateHomeRoute({ tab: 'collections' })}
             >
               <HStack spacing={2}>
                 <Text>Collections</Text>
@@ -1120,10 +1089,7 @@ export const HomePage: FC<HomePageProps> = ({
               rounded="xl"
               fontWeight={700}
               size="md"
-              onClick={() => {
-                setPrimaryTab('history');
-                setSelectedTestTarget(null);
-              }}
+              onClick={() => onNavigateHomeRoute({ tab: 'history' })}
             >
               <HStack spacing={2}>
                 <Text>History</Text>
@@ -1148,10 +1114,7 @@ export const HomePage: FC<HomePageProps> = ({
               rounded="xl"
               fontWeight={700}
               size="md"
-              onClick={() => {
-                setPrimaryTab('manage');
-                setSelectedTestTarget(null);
-              }}
+              onClick={() => onNavigateHomeRoute({ tab: 'manage', subTab: manageSubTab })}
             >
               Manage
             </Button>
@@ -1227,7 +1190,19 @@ export const HomePage: FC<HomePageProps> = ({
                   ? getAttemptsFor('Writing', effectiveSelectedTarget.exam.id)
                   : getAttemptsFor('Speaking', effectiveSelectedTarget.exam.id)
             }
-            onBack={() => setSelectedTestTarget(null)}
+            onBack={() => {
+              if (lastBackRouteRef.current) {
+                const back = lastBackRouteRef.current;
+                lastBackRouteRef.current = null;
+                onNavigateHomeRoute(back);
+                return;
+              }
+              const colName =
+                effectiveSelectedTarget.kind === 'exam'
+                  ? getExamCollection(effectiveSelectedTarget.exam)
+                  : effectiveSelectedTarget.exam.collection || 'My Tests';
+              onNavigateHomeRoute({ tab: 'collections', collectionName: colName });
+            }}
             onStartExam={(exam, options) => onSelectExam(exam, options)}
             onResumeExam={(exam) => onSelectExam(exam)}
             onDiscardExam={handleDiscardExam}
@@ -1258,8 +1233,8 @@ export const HomePage: FC<HomePageProps> = ({
                     rounded="xl"
                     leftIcon={<IconArrowLeft size={16} />}
                     onClick={() => {
-                      setSelectedCollectionName(null);
                       setStatusFilter('all');
+                      onNavigateHomeRoute({ tab: 'collections' });
                     }}
                   >
                     All Collections
@@ -1311,8 +1286,12 @@ export const HomePage: FC<HomePageProps> = ({
                     <Button
                       key={tab.id}
                       onClick={() => {
-                        setActiveSkillTab(tab.id);
                         setStatusFilter('all');
+                        onNavigateHomeRoute({
+                          tab: 'collections',
+                          collectionName: selectedCollectionName,
+                          skill: tab.id,
+                        });
                       }}
                       leftIcon={<Icon as={tab.icon} boxSize={4} />}
                       variant={isSelected ? 'solid' : 'outline'}
@@ -1577,12 +1556,12 @@ export const HomePage: FC<HomePageProps> = ({
                     );
                     const colWriting = writingExams.filter(
                       (w) =>
-                        (w.collection || 'IELTS Writing').toLowerCase() ===
+                        (w.collection || 'My Tests').toLowerCase() ===
                         colLower
                     );
                     const colSpeaking = speakingExams.filter(
                       (s) =>
-                        (s.collection || 'IELTS Speaking').toLowerCase() ===
+                        (s.collection || 'My Tests').toLowerCase() ===
                         colLower
                     );
                     const totalTests =
@@ -1852,7 +1831,7 @@ export const HomePage: FC<HomePageProps> = ({
                       }
                       onClick={() => {
                         if (entry.target) {
-                          setSelectedTestTarget(entry.target);
+                          openTestDetail(entry.skill, entry.examId);
                         }
                       }}
                     >
@@ -1940,7 +1919,7 @@ export const HomePage: FC<HomePageProps> = ({
                               variant="outline"
                               colorScheme="blue"
                               rounded="xl"
-                              onClick={() => setSelectedTestTarget(entry.target)}
+                              onClick={() => openTestDetail(entry.skill, entry.examId)}
                             >
                               View Details
                             </Button>
@@ -1961,6 +1940,9 @@ export const HomePage: FC<HomePageProps> = ({
             speakingExams={speakingExams}
             collections={collections}
             searchQuery={searchQuery}
+            subTab={manageSubTab}
+            onSubTabChange={(sub) => onNavigateHomeRoute({ tab: 'manage', subTab: sub })}
+            openNewCollectionSignal={(openNewCollectionSignal || 0) + localNewColSignal}
             onSearchQueryChange={(q) => {
               setSearchQuery(q);
               menuEventChannel.emit('ieltsSearchChange', q);
@@ -1969,17 +1951,12 @@ export const HomePage: FC<HomePageProps> = ({
               onOpenEditor(null, defaultCol, defaultSkill)
             }
             onOpenSmartImport={(col, skill) => onOpenSmartImport(col, skill)}
+            onPreviewTest={(row) =>
+              openTestDetail(row.skill.toLowerCase() as IeltsSkillSlug, row.id)
+            }
             onEditExam={(exam) => onOpenEditor(exam)}
-            onEditWriting={(exam, defaultCol) => {
-              setEditingWritingExam(exam ?? null);
-              setWritingDefaultCol(defaultCol);
-              setIsWritingEditorOpen(true);
-            }}
-            onEditSpeaking={(exam, defaultCol) => {
-              setEditingSpeakingExam(exam ?? null);
-              setSpeakingDefaultCol(defaultCol);
-              setIsSpeakingEditorOpen(true);
-            }}
+            onEditWriting={(exam, defaultCol) => onEditWriting(exam, defaultCol)}
+            onEditSpeaking={(exam, defaultCol) => onEditSpeaking(exam, defaultCol)}
             onRefreshAll={refreshAll}
             onCloudSaveExam={(payload) =>
               onCloudSaveExam?.(
@@ -2000,37 +1977,6 @@ export const HomePage: FC<HomePageProps> = ({
           />
         )}
       </Stack>
-
-      {/* Writing & Speaking Editor Modals */}
-      {isWritingEditorOpen && (
-        <WritingEditorModal
-          key={editingWritingExam?.id || 'new-writing'}
-          isOpen={isWritingEditorOpen}
-          defaultCollection={writingDefaultCol}
-          onClose={() => {
-            setIsWritingEditorOpen(false);
-            setEditingWritingExam(null);
-            setWritingDefaultCol(undefined);
-          }}
-          initialExam={editingWritingExam}
-          onSave={handleSaveWriting}
-        />
-      )}
-
-      {isSpeakingEditorOpen && (
-        <SpeakingEditorModal
-          key={editingSpeakingExam?.id || 'new-speaking'}
-          isOpen={isSpeakingEditorOpen}
-          defaultCollection={speakingDefaultCol}
-          onClose={() => {
-            setIsSpeakingEditorOpen(false);
-            setEditingSpeakingExam(null);
-            setSpeakingDefaultCol(undefined);
-          }}
-          initialExam={editingSpeakingExam}
-          onSave={handleSaveSpeaking}
-        />
-      )}
     </Container>
   );
 };

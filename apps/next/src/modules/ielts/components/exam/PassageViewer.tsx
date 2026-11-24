@@ -1,11 +1,14 @@
 import { useState, useRef, type FC } from 'react';
 import { Trash2 } from 'lucide-react';
+import { MediaEmbed } from './MediaEmbed';
 
 interface PassageViewerProps {
   title: string;
   subtitle?: string;
   passage: string;
   footnotes?: string;
+  imageUrl?: string;
+  videoUrl?: string;
   fontSize: 'sm' | 'base' | 'lg';
 }
 
@@ -46,6 +49,8 @@ export const PassageViewer: FC<PassageViewerProps> = ({
   subtitle,
   passage,
   footnotes,
+  imageUrl,
+  videoUrl,
   fontSize,
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -208,6 +213,11 @@ export const PassageViewer: FC<PassageViewerProps> = ({
           </p>
         )}
       </div>
+
+      {/* Main Passage Media (Image / Video) */}
+      {(imageUrl || videoUrl) && (
+        <MediaEmbed imageUrl={imageUrl} videoUrl={videoUrl} alt={title} className="mb-6" />
+      )}
 
       {/* Main Passage Content */}
       <div className={`space-y-4 md:space-y-5 text-justify font-sans text-gray-900 w-full ${fontClass}`}>

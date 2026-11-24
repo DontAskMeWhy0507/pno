@@ -1,6 +1,7 @@
 import React, { type FC } from 'react';
 import type { QuestionGroup, UserAnswerRecord, ScoreReport, QuestionOption } from '../../types/exam';
 import { QuestionItem } from './QuestionItem';
+import { MediaEmbed } from './MediaEmbed';
 import { Bookmark, CheckCircle2, XCircle, Info } from 'lucide-react';
 
 interface QuestionGroupRendererProps {
@@ -123,6 +124,14 @@ export const QuestionGroupRenderer: FC<QuestionGroupRendererProps> = ({
                 return renderMarkdownText(part);
               })}
           </div>
+          {(group.imageUrl || group.videoUrl) && (
+            <MediaEmbed
+              imageUrl={group.imageUrl}
+              videoUrl={group.videoUrl}
+              alt={group.title || 'Question diagram'}
+              className="mt-4"
+            />
+          )}
         </div>
 
         {/* 2. Summary Completion Card (PNO Quiz Card Style) */}
@@ -387,6 +396,14 @@ export const QuestionGroupRenderer: FC<QuestionGroupRendererProps> = ({
           <div className={`mt-3 p-4 bg-slate-50 border-2 border-gray-200 rounded-xl font-sans ${instructionTextClass} text-gray-900 whitespace-pre-line`}>
             {renderMarkdownText(group.sharedContent)}
           </div>
+        )}
+        {(group.imageUrl || group.videoUrl) && (
+          <MediaEmbed
+            imageUrl={group.imageUrl}
+            videoUrl={group.videoUrl}
+            alt={group.title || 'Question visual'}
+            className="mt-4"
+          />
         )}
       </div>
 
