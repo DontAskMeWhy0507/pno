@@ -78,6 +78,8 @@ export const AnkiStudyView: React.FC<AnkiStudyViewProps> = ({ studySetId }) => {
   const [replaySignal, setReplaySignal] = useState(0);
   const inFlightTermsRef = useRef<Set<string>>(new Set());
   const lastLoadedUpdatedAtRef = useRef<number>(0);
+  const cardScrollRef = useRef<HTMLDivElement>(null);
+  const answerRef = useRef<HTMLDivElement>(null);
 
   const utils = api.useContext();
   const queueQuery = api.anki.getReviewQueue.useQuery(
@@ -272,7 +274,36 @@ export const AnkiStudyView: React.FC<AnkiStudyViewProps> = ({ studySetId }) => {
     "rgba(247, 250, 252, 0.86)",
     "rgba(23, 25, 35, 0.86)",
   );
+  const barBorderColor = useColorModeValue("gray.200", "gray.700");
   const counts = liveCounts;
+
+  // Reset card scroll position when advancing to a new card or switching decks
+  useEffect(() => {
+    cardScrollRef.current?.scrollTo({ top: 0, behavior: "auto" });
+  }, [currentIndex, studySetId]);
+
+  // Smoothly scroll the card pane to bring the answer side into view on Show Answer
+  useEffect(() => {
+    if (!isAnswerShown) return;
+    const scrollToAnswer = () => {
+      const scroller = cardScrollRef.current;
+      const ans = answerRef.current;
+      if (!scroller || !ans) return;
+      const containerRect = scroller.getBoundingClientRect();
+      const ansRect = ans.getBoundingClientRect();
+      const targetTop = scroller.scrollTop + (ansRect.top - containerRect.top) - 12;
+      scroller.scrollTo({
+        top: Math.max(0, targetTop),
+        behavior: "smooth",
+      });
+    };
+    const rafId = window.requestAnimationFrame(scrollToAnswer);
+    const timerId = window.setTimeout(scrollToAnswer, 80);
+    return () => {
+      window.cancelAnimationFrame(rafId);
+      window.clearTimeout(timerId);
+    };
+  }, [isAnswerShown, currentIndex]);
 
   if (queueQuery.isLoading) {
     return (
@@ -355,138 +386,154 @@ export const AnkiStudyView: React.FC<AnkiStudyViewProps> = ({ studySetId }) => {
     <Container
       maxW="4xl"
       px={{ base: 3, sm: 6 }}
-      py={{ base: 3, md: 6 }}
-      minH="calc(100dvh - 80px)"
+      pt={{ base: 2, md: 4 }}
+      pb={0}
+      h="calc(100dvh - 80px)"
+      maxH="calc(100dvh - 80px)"
+      overflow="hidden"
       display="flex"
       flexDirection="column"
     >
-      <Stack spacing={{ base: 4, md: 6 }} flex="1" justify="space-between">
-        <Stack spacing={{ base: 4, md: 6 }}>
-          {/* Header Bar */}
-          <HStack justify="space-between" align="center" flexWrap="wrap" gap={2}>
-            <Button
+      {/* Header Bar */}
+      <HStack
+        flexShrink={0}
+        pb={{ base: 2, md: 3 }}
+        justify="space-between"
+        align="center"
+        flexWrap="wrap"
+        gap={2}
+      >
+        <Button
+          size="sm"
+          variant="ghost"
+          leftIcon={<IconArrowLeft size={16} />}
+          onClick={() => router.push(`/${studySetId}`)}
+        >
+          <Box as="span" display={{ base: "none", sm: "inline" }}>
+            Back to Deck
+          </Box>
+          <Box as="span" display={{ base: "inline", sm: "none" }}>
+            Deck
+          </Box>
+        </Button>
+
+        {/* Anki Review Counters + Replay/Edit */}
+        <HStack spacing={{ base: 1.5, sm: 2.5 }}>
+          <Badge
+            colorScheme="blue"
+            px={{ base: 2, sm: 2.5 }}
+            py={1}
+            rounded="md"
+            fontSize={{ base: "xs", sm: "sm" }}
+          >
+            New: {counts.new}
+          </Badge>
+          <Badge
+            colorScheme="red"
+            px={{ base: 2, sm: 2.5 }}
+            py={1}
+            rounded="md"
+            fontSize={{ base: "xs", sm: "sm" }}
+          >
+            Learn: {counts.learn}
+          </Badge>
+          <Badge
+            colorScheme="green"
+            px={{ base: 2, sm: 2.5 }}
+            py={1}
+            rounded="md"
+            fontSize={{ base: "xs", sm: "sm" }}
+          >
+            Review: {counts.review}
+          </Badge>
+
+          <Tooltip label="Replay audio (R)">
+            <IconButton
+              aria-label="Replay audio"
+              icon={<IconVolume size={17} />}
               size="sm"
               variant="ghost"
-              leftIcon={<IconArrowLeft size={16} />}
-              onClick={() => router.push(`/${studySetId}`)}
-            >
-              <Box as="span" display={{ base: "none", sm: "inline" }}>
-                Back to Deck
-              </Box>
-              <Box as="span" display={{ base: "inline", sm: "none" }}>
-                Deck
-              </Box>
-            </Button>
-
-            {/* Anki Review Counters + Replay/Edit */}
-            <HStack spacing={{ base: 1.5, sm: 2.5 }}>
-              <Badge
-                colorScheme="blue"
-                px={{ base: 2, sm: 2.5 }}
-                py={1}
-                rounded="md"
-                fontSize={{ base: "xs", sm: "sm" }}
-              >
-                New: {counts.new}
-              </Badge>
-              <Badge
-                colorScheme="red"
-                px={{ base: 2, sm: 2.5 }}
-                py={1}
-                rounded="md"
-                fontSize={{ base: "xs", sm: "sm" }}
-              >
-                Learn: {counts.learn}
-              </Badge>
-              <Badge
-                colorScheme="green"
-                px={{ base: 2, sm: 2.5 }}
-                py={1}
-                rounded="md"
-                fontSize={{ base: "xs", sm: "sm" }}
-              >
-                Review: {counts.review}
-              </Badge>
-
-              <Tooltip label="Replay audio (R)">
-                <IconButton
-                  aria-label="Replay audio"
-                  icon={<IconVolume size={17} />}
-                  size="sm"
-                  variant="ghost"
-                  rounded="lg"
-                  onClick={() => setReplaySignal((s) => s + 1)}
-                />
-              </Tooltip>
-
-              {isOwner && currentCard && (
-                <Tooltip label="Edit card (E)">
-                  <IconButton
-                    aria-label="Edit card"
-                    icon={<IconEdit size={17} />}
-                    size="sm"
-                    variant="outline"
-                    rounded="lg"
-                    onClick={() => setEditModalOpen(true)}
-                  />
-                </Tooltip>
-              )}
-            </HStack>
-          </HStack>
-
-          {/* Card View */}
-          {currentCard && (
-            <AnkiCard
-              key={`${currentCard.termId}-${currentIndex}`}
-              frontHtml={currentCard.word}
-              backHtml={currentCard.definition}
-              assetUrl={currentCard.assetUrl}
-              customCss={deckTemplate?.css}
-              replaySignal={replaySignal}
-              isAnswerShown={isAnswerShown}
-              onFlip={handleShowAnswer}
+              rounded="lg"
+              onClick={() => setReplaySignal((s) => s + 1)}
             />
-          )}
-        </Stack>
+          </Tooltip>
 
-        {/* Action Controls (Sticky thumb bar on mobile) */}
-        <Box
-          position={{ base: "sticky", md: "static" }}
-          bottom={0}
-          zIndex={20}
-          bg={{ base: stickyBg, md: "transparent" }}
-          backdropFilter={{ base: "blur(12px)", md: "none" }}
-          pt={2}
-          pb={{ base: "max(12px, env(safe-area-inset-bottom))", md: 2 }}
-          mx={{ base: -3, sm: 0 }}
-          px={{ base: 3, sm: 0 }}
-        >
-          {!isAnswerShown ? (
-            <Button
-              w="full"
-              h={{ base: "50px", md: "54px" }}
-              colorScheme="orange"
-              fontSize="md"
-              fontWeight={700}
-              rounded="xl"
-              onClick={handleShowAnswer}
-            >
-              Show Answer
-              <Box as="span" display={{ base: "none", sm: "inline" }} ml={1}>
-                (Space)
-              </Box>
-            </Button>
-          ) : (
-            currentCard && (
-              <AnkiRatingBar
-                estimates={currentCard.estimates}
-                onRate={handleRate}
-                isLoading={inFlightTermsRef.current.has(currentCard.termId)}
+          {isOwner && currentCard && (
+            <Tooltip label="Edit card (E)">
+              <IconButton
+                aria-label="Edit card"
+                icon={<IconEdit size={17} />}
+                size="sm"
+                variant="outline"
+                rounded="lg"
+                onClick={() => setEditModalOpen(true)}
               />
-            )
+            </Tooltip>
           )}
-        </Box>
-      </Stack>
+        </HStack>
+      </HStack>
+
+      {/* Scrollable Card Pane */}
+      <Box
+        ref={cardScrollRef}
+        flex="1"
+        minH={0}
+        overflowY="auto"
+        overscrollBehavior="contain"
+        pb={{ base: 4, md: 6 }}
+      >
+        {currentCard && (
+          <AnkiCard
+            key={`${currentCard.termId}-${currentIndex}`}
+            frontHtml={currentCard.word}
+            backHtml={currentCard.definition}
+            assetUrl={currentCard.assetUrl}
+            customCss={deckTemplate?.css}
+            replaySignal={replaySignal}
+            isAnswerShown={isAnswerShown}
+            onFlip={handleShowAnswer}
+            answerRef={answerRef}
+          />
+        )}
+      </Box>
+
+      {/* Docked Bottom Action Controls */}
+      <Box
+        flexShrink={0}
+        bg={stickyBg}
+        backdropFilter="blur(12px)"
+        borderTopWidth="1px"
+        borderColor={barBorderColor}
+        pt={{ base: 2.5, md: 3 }}
+        pb={{ base: "max(12px, env(safe-area-inset-bottom))", md: 4 }}
+        mx={{ base: -3, sm: 0 }}
+        px={{ base: 3, sm: 0 }}
+      >
+        {!isAnswerShown ? (
+          <Button
+            w="full"
+            h={{ base: "50px", md: "54px" }}
+            colorScheme="orange"
+            fontSize="md"
+            fontWeight={700}
+            rounded="xl"
+            onClick={handleShowAnswer}
+          >
+            Show Answer
+            <Box as="span" display={{ base: "none", sm: "inline" }} ml={1}>
+              (Space)
+            </Box>
+          </Button>
+        ) : (
+          currentCard && (
+            <AnkiRatingBar
+              estimates={currentCard.estimates}
+              onRate={handleRate}
+              isLoading={inFlightTermsRef.current.has(currentCard.termId)}
+            />
+          )
+        )}
+      </Box>
 
       {isOwner && currentCard && editModalOpen && (
         <AnkiCardEditorModal

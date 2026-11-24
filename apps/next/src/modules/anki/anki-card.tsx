@@ -30,6 +30,7 @@ export interface AnkiCardProps {
   replaySignal?: number;
   disableAutoPlay?: boolean;
   onFlip?: () => void;
+  answerRef?: React.RefObject<HTMLDivElement>;
 }
 
 export const AnkiCard: React.FC<AnkiCardProps> = ({
@@ -41,6 +42,7 @@ export const AnkiCard: React.FC<AnkiCardProps> = ({
   replaySignal = 0,
   disableAutoPlay = false,
   onFlip,
+  answerRef,
 }) => {
   const cardBg = useColorModeValue("white", "gray.800");
   const borderColor = useColorModeValue("gray.200", "gray.700");
@@ -287,7 +289,13 @@ export const AnkiCard: React.FC<AnkiCardProps> = ({
 
         {/* Answer Side */}
         {isAnswerShown && (
-          <Stack spacing={4} w="full" mt={{ base: 4, md: 6 }} align="center">
+          <Stack
+            ref={answerRef}
+            spacing={4}
+            w="full"
+            mt={{ base: 4, md: 6 }}
+            align="center"
+          >
             <Divider borderColor={borderColor} />
             <Box
               textAlign="center"
