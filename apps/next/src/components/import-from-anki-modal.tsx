@@ -291,8 +291,13 @@ export const ImportFromAnkiModal: React.FC<ImportFromAnkiModalProps> = ({
               }),
             });
             if (!resp.ok) {
+              const errBody = (await resp.json().catch(() => null)) as {
+                error?: string;
+              } | null;
               throw new Error(
-                `Media batch upload failed (${resp.status}). Please retry or check storage settings.`,
+                errBody?.error
+                  ? `Media batch upload failed (${resp.status}): ${errBody.error}`
+                  : `Media batch upload failed (${resp.status}). Please retry or check storage settings.`,
               );
             }
             const data = (await resp.json()) as {

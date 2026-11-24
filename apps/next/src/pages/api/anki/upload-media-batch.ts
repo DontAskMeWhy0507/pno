@@ -6,6 +6,7 @@ import path from "path";
 
 import { getServerAuthSession } from "@quenti/auth";
 import {
+  getMediaS3Config,
   uploadFilesToGithubMedia,
   uploadMediaBatchWithFailover,
 } from "@quenti/images/server";
@@ -52,7 +53,11 @@ export default async function handler(
       content[2] === 0x2f &&
       content[3] === 0xfd
     ) {
-      content = Buffer.from(fzstd.decompress(content));
+      try {
+        content = Buffer.from(fzstd.decompress(content));
+      } catch {
+        // Keep original bytes if zstd frame is partial or non-standard
+      }
     }
     const safeName =
       f.name
@@ -111,8 +116,11 @@ export default async function handler(
       fallbackUsed: true,
     });
   } catch (err) {
+    const s3Ready = Boolean(getMediaS3Config());
+    const ghReady = Boolean(process.env.GITHUB_MEDIA_TOKEN?.trim());
+    const detail = err instanceof Error ? err.message : "Failed to save media batch.";
     return res.status(500).json({
-      error: err instanceof Error ? err.message : "Failed to save media batch.",
+      error: `${detail} (s3Configured=${s3Ready}, githubConfigured=${ghReady})`,
     });
   }
 }
