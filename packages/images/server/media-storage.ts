@@ -1,3 +1,4 @@
+import crypto from "crypto";
 import {
   ListObjectsV2Command,
   PutObjectCommand,
@@ -609,7 +610,36 @@ export async function uploadMediaBatchWithFailover(
   return outcome.result;
 }
 
+export function createMediaWorkerToken(params: {
+  prefix: string;
+  secret: string;
+  ttlSeconds?: number;
+}): string {
+  const cleanPrefix = params.prefix.replace(/^\/+|\/+$/g, "");
+  const ttlSeconds = params.ttlSeconds ?? 900;
+  const payload = {
+    prefix: cleanPrefix,
+    exp: Date.now() + ttlSeconds * 1000,
+  };
+  const payloadB64 = Buffer.from(JSON.stringify(payload), "utf8").toString(
+    "base64url",
+  );
+  const sigB64 = crypto
+    .createHmac("sha256", params.secret)
+    .update(payloadB64)
+    .digest("base64url");
+  return `${payloadB64}.${sigB64}`;
+}
+
 export type PresignedMediaUploadResult =
+  | {
+      mode: "worker";
+      workerUrl: string;
+      token: string;
+      mediaBase: string;
+      maxBatchFiles: number;
+      maxBatchBytes: number;
+    }
   | {
       mode: "presigned";
       mediaBase: string;
@@ -634,6 +664,7 @@ export async function createPresignedMediaUploads(params: {
   estimatedTotalObjects?: number;
   skipQuotaCheck?: boolean;
   expiresInSeconds?: number;
+  forcePresigned?: boolean;
 }): Promise<PresignedMediaUploadResult> {
   const cfg = getMediaS3Config();
   if (!cfg) {
@@ -674,7 +705,26 @@ export async function createPresignedMediaUploads(params: {
       }
     }
 
+    const workerUrl = process.env.MEDIA_WORKER_URL?.trim().replace(/\/+$/, "");
+    const workerSecret = process.env.MEDIA_WORKER_SECRET?.trim();
     const expiresIn = params.expiresInSeconds ?? 900;
+
+    if (workerUrl && workerSecret && !params.forcePresigned) {
+      const token = createMediaWorkerToken({
+        prefix: cleanPrefix,
+        secret: workerSecret,
+        ttlSeconds: expiresIn,
+      });
+      return {
+        mode: "worker",
+        workerUrl,
+        token,
+        mediaBase: cleanPrefix ? `${cfg.publicUrl}/${cleanPrefix}` : cfg.publicUrl,
+        maxBatchFiles: 40,
+        maxBatchBytes: 2_500_000,
+      };
+    }
+
     const uploads = await Promise.all(
       params.filenames.map(async (rawName) => {
         const safeName = sanitizeMediaFileName(rawName);

@@ -27,12 +27,14 @@ export default async function handler(
     estimatedTotalBytes,
     estimatedTotalObjects,
     skipQuotaCheck,
+    forcePresigned,
   } = req.body as {
     importId?: string;
     filenames?: string[];
     estimatedTotalBytes?: number;
     estimatedTotalObjects?: number;
     skipQuotaCheck?: boolean;
+    forcePresigned?: boolean;
   };
 
   if (
@@ -57,6 +59,7 @@ export default async function handler(
     estimatedTotalBytes,
     estimatedTotalObjects,
     skipQuotaCheck,
+    forcePresigned,
   });
 
   return res.status(200).json(result);

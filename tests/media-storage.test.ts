@@ -1,5 +1,8 @@
+import fs from "fs";
+import path from "path";
 import { S3Client } from "@aws-sdk/client-s3";
 import {
+  createMediaWorkerToken,
   createPresignedMediaUploads,
   detectMediaContentType,
   evaluateS3QuotaHeadroom,
@@ -9,6 +12,30 @@ import {
   uploadMediaBatchWithDiagnostics,
 } from "../packages/images/server/media-storage";
 import { getAnkiFallbackMediaUrl } from "../packages/lib/src/anki/media-fallback";
+import {
+  detectAnkiMediaContentType,
+  packWorkerMediaBatch,
+} from "../packages/lib/src/anki/worker-batch";
+
+function loadWorkerHandler(): {
+  fetch: (
+    request: Request,
+    env: { BUCKET: { put: jest.Mock }; UPLOAD_SECRET: string },
+  ) => Promise<Response>;
+} {
+  const src = fs.readFileSync(
+    path.resolve(__dirname, "../workers/r2-uploader/index.js"),
+    "utf8",
+  );
+  const body = src.replace("export default {", "return {");
+  const factory = new Function(body);
+  return factory() as {
+    fetch: (
+      request: Request,
+      env: { BUCKET: { put: jest.Mock }; UPLOAD_SECRET: string },
+    ) => Promise<Response>;
+  };
+}
 
 describe("Media Storage, Hard Quota Guard & CDN Fallback", () => {
   test("detectMediaContentType resolves audio and image MIME types accurately", () => {
@@ -230,6 +257,192 @@ describe("Media Storage, Hard Quota Guard & CDN Fallback", () => {
       expect(diag.s3Error).toContain("AccessDenied");
       expect(diag.s3Error).toContain("HTTP 403");
       expect(diag.s3Error).not.toContain("SUPER_SECRET_ACCESS_KEY_VALUE");
+    });
+
+    test("createPresignedMediaUploads uses worker mode when MEDIA_WORKER_* set, respects forcePresigned, and enforces 9GB cap", async () => {
+      process.env.MEDIA_WORKER_URL = "https://pno-r2-uploader.example.workers.dev";
+      process.env.MEDIA_WORKER_SECRET = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
+
+      let bucketSize = 1_000_000;
+      jest
+        .spyOn(S3Client.prototype, "send")
+        .mockImplementation(async (cmd: { constructor: { name: string } }) => {
+          if (cmd.constructor.name === "ListObjectsV2Command") {
+            return {
+              Contents: [{ Size: bucketSize }],
+              IsTruncated: false,
+            };
+          }
+          return {};
+        });
+
+      process.env.MEDIA_S3_BUCKET = "pno-worker-ok";
+      const workerPlan = await createPresignedMediaUploads({
+        filenames: ["01.mp3"],
+        prefix: "anki/imports/workertest1",
+        estimatedTotalBytes: 10_000,
+        estimatedTotalObjects: 1,
+      });
+
+      expect(workerPlan.mode).toBe("worker");
+      if (workerPlan.mode === "worker") {
+        expect(workerPlan.workerUrl).toBe(
+          "https://pno-r2-uploader.example.workers.dev",
+        );
+        expect(workerPlan.mediaBase).toBe(
+          "https://pub-0fe24510262b429d9dfda48feefbedba.r2.dev/anki/imports/workertest1",
+        );
+        expect(workerPlan.maxBatchFiles).toBe(40);
+        expect(workerPlan.maxBatchBytes).toBe(2_500_000);
+        expect(workerPlan.token.split(".")).toHaveLength(2);
+      }
+
+      const forcedPresign = await createPresignedMediaUploads({
+        filenames: ["01.mp3"],
+        prefix: "anki/imports/workertest1",
+        skipQuotaCheck: true,
+        forcePresigned: true,
+      });
+      expect(forcedPresign.mode).toBe("presigned");
+
+      process.env.MEDIA_S3_BUCKET = "pno-worker-full";
+      bucketSize = 8_990_000_000;
+      const blocked = await createPresignedMediaUploads({
+        filenames: ["big.mp3"],
+        prefix: "anki/imports/workertest2",
+        estimatedTotalBytes: 20_000_000,
+        estimatedTotalObjects: 1,
+      });
+      expect(blocked).toEqual({
+        mode: "batch",
+        forceBackup: true,
+        reason: "BYTE_QUOTA_REACHED",
+      });
+    });
+
+    test("Cloudflare Worker PNOB protocol uploads batches, sanitizes paths, and rejects bad tokens/sizes", async () => {
+      const worker = loadWorkerHandler();
+      const secret = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
+      const stored = new Map<string, { bytes: Uint8Array; httpMetadata: unknown }>();
+      const mockEnv = {
+        UPLOAD_SECRET: secret,
+        BUCKET: {
+          put: jest.fn(async (key: string, data: Uint8Array, opts: { httpMetadata: unknown }) => {
+            stored.set(key, { bytes: new Uint8Array(data), httpMetadata: opts.httpMetadata });
+          }),
+        },
+      };
+
+      // 1. Health endpoint
+      const healthRes = await worker.fetch(
+        new Request("https://pno-r2-uploader.example.workers.dev/health", {
+          headers: { Origin: "https://pno-app.vercel.app" },
+        }),
+        mockEnv,
+      );
+      expect(healthRes.status).toBe(200);
+      expect(await healthRes.json()).toEqual({
+        ok: true,
+        service: "pno-r2-uploader",
+      });
+
+      // 2. Valid batch + path traversal sanitization
+      const token = createMediaWorkerToken({
+        prefix: "anki/imports/w123",
+        secret,
+        ttlSeconds: 300,
+      });
+      const audioBytes = new Uint8Array([1, 2, 3, 4, 5]);
+      const imgBytes = new Uint8Array([9, 8, 7]);
+      const packed = packWorkerMediaBatch(token, [
+        {
+          name: "01_word.mp3",
+          contentType: detectAnkiMediaContentType("01_word.mp3"),
+          bytes: audioBytes,
+        },
+        {
+          name: "../../evil<dir>/pic.jpg",
+          contentType: detectAnkiMediaContentType("pic.jpg"),
+          bytes: imgBytes,
+        },
+      ]);
+
+      const postRes = await worker.fetch(
+        new Request("https://pno-r2-uploader.example.workers.dev/", {
+          method: "POST",
+          headers: {
+            Origin: "https://pno-app.vercel.app",
+            "Content-Type": "text/plain",
+          },
+          body: packed.slice().buffer,
+        }),
+        mockEnv,
+      );
+      expect(postRes.status).toBe(200);
+      expect(postRes.headers.get("Access-Control-Allow-Origin")).toBe(
+        "https://pno-app.vercel.app",
+      );
+      expect(await postRes.json()).toEqual({
+        ok: true,
+        uploaded: 2,
+        bytes: 8,
+      });
+      expect(Array.from(stored.keys())).toEqual([
+        "anki/imports/w123/01_word.mp3",
+        "anki/imports/w123/pic.jpg",
+      ]);
+      expect(Array.from(stored.get("anki/imports/w123/01_word.mp3")!.bytes)).toEqual([
+        1, 2, 3, 4, 5,
+      ]);
+      expect(stored.get("anki/imports/w123/01_word.mp3")!.httpMetadata).toEqual({
+        contentType: "audio/mpeg",
+        cacheControl: "public, max-age=31536000, immutable",
+      });
+
+      // 3. Tampered signature -> 401
+      const tamperedToken = token.slice(0, -4) + "AAAA";
+      const badSigPacked = packWorkerMediaBatch(tamperedToken, [
+        { name: "a.mp3", contentType: "audio/mpeg", bytes: audioBytes },
+      ]);
+      const badSigRes = await worker.fetch(
+        new Request("https://pno-r2-uploader.example.workers.dev/", {
+          method: "POST",
+          body: badSigPacked.slice().buffer,
+        }),
+        mockEnv,
+      );
+      expect(badSigRes.status).toBe(401);
+
+      // 4. Expired token -> 401
+      const expiredToken = createMediaWorkerToken({
+        prefix: "anki/imports/w123",
+        secret,
+        ttlSeconds: -10,
+      });
+      const expPacked = packWorkerMediaBatch(expiredToken, [
+        { name: "a.mp3", contentType: "audio/mpeg", bytes: audioBytes },
+      ]);
+      const expRes = await worker.fetch(
+        new Request("https://pno-r2-uploader.example.workers.dev/", {
+          method: "POST",
+          body: expPacked.slice().buffer,
+        }),
+        mockEnv,
+      );
+      expect(expRes.status).toBe(401);
+
+      // 5. fileCount > 45 -> 400
+      const oversized = new Uint8Array(packed);
+      const tokenLen = new DataView(oversized.buffer).getUint16(5, false);
+      new DataView(oversized.buffer).setUint16(7 + tokenLen, 46, false);
+      const countErrRes = await worker.fetch(
+        new Request("https://pno-r2-uploader.example.workers.dev/", {
+          method: "POST",
+          body: oversized.slice().buffer,
+        }),
+        mockEnv,
+      );
+      expect(countErrRes.status).toBe(400);
     });
   });
 });

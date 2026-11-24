@@ -5,6 +5,11 @@ import JSZip from "jszip";
 import * as fzstd from "fzstd";
 import { Modal } from "@quenti/components/modal";
 import { decodeProtobufMedia } from "@quenti/lib/src/anki/protobuf-media";
+import {
+  detectAnkiMediaContentType,
+  packWorkerMediaBatch,
+  type WorkerBatchFileInput,
+} from "@quenti/lib/src/anki/worker-batch";
 import { api } from "@quenti/trpc";
 import {
   Button,
@@ -274,8 +279,8 @@ export const ImportFromAnkiModal: React.FC<ImportFromAnkiModalProps> = ({
         const fetchWithRetry = async <T,>(
           fn: () => Promise<T>,
           attempts = 3,
+          delays = [500, 1500, 3000],
         ): Promise<T> => {
-          const delays = [500, 1500, 3000];
           let lastErr: unknown;
           for (let attempt = 0; attempt < attempts; attempt++) {
             try {
@@ -291,6 +296,14 @@ export const ImportFromAnkiModal: React.FC<ImportFromAnkiModalProps> = ({
         };
 
         type PresignResponse =
+          | {
+              mode: "worker";
+              workerUrl: string;
+              token: string;
+              mediaBase: string;
+              maxBatchFiles: number;
+              maxBatchBytes: number;
+            }
           | {
               mode: "presigned";
               mediaBase: string;
@@ -311,6 +324,7 @@ export const ImportFromAnkiModal: React.FC<ImportFromAnkiModalProps> = ({
         const requestPresignChunk = async (
           filenames: string[],
           skipQuotaCheck: boolean,
+          forcePresigned = false,
         ): Promise<PresignResponse> => {
           const resp = await fetch("/api/anki/presign-media", {
             method: "POST",
@@ -321,6 +335,7 @@ export const ImportFromAnkiModal: React.FC<ImportFromAnkiModalProps> = ({
               estimatedTotalBytes,
               estimatedTotalObjects: dedupedEntries.length,
               skipQuotaCheck,
+              forcePresigned,
             }),
           });
           if (!resp.ok) {
@@ -345,16 +360,122 @@ export const ImportFromAnkiModal: React.FC<ImportFromAnkiModalProps> = ({
           const firstNames = dedupedEntries
             .slice(0, PRESIGN_CHUNK)
             .map(([, realName]) => realName);
-          const firstPresign = await requestPresignChunk(firstNames, false);
+          let activePlan = await requestPresignChunk(firstNames, false);
 
-          if (firstPresign.mode === "batch") {
-            forceBatchBackup = Boolean(firstPresign.forceBackup);
+          if (activePlan.mode === "worker") {
+            const workerUrl = activePlan.workerUrl;
+            const workerToken = activePlan.token;
+            const workerMediaBase = activePlan.mediaBase;
+            const maxFiles = Math.max(1, activePlan.maxBatchFiles || 40);
+            const maxBytes = Math.max(100_000, activePlan.maxBatchBytes || 2_500_000);
+
+            const slices: Array<Array<[string, string]>> = [];
+            for (let i = 0; i < dedupedEntries.length; i += maxFiles) {
+              slices.push(dedupedEntries.slice(i, i + maxFiles));
+            }
+
+            const uploadWorkerSlice = async (slice: Array<[string, string]>) => {
+              const items: WorkerBatchFileInput[] = [];
+              for (const [entryId, rawName] of slice) {
+                const rawBytes = await decompressEntryBytes(entryId);
+                if (!rawBytes) continue;
+                items.push({
+                  name: rawName,
+                  contentType: detectAnkiMediaContentType(rawName),
+                  bytes: rawBytes,
+                });
+              }
+              if (items.length === 0) return;
+
+              const subBatches: WorkerBatchFileInput[][] = [];
+              let currentSub: WorkerBatchFileInput[] = [];
+              let currentSubBytes = 0;
+              for (const item of items) {
+                if (
+                  currentSub.length > 0 &&
+                  currentSubBytes + item.bytes.byteLength > maxBytes
+                ) {
+                  subBatches.push(currentSub);
+                  currentSub = [];
+                  currentSubBytes = 0;
+                }
+                currentSub.push(item);
+                currentSubBytes += item.bytes.byteLength;
+              }
+              if (currentSub.length > 0) subBatches.push(currentSub);
+
+              for (const sub of subBatches) {
+                const packed = packWorkerMediaBatch(workerToken, sub);
+                await fetchWithRetry(
+                  async () => {
+                    const postResp = await fetch(workerUrl, {
+                      method: "POST",
+                      headers: { "Content-Type": "text/plain" },
+                      body: packed.slice().buffer,
+                    });
+                    if (!postResp.ok) {
+                      throw new Error(`Worker batch failed (${postResp.status})`);
+                    }
+                  },
+                  3,
+                  [300, 1000, 2500],
+                );
+                const subBytes = sub.reduce(
+                  (sum, item) => sum + item.bytes.byteLength,
+                  0,
+                );
+                uploadedFilesCount += sub.length;
+                uploadedRawBytes += subBytes;
+                setProgressMsg(formatProgress());
+              }
+            };
+
+            let workerProbeOk = false;
+            try {
+              if (slices.length > 0) {
+                await uploadWorkerSlice(slices[0]!);
+              }
+              workerProbeOk = true;
+            } catch {
+              workerProbeOk = false;
+              uploadedFilesCount = 0;
+              uploadedRawBytes = 0;
+            }
+
+            if (workerProbeOk) {
+              const WORKER_CONCURRENCY = 6;
+              const remainingSlices = slices.slice(1);
+              let nextSliceIdx = 0;
+              const workers = Array.from(
+                { length: Math.min(WORKER_CONCURRENCY, remainingSlices.length) },
+                async () => {
+                  while (nextSliceIdx < remainingSlices.length) {
+                    const idx = nextSliceIdx++;
+                    const slice = remainingSlices[idx];
+                    if (slice) {
+                      await uploadWorkerSlice(slice);
+                    }
+                  }
+                },
+              );
+              await Promise.all(workers);
+              resolvedMediaBase = workerMediaBase;
+              directSucceeded = true;
+            } else {
+              // Fall back seamlessly to Presigned PUT -> Server Batch if Worker probe fails
+              activePlan = await requestPresignChunk(firstNames, true, true);
+            }
+          }
+
+          if (!directSucceeded && activePlan.mode === "batch") {
+            forceBatchBackup = Boolean(activePlan.forceBackup);
           } else if (
-            firstPresign.mode === "presigned" &&
-            firstPresign.uploads.length > 0
+            !directSucceeded &&
+            activePlan.mode === "presigned" &&
+            activePlan.uploads.length > 0
           ) {
             const firstEntry = dedupedEntries[0]!;
-            const firstUpload = firstPresign.uploads[0]!;
+            const firstUpload = activePlan.uploads[0]!;
             const firstBytes = await decompressEntryBytes(firstEntry[0]);
 
             // Probe entry #0 directly against R2 before fanning out all chunks
@@ -375,12 +496,12 @@ export const ImportFromAnkiModal: React.FC<ImportFromAnkiModalProps> = ({
             }
 
             if (probeOk) {
-              resolvedMediaBase = firstPresign.mediaBase;
+              resolvedMediaBase = activePlan.mediaBase;
               uploadedFilesCount = 1;
               uploadedRawBytes += firstBytes?.byteLength ?? 0;
               setProgressMsg(formatProgress());
 
-              const allUploads = [...firstPresign.uploads];
+              const allUploads = [...activePlan.uploads];
               for (
                 let offset = PRESIGN_CHUNK;
                 offset < dedupedEntries.length;
@@ -389,10 +510,16 @@ export const ImportFromAnkiModal: React.FC<ImportFromAnkiModalProps> = ({
                 const chunkNames = dedupedEntries
                   .slice(offset, offset + PRESIGN_CHUNK)
                   .map(([, realName]) => realName);
-                const chunkRes = await requestPresignChunk(chunkNames, true);
+                const chunkRes = await requestPresignChunk(
+                  chunkNames,
+                  true,
+                  true,
+                );
                 if (chunkRes.mode !== "presigned") {
                   throw new Error(
-                    chunkRes.errorMessage || "Presign failed mid-stream",
+                    chunkRes.mode === "batch"
+                      ? chunkRes.errorMessage || "Presign failed mid-stream"
+                      : "Presign failed mid-stream",
                   );
                 }
                 allUploads.push(...chunkRes.uploads);

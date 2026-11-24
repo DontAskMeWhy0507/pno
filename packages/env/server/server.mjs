@@ -62,6 +62,8 @@ export const env = createEnv({
     MEDIA_S3_PUBLIC_URL: z.string().url().optional(),
     MEDIA_S3_MAX_BYTES: z.string().optional(),
     MEDIA_S3_MAX_OBJECTS: z.string().optional(),
+    MEDIA_WORKER_URL: z.string().url().optional(),
+    MEDIA_WORKER_SECRET: z.string().min(16).optional(),
     SQL_WASM_PATH: z.string().optional(),
     ENABLE_CLICKHOUSE: z.string().optional(),
     CLICKHOUSE_HOST: z.string().url().optional(),
