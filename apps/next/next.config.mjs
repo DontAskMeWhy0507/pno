@@ -51,7 +51,13 @@ const getConsoleRewrites = async () => {
 
 /** @type {import("next").NextConfig} */
 let config = {
-  generateBuildId: () => nextBuildId({ dir: __dirname }),
+  generateBuildId: async () => {
+    try {
+      return await nextBuildId({ dir: __dirname });
+    } catch {
+      return process.env.VERCEL_GIT_COMMIT_SHA || `build-${Date.now()}`;
+    }
+  },
   experimental: {
     optimizePackageImports: [
       "@pno/components",
