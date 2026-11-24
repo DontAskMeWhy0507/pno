@@ -65,6 +65,7 @@
     "@tiptap/pm": "^2.1.12",
     "@tiptap/react": "^2.1.12",
     "@tiptap/starter-kit": "^2.1.12",
+    "@tremor/react": "^3.12.1",
     "@upstash/ratelimit": "^0.4.4",
     "@upstash/redis": "^1.22.1",
     "@vercel/og": "^0.5.17",
