@@ -42,9 +42,5 @@ export const importIntegration = async (path: string) => {
   }
 
   // Graceful fallback for any missing submodules
-  try {
-    return await import(`../integrations/${path}`);
-  } catch {
-    throw new Error(`Integration "${path}" is not available.`);
-  }
+  throw new Error(`Integration "${path}" is not available.`);
 };

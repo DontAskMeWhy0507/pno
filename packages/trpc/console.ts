@@ -1,6 +1,5 @@
-export const importConsole = async (path: string) => {
-  // eslint-disable-next-line @typescript-eslint/no-unsafe-return
-  return (await import(`../console/${path}`)) as {
-    usernameAvailable: (username: string) => boolean;
+export const importConsole = async (_path: string) => {
+  return {
+    usernameAvailable: (_username: string) => true,
   };
 };
