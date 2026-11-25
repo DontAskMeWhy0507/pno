@@ -61,7 +61,10 @@ export const submitReviewHandler = async ({
       lastReviewedAt: existing?.lastReviewedAt ?? null,
     };
 
-    const nextState = calculateNextSchedule(currentState, input.rating, now);
+    const nextState = calculateNextSchedule(currentState, input.rating, now, {
+      timezoneOffsetMinutes: input.timezoneOffsetMinutes,
+      enableFuzz: true,
+    });
 
     return await tx.ankiCardSchedule.upsert({
       where: {

@@ -1,12 +1,16 @@
 import {
+  applyAnkiFuzz,
   calculateNextSchedule,
+  getAnkiDayStart,
   getIntervalEstimateLabel,
-  CardScheduleState,
-  ScheduleConfig,
+  isRelearningCard,
+  type CardScheduleState,
 } from "../packages/lib/src/anki/srs";
 
-describe("Anki SM-2 SRS Engine", () => {
+describe("Anki V3 / SM-2 SRS Engine", () => {
+  // 2026-10-15 12:00 UTC (with timezoneOffsetMinutes: 0 so Anki day starts at 04:00 UTC)
   const baseNow = new Date("2026-10-15T12:00:00Z");
+  const tzOpts = { timezoneOffsetMinutes: 0, enableFuzz: false };
 
   const initialNewCard: CardScheduleState = {
     queue: "New",
@@ -20,49 +24,100 @@ describe("Anki SM-2 SRS Engine", () => {
   };
 
   test("New card graded Good advances learning step to 10m", () => {
-    const next = calculateNextSchedule(initialNewCard, 3, baseNow);
+    const next = calculateNextSchedule(initialNewCard, 3, baseNow, tzOpts);
     expect(next.queue).toBe("Learning");
     expect(next.step).toBe(1);
     expect(next.reps).toBe(1);
     expect(next.interval).toBe(0);
-    // 10 minutes in the future
+    expect(isRelearningCard(next)).toBe(false);
     expect(next.due.getTime()).toBe(baseNow.getTime() + 10 * 60 * 1000);
   });
 
-  test("New card graded Good at final step graduates to Review (1 day)", () => {
+  test("New card graded Good at final step graduates to Review anchored to 4:00 AM next day", () => {
     const cardAtStep1: CardScheduleState = {
       ...initialNewCard,
       queue: "Learning",
       step: 1,
       reps: 1,
     };
-    const next = calculateNextSchedule(cardAtStep1, 3, baseNow);
+    const next = calculateNextSchedule(cardAtStep1, 3, baseNow, tzOpts);
     expect(next.queue).toBe("Review");
     expect(next.step).toBe(0);
     expect(next.interval).toBe(1);
-    expect(next.due.getTime()).toBe(baseNow.getTime() + 24 * 60 * 60 * 1000);
+    // 2026-10-15 04:00Z + 1d = 2026-10-16 04:00Z (ready next morning, not 24h later)
+    expect(next.due.toISOString()).toBe("2026-10-16T04:00:00.000Z");
   });
 
-  test("Review card graded Again resets to learning step 0, increments lapse, reduces easeFactor", () => {
+  test("Day boundary rollover treats 02:00 AM as belonging to previous Anki day", () => {
+    const lateNight = new Date("2026-10-16T02:00:00Z");
+    const dayStart = getAnkiDayStart(lateNight, 4, 0);
+    expect(dayStart.toISOString()).toBe("2026-10-15T04:00:00.000Z");
+  });
+
+  test("Single-step Learning/Relearning Hard uses Anki 1.5x rule", () => {
+    const singleStepNew: CardScheduleState = {
+      ...initialNewCard,
+      queue: "Learning",
+      step: 0,
+    };
+    const next = calculateNextSchedule(singleStepNew, 2, baseNow, {
+      ...tzOpts,
+      learningStepsMinutes: [10],
+    });
+    expect(next.queue).toBe("Learning");
+    expect(next.due.getTime()).toBe(baseNow.getTime() + 15 * 60 * 1000);
+  });
+
+  test("Review card graded Again enters Relearning (10m) and preserves post-lapse interval", () => {
     const reviewCard: CardScheduleState = {
       queue: "Review",
       step: 0,
-      interval: 10,
+      interval: 20,
       easeFactor: 2500,
       reps: 5,
       lapses: 0,
       due: baseNow,
-      lastReviewedAt: new Date(baseNow.getTime() - 10 * 24 * 60 * 60 * 1000),
+      lastReviewedAt: new Date(baseNow.getTime() - 20 * 86400000),
     };
-    const next = calculateNextSchedule(reviewCard, 1, baseNow);
-    expect(next.queue).toBe("Learning");
-    expect(next.step).toBe(0);
-    expect(next.lapses).toBe(1);
-    expect(next.easeFactor).toBe(2300); // 2500 - 200
-    expect(next.due.getTime()).toBe(baseNow.getTime() + 1 * 60 * 1000); // 1 minute
+    const lapsed = calculateNextSchedule(reviewCard, 1, baseNow, {
+      ...tzOpts,
+      lapseNewIntervalMultiplier: 0.25,
+    });
+    expect(lapsed.queue).toBe("Learning");
+    expect(isRelearningCard(lapsed)).toBe(true);
+    expect(lapsed.step).toBe(0);
+    expect(lapsed.lapses).toBe(1);
+    expect(lapsed.interval).toBe(5); // 20 * 0.25 = 5 days saved for re-graduation
+    expect(lapsed.easeFactor).toBe(2300); // 2500 - 200
+    expect(lapsed.due.getTime()).toBe(baseNow.getTime() + 10 * 60 * 1000);
+
+    // Relearning Good graduates directly to Review with preserved 5d interval
+    const regraduated = calculateNextSchedule(lapsed, 3, baseNow, tzOpts);
+    expect(regraduated.queue).toBe("Review");
+    expect(regraduated.interval).toBe(5);
+    expect(regraduated.due.toISOString()).toBe("2026-10-20T04:00:00.000Z");
   });
 
-  test("Ease factor clamps at minimum 1300 even after many Again ratings", () => {
+  test("Leech threshold suspends card after 8 lapses", () => {
+    const leechProneCard: CardScheduleState = {
+      queue: "Review",
+      step: 0,
+      interval: 10,
+      easeFactor: 1500,
+      reps: 15,
+      lapses: 7,
+      due: baseNow,
+      lastReviewedAt: baseNow,
+    };
+    const next = calculateNextSchedule(leechProneCard, 1, baseNow, tzOpts);
+    expect(next.lapses).toBe(8);
+    expect(next.queue).toBe("Suspended");
+    expect(getIntervalEstimateLabel(leechProneCard, 1, baseNow, tzOpts)).toBe(
+      "Leech",
+    );
+  });
+
+  test("Ease factor clamps at minimum 1300", () => {
     let card: CardScheduleState = {
       queue: "Review",
       step: 0,
@@ -73,30 +128,16 @@ describe("Anki SM-2 SRS Engine", () => {
       due: baseNow,
       lastReviewedAt: baseNow,
     };
-    card = calculateNextSchedule(card, 1, baseNow);
-    expect(card.easeFactor).toBe(1300); // 1400 - 200 clamped to 1300
-    card = calculateNextSchedule(card, 1, baseNow);
-    expect(card.easeFactor).toBe(1300); // clamped at 1300
+    card = calculateNextSchedule(card, 1, baseNow, tzOpts);
+    expect(card.easeFactor).toBe(1300);
+    // Relearning Again does not penalize ease again
+    card = calculateNextSchedule(card, 1, baseNow, tzOpts);
+    expect(card.easeFactor).toBe(1300);
+    expect(card.lapses).toBe(3);
   });
 
-  test("Review card graded Good multiplies interval by easeFactor / 1000", () => {
-    const reviewCard: CardScheduleState = {
-      queue: "Review",
-      step: 0,
-      interval: 10,
-      easeFactor: 2500, // 2.5x
-      reps: 5,
-      lapses: 0,
-      due: baseNow,
-      lastReviewedAt: baseNow,
-    };
-    const next = calculateNextSchedule(reviewCard, 3, baseNow);
-    expect(next.queue).toBe("Review");
-    expect(next.interval).toBe(25); // 10 * 2.5 = 25 days
-    expect(next.due.getTime()).toBe(baseNow.getTime() + 25 * 24 * 60 * 60 * 1000);
-  });
-
-  test("Review card graded Easy increases interval with bonus and raises ease factor", () => {
+  test("Review card graded Good accounts for daysLate overdue bonus", () => {
+    const overdueDue = new Date("2026-10-05T04:00:00Z"); // 10 days overdue at baseNow
     const reviewCard: CardScheduleState = {
       queue: "Review",
       step: 0,
@@ -104,21 +145,28 @@ describe("Anki SM-2 SRS Engine", () => {
       easeFactor: 2500,
       reps: 5,
       lapses: 0,
-      due: baseNow,
-      lastReviewedAt: baseNow,
+      due: overdueDue,
+      lastReviewedAt: new Date("2026-09-25T04:00:00Z"),
     };
-    const next = calculateNextSchedule(reviewCard, 4, baseNow);
+    const next = calculateNextSchedule(reviewCard, 3, baseNow, tzOpts);
     expect(next.queue).toBe("Review");
-    expect(next.easeFactor).toBe(2650); // 2500 + 150
-    // 10 * 2.5 * 1.3 = 32.5 -> rounded to 33
-    expect(next.interval).toBe(33);
+    // (10 + 10/2) * 2.5 = 37.5 -> 38 days
+    expect(next.interval).toBe(38);
   });
 
-  test("getIntervalEstimateLabel returns human-friendly time badges", () => {
-    expect(getIntervalEstimateLabel(initialNewCard, 1, baseNow)).toBe("< 1m");
-    expect(getIntervalEstimateLabel(initialNewCard, 2, baseNow)).toBe("< 6m");
-    expect(getIntervalEstimateLabel(initialNewCard, 3, baseNow)).toBe("< 10m");
-    expect(getIntervalEstimateLabel(initialNewCard, 4, baseNow)).toBe("4d");
+  test("applyAnkiFuzz jitters intervals >= 3 within bounds", () => {
+    const low = applyAnkiFuzz(10, 36500, 2, () => 0);
+    const high = applyAnkiFuzz(10, 36500, 2, () => 0.9999);
+    expect(low).toBe(8); // 10 - max(2, round(1.5)=2) = 8
+    expect(high).toBe(12); // 10 + 2 = 12
+    expect(applyAnkiFuzz(2, 36500, 2, () => 0.99)).toBe(2);
+  });
+
+  test("getIntervalEstimateLabel returns human-friendly badges for New and Review", () => {
+    expect(getIntervalEstimateLabel(initialNewCard, 1, baseNow, tzOpts)).toBe("< 1m");
+    expect(getIntervalEstimateLabel(initialNewCard, 2, baseNow, tzOpts)).toBe("< 6m");
+    expect(getIntervalEstimateLabel(initialNewCard, 3, baseNow, tzOpts)).toBe("< 10m");
+    expect(getIntervalEstimateLabel(initialNewCard, 4, baseNow, tzOpts)).toBe("4d");
 
     const reviewCard: CardScheduleState = {
       queue: "Review",
@@ -130,9 +178,9 @@ describe("Anki SM-2 SRS Engine", () => {
       due: baseNow,
       lastReviewedAt: baseNow,
     };
-    expect(getIntervalEstimateLabel(reviewCard, 1, baseNow)).toBe("< 1m");
-    expect(getIntervalEstimateLabel(reviewCard, 2, baseNow)).toBe("12d");
-    expect(getIntervalEstimateLabel(reviewCard, 3, baseNow)).toBe("25d");
-    expect(getIntervalEstimateLabel(reviewCard, 4, baseNow)).toBe("33d");
+    expect(getIntervalEstimateLabel(reviewCard, 1, baseNow, tzOpts)).toBe("< 10m");
+    expect(getIntervalEstimateLabel(reviewCard, 2, baseNow, tzOpts)).toBe("12d");
+    expect(getIntervalEstimateLabel(reviewCard, 3, baseNow, tzOpts)).toBe("25d");
+    expect(getIntervalEstimateLabel(reviewCard, 4, baseNow, tzOpts)).toBe("33d");
   });
 });

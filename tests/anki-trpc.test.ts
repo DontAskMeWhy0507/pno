@@ -1,7 +1,13 @@
-import { calculateNextSchedule, getIntervalEstimateLabel, CardScheduleState } from "../packages/lib/src/anki/srs";
+import {
+  calculateNextSchedule,
+  getIntervalEstimateLabel,
+  isRelearningCard,
+  type CardScheduleState,
+} from "../packages/lib/src/anki/srs";
 
 describe("Anki Review Queue and State Transitions", () => {
   const now = new Date("2026-10-15T12:00:00Z");
+  const opts = { timezoneOffsetMinutes: 0, enableFuzz: false };
 
   test("calculates interval badges for cards in review queue", () => {
     const card: CardScheduleState = {
@@ -16,10 +22,10 @@ describe("Anki Review Queue and State Transitions", () => {
     };
 
     const estimates = {
-      again: getIntervalEstimateLabel(card, 1, now),
-      hard: getIntervalEstimateLabel(card, 2, now),
-      good: getIntervalEstimateLabel(card, 3, now),
-      easy: getIntervalEstimateLabel(card, 4, now),
+      again: getIntervalEstimateLabel(card, 1, now, opts),
+      hard: getIntervalEstimateLabel(card, 2, now, opts),
+      good: getIntervalEstimateLabel(card, 3, now, opts),
+      easy: getIntervalEstimateLabel(card, 4, now, opts),
     };
 
     expect(estimates.again).toBe("< 1m");
@@ -40,13 +46,13 @@ describe("Anki Review Queue and State Transitions", () => {
       lastReviewedAt: null,
     };
 
-    const next = calculateNextSchedule(card, 3, now);
+    const next = calculateNextSchedule(card, 3, now, opts);
     expect(next.queue).toBe("Learning");
     expect(next.step).toBe(1);
     expect(next.due.getTime()).toBe(now.getTime() + 10 * 60 * 1000);
   });
 
-  test("submitting rating 1 (Again) on review card resets to learning with lapse count", () => {
+  test("submitting rating 1 (Again) on review card enters Relearning (10m) with lapse count", () => {
     const card: CardScheduleState = {
       queue: "Review",
       step: 0,
@@ -58,11 +64,12 @@ describe("Anki Review Queue and State Transitions", () => {
       lastReviewedAt: new Date(now.getTime() - 15 * 86400000),
     };
 
-    const next = calculateNextSchedule(card, 1, now);
+    const next = calculateNextSchedule(card, 1, now, opts);
     expect(next.queue).toBe("Learning");
+    expect(isRelearningCard(next)).toBe(true);
     expect(next.step).toBe(0);
     expect(next.lapses).toBe(2);
     expect(next.easeFactor).toBe(2200); // 2400 - 200
-    expect(next.due.getTime()).toBe(now.getTime() + 60 * 1000);
+    expect(next.due.getTime()).toBe(now.getTime() + 10 * 60 * 1000);
   });
 });

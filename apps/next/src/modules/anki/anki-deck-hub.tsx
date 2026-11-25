@@ -116,8 +116,9 @@ export const AnkiDeckHub: React.FC<AnkiDeckHubProps> = ({ data }) => {
     [data],
   );
 
+  const timezoneOffsetMinutes = useMemo(() => new Date().getTimezoneOffset(), []);
   const queueQuery = api.anki.getReviewQueue.useQuery(
-    { studySetId: data.id },
+    { studySetId: data.id, timezoneOffsetMinutes },
     { staleTime: 30000, enabled: status === "authenticated" },
   );
 
