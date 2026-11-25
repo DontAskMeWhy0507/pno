@@ -2,25 +2,31 @@ import { createTRPCRouter, protectedProcedure } from "../../trpc";
 import {
   addCardHandler,
   deleteCardHandler,
+  setCardSuspendedHandler,
   updateCardHandler,
 } from "./card-mutations.handler";
 import {
   ZAddAnkiCardSchema,
   ZDeleteAnkiCardSchema,
+  ZSetCardSuspendedSchema,
   ZUpdateAnkiCardSchema,
 } from "./card-mutations.schema";
 import {
   createDeckHandler,
   updateDeckHandler,
+  updateDeckOptionsHandler,
   updateTemplateHandler,
 } from "./deck-mutations.handler";
 import {
   ZCreateAnkiDeckSchema,
+  ZUpdateAnkiDeckOptionsSchema,
   ZUpdateAnkiDeckSchema,
   ZUpdateAnkiTemplateSchema,
 } from "./deck-mutations.schema";
 import { getReviewQueueHandler } from "./get-review-queue.handler";
 import { ZGetReviewQueueSchema } from "./get-review-queue.schema";
+import { getStatsHandler } from "./get-stats.handler";
+import { ZGetAnkiStatsSchema } from "./get-stats.schema";
 import { importFromDriveHandler } from "./import-from-drive.handler";
 import { ZImportFromDriveSchema } from "./import-from-drive.schema";
 import { importPackageHandler } from "./import-package.handler";
@@ -35,6 +41,12 @@ export const ankiRouter = createTRPCRouter({
     .input(ZGetReviewQueueSchema)
     .query(async ({ ctx, input }) => {
       return getReviewQueueHandler({ ctx, input });
+    }),
+
+  getStats: protectedProcedure
+    .input(ZGetAnkiStatsSchema)
+    .query(async ({ ctx, input }) => {
+      return getStatsHandler({ ctx, input });
     }),
 
   submitReview: protectedProcedure
@@ -77,6 +89,18 @@ export const ankiRouter = createTRPCRouter({
     .input(ZUpdateAnkiTemplateSchema)
     .mutation(async ({ ctx, input }) => {
       return updateTemplateHandler({ ctx, input });
+    }),
+
+  updateDeckOptions: protectedProcedure
+    .input(ZUpdateAnkiDeckOptionsSchema)
+    .mutation(async ({ ctx, input }) => {
+      return updateDeckOptionsHandler({ ctx, input });
+    }),
+
+  setCardSuspended: protectedProcedure
+    .input(ZSetCardSuspendedSchema)
+    .mutation(async ({ ctx, input }) => {
+      return setCardSuspendedHandler({ ctx, input });
     }),
 
   addCard: protectedProcedure

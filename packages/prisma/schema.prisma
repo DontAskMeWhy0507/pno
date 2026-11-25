@@ -95,6 +95,7 @@ model User {
   collabTerms     Term[]
   collabStudySets StudySetCollaborator[]
   ankiSchedules   AnkiCardSchedule[]
+  ankiReviewLogs  AnkiReviewLog[]
 
   ieltsCustomExams IeltsCustomExam[]
   ieltsCollections IeltsCollection[]
@@ -416,6 +417,7 @@ model StudySet {
   setPinnedInClasses StudySetsOnClasses[]
   collaborators      StudySetCollaborator[]
   ankiSchedules      AnkiCardSchedule[]
+  ankiReviewLogs     AnkiReviewLog[]
 
   @@unique([id, userId])
   @@index([userId])
@@ -590,6 +592,7 @@ model Term {
   studiableTerms StudiableTerm[]
   distractors    Distractor[]    @relation("distractor-term-id")
   ankiSchedules  AnkiCardSchedule[]
+  ankiReviewLogs AnkiReviewLog[]
 
   @@unique([id, studySetId])
   @@unique([id, submissionId])
@@ -784,6 +787,36 @@ model AnkiCardSchedule {
 
   @@unique([userId, termId])
   @@index([userId, studySetId, due, queue])
+  @@index([termId])
+  @@index([studySetId])
+}
+
+enum AnkiReviewKind {
+  Learning
+  Review
+  Relearning
+  Filtered
+  Manual
+}
+
+model AnkiReviewLog {
+  id           String         @id @default(cuid())
+  userId       String
+  termId       String
+  studySetId   String
+  rating       Int
+  kind         AnkiReviewKind
+  interval     Int
+  lastInterval Int
+  easeFactor   Int
+  takenMillis  Int            @default(0)
+  reviewedAt   DateTime       @default(now())
+
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  term     Term     @relation(fields: [termId], references: [id], onDelete: Cascade)
+  studySet StudySet @relation(fields: [studySetId], references: [id], onDelete: Cascade)
+
+  @@index([userId, studySetId, reviewedAt])
   @@index([termId])
   @@index([studySetId])
 }

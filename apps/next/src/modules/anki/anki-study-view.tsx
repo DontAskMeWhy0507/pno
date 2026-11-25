@@ -19,16 +19,22 @@ import {
 } from "@chakra-ui/react";
 import {
   IconArrowLeft,
+  IconChartBar,
+  IconClock,
   IconEdit,
   IconRefresh,
+  IconSettings,
   IconTrophy,
   IconVolume,
 } from "@tabler/icons-react";
 import { parseAnkiDeckTemplate } from "@pno/lib/src/anki/presets";
 import {
   calculateNextSchedule,
+  deckOptionsToScheduleConfig,
   DEFAULT_SCHEDULE_CONFIG,
   getIntervalEstimateLabel,
+  resolveDeckOptions,
+  type AnkiDeckOptions,
   type AnkiQueue,
   type CardScheduleState,
 } from "@pno/lib/src/anki/srs";
@@ -38,6 +44,17 @@ import { AnkiRatingBar } from "./anki-rating-bar";
 
 const AnkiCardEditorModal = dynamic(
   () => import("./anki-card-editor-modal").then((m) => m.AnkiCardEditorModal),
+  { ssr: false },
+);
+const AnkiDeckOptionsModal = dynamic(
+  () =>
+    import("./anki-deck-options-modal").then(
+      (m) => m.AnkiDeckOptionsModal,
+    ),
+  { ssr: false },
+);
+const AnkiStatsModal = dynamic(
+  () => import("./anki-stats-modal").then((m) => m.AnkiStatsModal),
   { ssr: false },
 );
 
@@ -71,23 +88,29 @@ function pickNextV3Card(
   pool: SessionCard[],
   nowMs: number,
   learnAheadMinutes: number,
+  options?: Pick<AnkiDeckOptions, "newMix" | "interdayLearnMix">,
 ): { active: SessionCard | null; remaining: SessionCard[] } {
   if (pool.length === 0) {
     return { active: null, remaining: [] };
   }
 
-  const dueLearn: SessionCard[] = [];
+  const dueIntradayLearn: SessionCard[] = [];
+  const dueDayLearn: SessionCard[] = [];
   const review: SessionCard[] = [];
   const newCards: SessionCard[] = [];
   const waitingLearn: SessionCard[] = [];
 
   for (const card of pool) {
     const dueMs = new Date(card.due).getTime();
-    if (card.queue === "Learning" || card.queue === "DayLearn") {
+    if (card.queue === "Learning") {
       if (dueMs <= nowMs) {
-        dueLearn.push(card);
-      } else if (card.queue === "Learning") {
+        dueIntradayLearn.push(card);
+      } else {
         waitingLearn.push(card);
+      }
+    } else if (card.queue === "DayLearn") {
+      if (dueMs <= nowMs) {
+        dueDayLearn.push(card);
       }
     } else if (card.queue === "Review") {
       review.push(card);
@@ -96,7 +119,10 @@ function pickNextV3Card(
     }
   }
 
-  dueLearn.sort(
+  dueIntradayLearn.sort(
+    (a, b) => new Date(a.due).getTime() - new Date(b.due).getTime(),
+  );
+  dueDayLearn.sort(
     (a, b) => new Date(a.due).getTime() - new Date(b.due).getTime(),
   );
   waitingLearn.sort(
@@ -104,10 +130,19 @@ function pickNextV3Card(
   );
 
   let chosen: SessionCard | null = null;
-  if (dueLearn.length > 0) {
-    chosen = dueLearn[0]!;
+  if (dueIntradayLearn.length > 0) {
+    chosen = dueIntradayLearn[0]!;
+  } else if (
+    options?.interdayLearnMix === "before_reviews" &&
+    dueDayLearn.length > 0
+  ) {
+    chosen = dueDayLearn[0]!;
+  } else if (options?.newMix === "before_reviews" && newCards.length > 0) {
+    chosen = newCards[0]!;
   } else if (review.length > 0) {
     chosen = review[0]!;
+  } else if (dueDayLearn.length > 0) {
+    chosen = dueDayLearn[0]!;
   } else if (newCards.length > 0) {
     chosen = newCards[0]!;
   } else if (waitingLearn.length > 0) {
@@ -155,7 +190,11 @@ export const AnkiStudyView: React.FC<AnkiStudyViewProps> = ({ studySetId }) => {
   const [sessionInitialized, setSessionInitialized] = useState(false);
   const [ignoreDailyLimit, setIgnoreDailyLimit] = useState(false);
   const [editModalOpen, setEditModalOpen] = useState(false);
+  const [optionsModalOpen, setOptionsModalOpen] = useState(false);
+  const [statsModalOpen, setStatsModalOpen] = useState(false);
+  const [elapsedSecs, setElapsedSecs] = useState(0);
   const [replaySignal, setReplaySignal] = useState(0);
+  const cardShownAtRef = useRef<number>(Date.now());
   const inFlightTermsRef = useRef<Set<string>>(new Set());
   const lastLoadedUpdatedAtRef = useRef<number>(0);
   const cardScrollRef = useRef<HTMLDivElement>(null);
@@ -180,6 +219,10 @@ export const AnkiStudyView: React.FC<AnkiStudyViewProps> = ({ studySetId }) => {
     () => parseAnkiDeckTemplate(deckInfo?.ankiTemplate),
     [deckInfo?.ankiTemplate],
   );
+  const deckOptions = useMemo(
+    () => resolveDeckOptions(deckInfo?.options ?? deckTemplate?.options),
+    [deckInfo?.options, deckTemplate?.options],
+  );
   const isOwner = Boolean(deckInfo?.isOwner);
 
   // Reset local session state whenever navigating between decks
@@ -202,11 +245,12 @@ export const AnkiStudyView: React.FC<AnkiStudyViewProps> = ({ studySetId }) => {
       !sessionInitialized
     ) {
       lastLoadedUpdatedAtRef.current = queueQuery.dataUpdatedAt;
+      const opts = resolveDeckOptions(queueQuery.data.deck?.options);
       const picked = pickNextV3Card(
         queueQuery.data.cards as SessionCard[],
         Date.now(),
-        queueQuery.data.dailyStats?.learnAheadMinutes ??
-          DEFAULT_SCHEDULE_CONFIG.learnAheadMinutes,
+        opts.learnAheadMinutes,
+        opts,
       );
       setActiveCard(picked.active);
       setRemainingCards(picked.remaining);
@@ -248,6 +292,22 @@ export const AnkiStudyView: React.FC<AnkiStudyViewProps> = ({ studySetId }) => {
   const isFinished =
     !queueQuery.isLoading && sessionInitialized && currentCard === null;
 
+  // Track answer timing per card (capped by deckOptions.capAnswerTimeSecs)
+  useEffect(() => {
+    if (!currentCard) return;
+    cardShownAtRef.current = Date.now();
+    setElapsedSecs(0);
+    if (!deckOptions.showTimer) return;
+    const id = window.setInterval(() => {
+      const secs = Math.min(
+        deckOptions.capAnswerTimeSecs,
+        Math.floor((Date.now() - cardShownAtRef.current) / 1000),
+      );
+      setElapsedSecs(secs);
+    }, 1000);
+    return () => window.clearInterval(id);
+  }, [currentCard?.termId, reviewStepCount, deckOptions.showTimer, deckOptions.capAnswerTimeSecs]);
+
   // Invalidate queue when finishing a batch so remaining due cards or hub counts stay fresh
   useEffect(() => {
     if (isFinished && reviewStepCount > 0) {
@@ -267,16 +327,22 @@ export const AnkiStudyView: React.FC<AnkiStudyViewProps> = ({ studySetId }) => {
       const ratedCard = currentCard;
       inFlightTermsRef.current.add(ratedCard.termId);
 
+      const now = new Date();
+      const takenMillis = Math.min(
+        Math.max(0, now.getTime() - cardShownAtRef.current),
+        deckOptions.capAnswerTimeSecs * 1000,
+      );
+
       submitReviewMutation.mutate({
         studySetId,
         termId: ratedCard.termId,
         rating,
+        takenMillis,
         timezoneOffsetMinutes,
       });
 
       setIsAnswerShown(false);
 
-      const now = new Date();
       const prevState: CardScheduleState = {
         queue: ratedCard.queue,
         step: ratedCard.step,
@@ -287,10 +353,12 @@ export const AnkiStudyView: React.FC<AnkiStudyViewProps> = ({ studySetId }) => {
         due: new Date(ratedCard.due),
         lastReviewedAt: null,
       };
-      const nextState = calculateNextSchedule(prevState, rating, now, {
+      const schedCfg = deckOptionsToScheduleConfig(
+        deckOptions,
         timezoneOffsetMinutes,
-        enableFuzz: false,
-      });
+        false,
+      );
+      const nextState = calculateNextSchedule(prevState, rating, now, schedCfg);
       const stayInIntradaySession = nextState.queue === "Learning";
 
       const nextPool = stayInIntradaySession
@@ -300,34 +368,28 @@ export const AnkiStudyView: React.FC<AnkiStudyViewProps> = ({ studySetId }) => {
               ...ratedCard,
               ...nextState,
               estimates: {
-                again: getIntervalEstimateLabel(nextState, 1, now, {
-                  timezoneOffsetMinutes,
-                }),
-                hard: getIntervalEstimateLabel(nextState, 2, now, {
-                  timezoneOffsetMinutes,
-                }),
-                good: getIntervalEstimateLabel(nextState, 3, now, {
-                  timezoneOffsetMinutes,
-                }),
-                easy: getIntervalEstimateLabel(nextState, 4, now, {
-                  timezoneOffsetMinutes,
-                }),
+                again: getIntervalEstimateLabel(nextState, 1, now, schedCfg),
+                hard: getIntervalEstimateLabel(nextState, 2, now, schedCfg),
+                good: getIntervalEstimateLabel(nextState, 3, now, schedCfg),
+                easy: getIntervalEstimateLabel(nextState, 4, now, schedCfg),
               },
             },
           ]
         : remainingCards;
 
-      const learnAheadMin =
-        queueQuery.data?.dailyStats?.learnAheadMinutes ??
-        DEFAULT_SCHEDULE_CONFIG.learnAheadMinutes;
-      const picked = pickNextV3Card(nextPool, now.getTime(), learnAheadMin);
+      const picked = pickNextV3Card(
+        nextPool,
+        now.getTime(),
+        deckOptions.learnAheadMinutes,
+        deckOptions,
+      );
       setActiveCard(picked.active);
       setRemainingCards(picked.remaining);
       setReviewStepCount((prev) => prev + 1);
     },
     [
       currentCard,
-      queueQuery.data?.dailyStats?.learnAheadMinutes,
+      deckOptions,
       remainingCards,
       studySetId,
       submitReviewMutation,
@@ -338,7 +400,14 @@ export const AnkiStudyView: React.FC<AnkiStudyViewProps> = ({ studySetId }) => {
   // Global Keyboard shortcuts
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (isFinished || queueQuery.isLoading || !currentCard || editModalOpen)
+      if (
+        isFinished ||
+        queueQuery.isLoading ||
+        !currentCard ||
+        editModalOpen ||
+        optionsModalOpen ||
+        statsModalOpen
+      )
         return;
       if (e.ctrlKey || e.altKey || e.metaKey) return;
       if (
@@ -379,6 +448,8 @@ export const AnkiStudyView: React.FC<AnkiStudyViewProps> = ({ studySetId }) => {
     currentCard,
     isAnswerShown,
     editModalOpen,
+    optionsModalOpen,
+    statsModalOpen,
     isOwner,
     handleShowAnswer,
     handleRate,
@@ -603,6 +674,49 @@ export const AnkiStudyView: React.FC<AnkiStudyViewProps> = ({ studySetId }) => {
             Review: {counts.review}
           </Badge>
 
+          {deckOptions.showTimer && (
+            <Badge
+              colorScheme="gray"
+              variant="subtle"
+              px={2}
+              py={1}
+              rounded="md"
+              fontSize="xs"
+            >
+              <HStack spacing={1}>
+                <IconClock size={12} />
+                <Text>
+                  {Math.floor(elapsedSecs / 60)}:
+                  {String(elapsedSecs % 60).padStart(2, "0")}
+                </Text>
+              </HStack>
+            </Badge>
+          )}
+
+          <Tooltip label="Statistics">
+            <IconButton
+              aria-label="Anki Statistics"
+              icon={<IconChartBar size={17} />}
+              size="sm"
+              variant="ghost"
+              rounded="lg"
+              onClick={() => setStatsModalOpen(true)}
+            />
+          </Tooltip>
+
+          {isOwner && (
+            <Tooltip label="Deck Options">
+              <IconButton
+                aria-label="Deck Options"
+                icon={<IconSettings size={17} />}
+                size="sm"
+                variant="ghost"
+                rounded="lg"
+                onClick={() => setOptionsModalOpen(true)}
+              />
+            </Tooltip>
+          )}
+
           <Tooltip label="Replay audio (R)">
             <IconButton
               aria-label="Replay audio"
@@ -646,6 +760,7 @@ export const AnkiStudyView: React.FC<AnkiStudyViewProps> = ({ studySetId }) => {
             assetUrl={currentCard.assetUrl}
             customCss={deckTemplate?.css}
             replaySignal={replaySignal}
+            disableAutoPlay={deckOptions.disableAutoplay}
             isAnswerShown={isAnswerShown}
             onFlip={handleShowAnswer}
             answerRef={answerRef}
@@ -730,6 +845,28 @@ export const AnkiStudyView: React.FC<AnkiStudyViewProps> = ({ studySetId }) => {
               ),
             );
           }}
+        />
+      )}
+
+      {isOwner && optionsModalOpen && (
+        <AnkiDeckOptionsModal
+          isOpen={optionsModalOpen}
+          onClose={() => setOptionsModalOpen(false)}
+          studySetId={studySetId}
+          initialOptions={deckOptions}
+          dayKey={queueQuery.data?.dailyStats?.dayKey}
+          newStudiedToday={queueQuery.data?.dailyStats?.newStudiedToday ?? 0}
+          reviewsStudiedToday={
+            queueQuery.data?.dailyStats?.reviewsStudiedToday ?? 0
+          }
+        />
+      )}
+
+      {statsModalOpen && (
+        <AnkiStatsModal
+          isOpen={statsModalOpen}
+          onClose={() => setStatsModalOpen(false)}
+          studySetId={studySetId}
         />
       )}
     </Container>

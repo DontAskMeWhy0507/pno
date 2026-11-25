@@ -48,6 +48,7 @@ import {
   IconArrowLeft,
   IconBrain,
   IconCards,
+  IconChartBar,
   IconCheck,
   IconClock,
   IconCode,
@@ -56,6 +57,7 @@ import {
   IconPlayerPlay,
   IconPlus,
   IconSearch,
+  IconSettings,
   IconTrash,
 } from "@tabler/icons-react";
 
@@ -80,6 +82,17 @@ const AnkiTemplateEditorModal = dynamic(
     ),
   { ssr: false },
 );
+const AnkiDeckOptionsModal = dynamic(
+  () =>
+    import("./anki-deck-options-modal").then(
+      (m) => m.AnkiDeckOptionsModal,
+    ),
+  { ssr: false },
+);
+const AnkiStatsModal = dynamic(
+  () => import("./anki-stats-modal").then((m) => m.AnkiStatsModal),
+  { ssr: false },
+);
 
 export interface AnkiDeckHubProps {
   data: SetData;
@@ -99,6 +112,8 @@ export const AnkiDeckHub: React.FC<AnkiDeckHubProps> = ({ data }) => {
   const [editingCard, setEditingCard] = useState<EditableAnkiCard | null>(null);
   const [isCardModalOpen, setIsCardModalOpen] = useState(false);
   const [isTemplateModalOpen, setIsTemplateModalOpen] = useState(false);
+  const [isOptionsOpen, setIsOptionsOpen] = useState(false);
+  const [isStatsOpen, setIsStatsOpen] = useState(false);
   const [isEditDeckOpen, setIsEditDeckOpen] = useState(false);
   const [deckTitleInput, setDeckTitleInput] = useState(data.title);
   const [deckDescInput, setDeckDescInput] = useState(data.description || "");
@@ -336,8 +351,32 @@ export const AnkiDeckHub: React.FC<AnkiDeckHubProps> = ({ data }) => {
                     Study Now
                   </Button>
                 </WrapItem>
+                <WrapItem>
+                  <Button
+                    size={{ base: "sm", md: "md" }}
+                    h={{ base: "40px", md: "44px" }}
+                    variant="outline"
+                    colorScheme="purple"
+                    leftIcon={<IconChartBar size={16} />}
+                    onClick={() => setIsStatsOpen(true)}
+                  >
+                    Stats
+                  </Button>
+                </WrapItem>
                 {isOwner && (
                   <>
+                    <WrapItem>
+                      <Button
+                        size={{ base: "sm", md: "md" }}
+                        h={{ base: "40px", md: "44px" }}
+                        variant="outline"
+                        colorScheme="orange"
+                        leftIcon={<IconSettings size={16} />}
+                        onClick={() => setIsOptionsOpen(true)}
+                      >
+                        Options
+                      </Button>
+                    </WrapItem>
                     <WrapItem>
                       <Button
                         size={{ base: "sm", md: "md" }}
@@ -503,13 +542,44 @@ export const AnkiDeckHub: React.FC<AnkiDeckHubProps> = ({ data }) => {
 
         {/* Info card */}
         <Card bg={cardBg} borderWidth="1px" borderColor={borderColor} rounded="xl" p={4}>
-          <HStack spacing={3}>
-            <Icon as={IconFlame} boxSize={5} color="orange.400" flexShrink={0} />
-            <Text fontSize="sm" color={secondaryColor}>
-              Total cards in deck: <b>{data.terms.length} cards</b>. The SM-2
-              spaced repetition algorithm schedules reviews automatically for
-              long-term retention.
-            </Text>
+          <HStack spacing={3} justify="space-between" flexWrap="wrap">
+            <HStack spacing={3}>
+              <Icon as={IconFlame} boxSize={5} color="orange.400" flexShrink={0} />
+              <Text fontSize="sm" color={secondaryColor}>
+                Total cards: <b>{data.terms.length}</b>
+                {queueQuery.data?.dailyStats && (
+                  <>
+                    {" • "}Today:{" "}
+                    <b>
+                      {queueQuery.data.dailyStats.newStudiedToday}/
+                      {queueQuery.data.dailyStats.newLimit}
+                    </b>{" "}
+                    new,{" "}
+                    <b>
+                      {queueQuery.data.dailyStats.reviewsStudiedToday}/
+                      {queueQuery.data.dailyStats.reviewLimit}
+                    </b>{" "}
+                    review
+                    {queueQuery.data.dailyStats.suspendedCount > 0 && (
+                      <>
+                        {" • "}
+                        <b>{queueQuery.data.dailyStats.suspendedCount}</b> suspended
+                      </>
+                    )}
+                  </>
+                )}
+              </Text>
+            </HStack>
+            {isOwner && (
+              <Button
+                size="xs"
+                variant="link"
+                colorScheme="orange"
+                onClick={() => setIsOptionsOpen(true)}
+              >
+                Adjust daily limits &amp; steps →
+              </Button>
+            )}
           </HStack>
         </Card>
 
@@ -769,6 +839,30 @@ export const AnkiDeckHub: React.FC<AnkiDeckHubProps> = ({ data }) => {
           studySetId={data.id}
           currentTemplate={deckTemplate}
           sampleCardWordRichText={data.terms[0]?.wordRichText}
+        />
+      )}
+
+      {isOptionsOpen && (
+        <AnkiDeckOptionsModal
+          isOpen={isOptionsOpen}
+          onClose={() => setIsOptionsOpen(false)}
+          studySetId={data.id}
+          initialOptions={
+            queueQuery.data?.deck?.options ?? deckTemplate?.options ?? null
+          }
+          dayKey={queueQuery.data?.dailyStats?.dayKey}
+          newStudiedToday={queueQuery.data?.dailyStats?.newStudiedToday ?? 0}
+          reviewsStudiedToday={
+            queueQuery.data?.dailyStats?.reviewsStudiedToday ?? 0
+          }
+        />
+      )}
+
+      {isStatsOpen && (
+        <AnkiStatsModal
+          isOpen={isStatsOpen}
+          onClose={() => setIsStatsOpen(false)}
+          studySetId={data.id}
         />
       )}
 

@@ -1,6 +1,55 @@
 export type AnkiRating = 1 | 2 | 3 | 4; // 1: Again, 2: Hard, 3: Good, 4: Easy
 export type AnkiQueue = "New" | "Learning" | "Review" | "DayLearn" | "Suspended";
 
+export type AnkiNewGatherOrder = "sequential" | "random";
+export type AnkiReviewMix = "mix" | "after_reviews" | "before_reviews";
+export type AnkiReviewSortOrder =
+  | "due_asc"
+  | "interval_asc"
+  | "interval_desc"
+  | "random";
+export type AnkiLeechAction = "suspend" | "tag_only";
+
+export interface AnkiTodayLimitOverride {
+  dayKey: string;
+  newCardsPerDay?: number;
+  maxReviewsPerDay?: number;
+}
+
+export interface AnkiDeckOptions {
+  // Daily Limits
+  newCardsPerDay: number;
+  maxReviewsPerDay: number;
+  todayOverride?: AnkiTodayLimitOverride | null;
+  // New Cards
+  learningStepsMinutes: number[];
+  graduatingIntervalDays: number;
+  easyIntervalDays: number;
+  newCardGatherOrder: AnkiNewGatherOrder;
+  // Lapses
+  relearningStepsMinutes: number[];
+  minimumLapseIntervalDays: number;
+  leechThreshold: number;
+  leechAction: AnkiLeechAction;
+  // Display Order
+  newMix: AnkiReviewMix;
+  interdayLearnMix: AnkiReviewMix;
+  reviewSortOrder: AnkiReviewSortOrder;
+  // Timer & Audio
+  showTimer: boolean;
+  capAnswerTimeSecs: number;
+  disableAutoplay: boolean;
+  // Advanced SM-2 & Scheduling
+  maxIntervalDays: number;
+  startingEaseFactor: number;
+  easyIntervalBonus: number;
+  intervalModifier: number;
+  hardIntervalMultiplier: number;
+  lapseNewIntervalMultiplier: number;
+  rolloverHour: number;
+  learnAheadMinutes: number;
+}
+
 export interface CardScheduleState {
   queue: AnkiQueue;
   step: number;        // Step index in learning/relearning steps
@@ -21,9 +70,11 @@ export interface ScheduleConfig {
   minimumEaseFactor: number;          // default: 1300
   hardIntervalMultiplier: number;     // default: 1.2
   easyIntervalBonus: number;          // default: 1.3
+  intervalModifier: number;           // default: 1.0 (Anki interval_multiplier)
   lapseNewIntervalMultiplier: number; // default: 0 (reset to minimumLapseIntervalDays, Anki default)
   minimumLapseIntervalDays: number;   // default: 1
-  leechThreshold: number;             // default: 8 lapses -> Suspended
+  leechThreshold: number;             // default: 8 lapses
+  leechAction: AnkiLeechAction;       // default: "suspend"
   maxIntervalDays: number;            // default: 36500 (100 years)
   newCardsPerDay: number;             // default: 20
   maxReviewsPerDay: number;           // default: 200
@@ -42,9 +93,11 @@ export const DEFAULT_SCHEDULE_CONFIG: ScheduleConfig = {
   minimumEaseFactor: 1300,
   hardIntervalMultiplier: 1.2,
   easyIntervalBonus: 1.3,
+  intervalModifier: 1.0,
   lapseNewIntervalMultiplier: 0,
   minimumLapseIntervalDays: 1,
   leechThreshold: 8,
+  leechAction: "suspend",
   maxIntervalDays: 36500,
   newCardsPerDay: 20,
   maxReviewsPerDay: 200,
@@ -53,13 +106,252 @@ export const DEFAULT_SCHEDULE_CONFIG: ScheduleConfig = {
   enableFuzz: true,
 };
 
+export const DEFAULT_DECK_OPTIONS: AnkiDeckOptions = {
+  newCardsPerDay: DEFAULT_SCHEDULE_CONFIG.newCardsPerDay,
+  maxReviewsPerDay: DEFAULT_SCHEDULE_CONFIG.maxReviewsPerDay,
+  todayOverride: null,
+  learningStepsMinutes: [...DEFAULT_SCHEDULE_CONFIG.learningStepsMinutes],
+  graduatingIntervalDays: DEFAULT_SCHEDULE_CONFIG.graduatingIntervalDays,
+  easyIntervalDays: DEFAULT_SCHEDULE_CONFIG.easyIntervalDays,
+  newCardGatherOrder: "sequential",
+  relearningStepsMinutes: [...DEFAULT_SCHEDULE_CONFIG.relearningStepsMinutes],
+  minimumLapseIntervalDays: DEFAULT_SCHEDULE_CONFIG.minimumLapseIntervalDays,
+  leechThreshold: DEFAULT_SCHEDULE_CONFIG.leechThreshold,
+  leechAction: DEFAULT_SCHEDULE_CONFIG.leechAction,
+  newMix: "after_reviews",
+  interdayLearnMix: "mix",
+  reviewSortOrder: "due_asc",
+  showTimer: false,
+  capAnswerTimeSecs: 60,
+  disableAutoplay: false,
+  maxIntervalDays: DEFAULT_SCHEDULE_CONFIG.maxIntervalDays,
+  startingEaseFactor: DEFAULT_SCHEDULE_CONFIG.startingEaseFactor,
+  easyIntervalBonus: DEFAULT_SCHEDULE_CONFIG.easyIntervalBonus,
+  intervalModifier: DEFAULT_SCHEDULE_CONFIG.intervalModifier,
+  hardIntervalMultiplier: DEFAULT_SCHEDULE_CONFIG.hardIntervalMultiplier,
+  lapseNewIntervalMultiplier: DEFAULT_SCHEDULE_CONFIG.lapseNewIntervalMultiplier,
+  rolloverHour: DEFAULT_SCHEDULE_CONFIG.rolloverHour,
+  learnAheadMinutes: DEFAULT_SCHEDULE_CONFIG.learnAheadMinutes,
+};
+
+function clampInt(val: unknown, min: number, max: number, fallback: number): number {
+  if (typeof val !== "number" || !Number.isFinite(val)) return fallback;
+  return Math.max(min, Math.min(max, Math.round(val)));
+}
+
+function clampFloat(val: unknown, min: number, max: number, fallback: number): number {
+  if (typeof val !== "number" || !Number.isFinite(val)) return fallback;
+  return Math.max(min, Math.min(max, val));
+}
+
+function normalizeSteps(raw: unknown, fallback: number[]): number[] {
+  if (!Array.isArray(raw)) return [...fallback];
+  const valid = raw
+    .filter((n): n is number => typeof n === "number" && Number.isFinite(n) && n >= 1)
+    .map((n) => Math.min(525600, Math.round(n)))
+    .slice(0, 12);
+  return valid.length > 0 ? valid : [...fallback];
+}
+
+export function resolveDeckOptions(
+  raw?: Partial<AnkiDeckOptions> | Record<string, unknown> | null,
+): AnkiDeckOptions {
+  if (!raw || typeof raw !== "object") {
+    return {
+      ...DEFAULT_DECK_OPTIONS,
+      learningStepsMinutes: [...DEFAULT_DECK_OPTIONS.learningStepsMinutes],
+      relearningStepsMinutes: [...DEFAULT_DECK_OPTIONS.relearningStepsMinutes],
+    };
+  }
+  const obj = raw as Record<string, unknown>;
+  const rawOverride = obj.todayOverride as Record<string, unknown> | null | undefined;
+  const todayOverride: AnkiTodayLimitOverride | null =
+    rawOverride &&
+    typeof rawOverride === "object" &&
+    typeof rawOverride.dayKey === "string" &&
+    rawOverride.dayKey.length > 0
+      ? {
+          dayKey: rawOverride.dayKey,
+          ...(typeof rawOverride.newCardsPerDay === "number"
+            ? { newCardsPerDay: clampInt(rawOverride.newCardsPerDay, 0, 9999, 20) }
+            : {}),
+          ...(typeof rawOverride.maxReviewsPerDay === "number"
+            ? { maxReviewsPerDay: clampInt(rawOverride.maxReviewsPerDay, 0, 9999, 200) }
+            : {}),
+        }
+      : null;
+
+  return {
+    newCardsPerDay: clampInt(obj.newCardsPerDay, 0, 9999, DEFAULT_DECK_OPTIONS.newCardsPerDay),
+    maxReviewsPerDay: clampInt(obj.maxReviewsPerDay, 0, 9999, DEFAULT_DECK_OPTIONS.maxReviewsPerDay),
+    todayOverride,
+    learningStepsMinutes: normalizeSteps(
+      obj.learningStepsMinutes,
+      DEFAULT_DECK_OPTIONS.learningStepsMinutes,
+    ),
+    graduatingIntervalDays: clampInt(
+      obj.graduatingIntervalDays,
+      1,
+      36500,
+      DEFAULT_DECK_OPTIONS.graduatingIntervalDays,
+    ),
+    easyIntervalDays: clampInt(
+      obj.easyIntervalDays,
+      1,
+      36500,
+      DEFAULT_DECK_OPTIONS.easyIntervalDays,
+    ),
+    newCardGatherOrder:
+      obj.newCardGatherOrder === "random" ? "random" : "sequential",
+    relearningStepsMinutes: normalizeSteps(
+      obj.relearningStepsMinutes,
+      DEFAULT_DECK_OPTIONS.relearningStepsMinutes,
+    ),
+    minimumLapseIntervalDays: clampInt(
+      obj.minimumLapseIntervalDays,
+      1,
+      36500,
+      DEFAULT_DECK_OPTIONS.minimumLapseIntervalDays,
+    ),
+    leechThreshold: clampInt(obj.leechThreshold, 0, 999, DEFAULT_DECK_OPTIONS.leechThreshold),
+    leechAction: obj.leechAction === "tag_only" ? "tag_only" : "suspend",
+    newMix:
+      obj.newMix === "mix" || obj.newMix === "before_reviews"
+        ? obj.newMix
+        : "after_reviews",
+    interdayLearnMix:
+      obj.interdayLearnMix === "after_reviews" ||
+      obj.interdayLearnMix === "before_reviews"
+        ? obj.interdayLearnMix
+        : "mix",
+    reviewSortOrder:
+      obj.reviewSortOrder === "interval_asc" ||
+      obj.reviewSortOrder === "interval_desc" ||
+      obj.reviewSortOrder === "random"
+        ? obj.reviewSortOrder
+        : "due_asc",
+    showTimer: Boolean(obj.showTimer),
+    capAnswerTimeSecs: clampInt(
+      obj.capAnswerTimeSecs,
+      5,
+      3600,
+      DEFAULT_DECK_OPTIONS.capAnswerTimeSecs,
+    ),
+    disableAutoplay: Boolean(obj.disableAutoplay),
+    maxIntervalDays: clampInt(
+      obj.maxIntervalDays,
+      1,
+      36500,
+      DEFAULT_DECK_OPTIONS.maxIntervalDays,
+    ),
+    startingEaseFactor: clampInt(
+      obj.startingEaseFactor,
+      1300,
+      5000,
+      DEFAULT_DECK_OPTIONS.startingEaseFactor,
+    ),
+    easyIntervalBonus: clampFloat(
+      obj.easyIntervalBonus,
+      1.0,
+      5.0,
+      DEFAULT_DECK_OPTIONS.easyIntervalBonus,
+    ),
+    intervalModifier: clampFloat(
+      obj.intervalModifier,
+      0.5,
+      2.5,
+      DEFAULT_DECK_OPTIONS.intervalModifier,
+    ),
+    hardIntervalMultiplier: clampFloat(
+      obj.hardIntervalMultiplier,
+      1.0,
+      2.5,
+      DEFAULT_DECK_OPTIONS.hardIntervalMultiplier,
+    ),
+    lapseNewIntervalMultiplier: clampFloat(
+      obj.lapseNewIntervalMultiplier,
+      0,
+      1.0,
+      DEFAULT_DECK_OPTIONS.lapseNewIntervalMultiplier,
+    ),
+    rolloverHour: clampInt(obj.rolloverHour, 0, 23, DEFAULT_DECK_OPTIONS.rolloverHour),
+    learnAheadMinutes: clampInt(
+      obj.learnAheadMinutes,
+      0,
+      180,
+      DEFAULT_DECK_OPTIONS.learnAheadMinutes,
+    ),
+  };
+}
+
+export function deckOptionsToScheduleConfig(
+  options: AnkiDeckOptions,
+  timezoneOffsetMinutes?: number,
+  enableFuzz = true,
+): Partial<ScheduleConfig> {
+  return {
+    learningStepsMinutes: options.learningStepsMinutes,
+    relearningStepsMinutes: options.relearningStepsMinutes,
+    graduatingIntervalDays: options.graduatingIntervalDays,
+    easyIntervalDays: options.easyIntervalDays,
+    startingEaseFactor: options.startingEaseFactor,
+    hardIntervalMultiplier: options.hardIntervalMultiplier,
+    easyIntervalBonus: options.easyIntervalBonus,
+    intervalModifier: options.intervalModifier,
+    lapseNewIntervalMultiplier: options.lapseNewIntervalMultiplier,
+    minimumLapseIntervalDays: options.minimumLapseIntervalDays,
+    leechThreshold: options.leechThreshold,
+    leechAction: options.leechAction,
+    maxIntervalDays: options.maxIntervalDays,
+    newCardsPerDay: options.newCardsPerDay,
+    maxReviewsPerDay: options.maxReviewsPerDay,
+    learnAheadMinutes: options.learnAheadMinutes,
+    rolloverHour: options.rolloverHour,
+    enableFuzz,
+    timezoneOffsetMinutes,
+  };
+}
+
+/**
+ * Parses an Anki steps string like "1m 10m 1d" or "1 10 1440" into minutes.
+ * Mirrors Anki's steps parser (supports s/m/h/d suffixes; rounds up >= 1m).
+ */
+export function parseStepsString(raw: string): number[] {
+  const parts = raw
+    .trim()
+    .split(/[\s,]+/)
+    .filter(Boolean);
+  const result: number[] = [];
+  for (const part of parts) {
+    const m = /^(\d+(?:\.\d+)?)\s*([smhd])?$/i.exec(part);
+    if (!m) continue;
+    const num = Number(m[1]);
+    if (!Number.isFinite(num) || num <= 0) continue;
+    const unit = (m[2] ?? "m").toLowerCase();
+    let minutes = num;
+    if (unit === "s") minutes = num / 60;
+    else if (unit === "h") minutes = num * 60;
+    else if (unit === "d") minutes = num * 1440;
+    result.push(Math.max(1, Math.min(525600, Math.round(minutes))));
+  }
+  return result;
+}
+
+export function formatStepsString(steps: number[]): string {
+  return steps
+    .map((m) => {
+      if (m >= 1440 && m % 1440 === 0) return `${m / 1440}d`;
+      if (m >= 60 && m % 60 === 0) return `${m / 60}h`;
+      return `${m}m`;
+    })
+    .join(" ");
+}
+
 const DAY_MS = 24 * 60 * 60 * 1000;
 const MINUTE_MS = 60 * 1000;
 
 /**
  * Computes the timestamp of the start of the current Anki day (default 04:00 local time).
- * Matches Anki's `day_cutoff` rollover semantics so a "1d" card studied at 22:00
- * becomes due at 04:00 the next morning rather than waiting a full 24h.
  */
 export function getAnkiDayStart(
   now: Date,
@@ -72,7 +364,6 @@ export function getAnkiDayStart(
       : now.getTimezoneOffset();
   const offsetMs = offsetMin * MINUTE_MS;
 
-  // Shift UTC clock into "pseudo-local" coordinates so UTC getters reflect local wall time
   const shifted = new Date(now.getTime() - offsetMs);
   const year = shifted.getUTCFullYear();
   const month = shifted.getUTCMonth();
@@ -84,6 +375,26 @@ export function getAnkiDayStart(
     hour < rolloverHour ? startLocalUtcMs - DAY_MS : startLocalUtcMs;
 
   return new Date(adjustedLocalUtcMs + offsetMs);
+}
+
+/**
+ * Returns the YYYY-MM-DD key for the current Anki day (respecting rolloverHour & timezone).
+ */
+export function getAnkiDayKey(
+  now: Date = new Date(),
+  rolloverHour = DEFAULT_SCHEDULE_CONFIG.rolloverHour,
+  timezoneOffsetMinutes?: number,
+): string {
+  const offsetMin =
+    typeof timezoneOffsetMinutes === "number" && Number.isFinite(timezoneOffsetMinutes)
+      ? timezoneOffsetMinutes
+      : now.getTimezoneOffset();
+  const dayStart = getAnkiDayStart(now, rolloverHour, offsetMin);
+  const shifted = new Date(dayStart.getTime() - offsetMin * MINUTE_MS);
+  const y = shifted.getUTCFullYear();
+  const m = String(shifted.getUTCMonth() + 1).padStart(2, "0");
+  const d = String(shifted.getUTCDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
 }
 
 /**
@@ -111,12 +422,6 @@ export function isRelearningCard(state: CardScheduleState): boolean {
   );
 }
 
-/**
- * Official Anki SM-2 Hard button delay on learning/relearning steps:
- * - Single step: 1.5x the step (capped at step + 1 day)
- * - First step of >=2 steps: average of step 0 and step 1
- * - Later steps: repeats current step
- */
 function calculateLearningHardMinutes(steps: number[], stepIndex: number): number {
   const currentStep = Math.max(1, steps[stepIndex] ?? steps[0] ?? 1);
   if (steps.length <= 1) {
@@ -129,10 +434,6 @@ function calculateLearningHardMinutes(steps: number[], stepIndex: number): numbe
   return currentStep;
 }
 
-/**
- * Official Anki interval fuzz to prevent cards studied on the same day
- * from clumping together on identical future dates.
- */
 export function applyAnkiFuzz(
   intervalDays: number,
   maxIntervalDays: number,
@@ -166,7 +467,6 @@ function scheduleStepTarget(
       DAY_MS,
   );
 
-  // If the step is >= 1 day or crosses into the next Anki day, promote to DayLearn
   if (safeMinutes >= 1440 || exactDue.getTime() >= nextCutoff.getTime()) {
     const days = Math.max(1, Math.round(safeMinutes / 1440));
     return {
@@ -216,7 +516,6 @@ export function calculateNextSchedule(
 
     switch (rating) {
       case 1: {
-        // Again: restart learning/relearning steps without penalizing ease or lapses
         const minutes = steps[0] ?? 1;
         const target = scheduleStepTarget(minutes, now, config);
         return {
@@ -231,7 +530,6 @@ export function calculateNextSchedule(
         };
       }
       case 2: {
-        // Hard: 1.5x for single step, average of step 0 & 1 at start, or repeat current step
         const clampedStep = Math.min(current.step, steps.length - 1);
         const minutes = calculateLearningHardMinutes(steps, clampedStep);
         const target = scheduleStepTarget(minutes, now, config);
@@ -247,7 +545,6 @@ export function calculateNextSchedule(
         };
       }
       case 3: {
-        // Good: advance step or graduate
         const nextStep = current.step + 1;
         if (nextStep < steps.length) {
           const minutes = steps[nextStep] ?? 10;
@@ -287,7 +584,6 @@ export function calculateNextSchedule(
         };
       }
       case 4: {
-        // Easy: graduate immediately
         const baseEasyInterval = relearning
           ? Math.max(preservedInterval + 1, config.easyIntervalDays)
           : config.easyIntervalDays;
@@ -319,20 +615,24 @@ export function calculateNextSchedule(
     0,
     Math.floor((now.getTime() - current.due.getTime()) / DAY_MS),
   );
+  const ivlMod = config.intervalModifier;
 
-  // Precompute monotonic Anki SM-2 review intervals (Hard < Good < Easy)
   const rawHard = Math.min(
     config.maxIntervalDays,
     Math.max(
       safeInterval + 1,
-      Math.round((safeInterval + daysLate / 4) * config.hardIntervalMultiplier),
+      Math.round(
+        (safeInterval + daysLate / 4) * config.hardIntervalMultiplier * ivlMod,
+      ),
     ),
   );
   const rawGood = Math.min(
     config.maxIntervalDays,
     Math.max(
       rawHard + 1,
-      Math.round((safeInterval + daysLate / 2) * (current.easeFactor / 1000)),
+      Math.round(
+        (safeInterval + daysLate / 2) * (current.easeFactor / 1000) * ivlMod,
+      ),
     ),
   );
   const rawEasy = Math.min(
@@ -342,14 +642,14 @@ export function calculateNextSchedule(
       Math.round(
         (safeInterval + daysLate) *
           (current.easeFactor / 1000) *
-          config.easyIntervalBonus,
+          config.easyIntervalBonus *
+          ivlMod,
       ),
     ),
   );
 
   switch (rating) {
     case 1: {
-      // Lapse: reduce ease, increment lapses, enter Relearning (or Suspend if Leech)
       const nextLapses = current.lapses + 1;
       const nextEase = Math.max(
         config.minimumEaseFactor,
@@ -363,7 +663,15 @@ export function calculateNextSchedule(
         ),
       );
 
-      if (config.leechThreshold > 0 && nextLapses >= config.leechThreshold) {
+      const isLeechTrigger =
+        config.leechThreshold > 0 &&
+        nextLapses >= config.leechThreshold &&
+        (nextLapses === config.leechThreshold ||
+          (nextLapses - config.leechThreshold) %
+            Math.max(1, Math.floor(config.leechThreshold / 2)) ===
+            0);
+
+      if (config.leechAction === "suspend" && isLeechTrigger) {
         return {
           queue: "Suspended",
           step: 0,

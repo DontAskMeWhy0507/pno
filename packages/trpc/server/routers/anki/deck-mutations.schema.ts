@@ -1,5 +1,37 @@
 import { z } from "zod";
 
+export const ZAnkiDeckOptionsSchema = z.object({
+  newCardsPerDay: z.number().int().min(0).max(9999),
+  maxReviewsPerDay: z.number().int().min(0).max(9999),
+  learningStepsMinutes: z.array(z.number().min(1).max(525600)).min(1).max(12),
+  graduatingIntervalDays: z.number().int().min(1).max(36500),
+  easyIntervalDays: z.number().int().min(1).max(36500),
+  newCardGatherOrder: z.enum(["sequential", "random"]),
+  relearningStepsMinutes: z.array(z.number().min(1).max(525600)).min(1).max(12),
+  minimumLapseIntervalDays: z.number().int().min(1).max(36500),
+  leechThreshold: z.number().int().min(0).max(999),
+  leechAction: z.enum(["suspend", "tag_only"]),
+  newMix: z.enum(["mix", "after_reviews", "before_reviews"]),
+  interdayLearnMix: z.enum(["mix", "after_reviews", "before_reviews"]),
+  reviewSortOrder: z.enum([
+    "due_asc",
+    "interval_asc",
+    "interval_desc",
+    "random",
+  ]),
+  showTimer: z.boolean(),
+  capAnswerTimeSecs: z.number().int().min(5).max(3600),
+  disableAutoplay: z.boolean(),
+  maxIntervalDays: z.number().int().min(1).max(36500),
+  startingEaseFactor: z.number().int().min(1300).max(5000),
+  easyIntervalBonus: z.number().min(1).max(5),
+  intervalModifier: z.number().min(0.5).max(2.5),
+  hardIntervalMultiplier: z.number().min(1).max(2.5),
+  lapseNewIntervalMultiplier: z.number().min(0).max(1),
+  rolloverHour: z.number().int().min(0).max(23),
+  learnAheadMinutes: z.number().int().min(0).max(180),
+});
+
 export const ZAnkiTemplateSchema = z.object({
   presetId: z
     .enum(["vocab_pro", "basic", "cloze", "imported", "custom"])
@@ -9,6 +41,7 @@ export const ZAnkiTemplateSchema = z.object({
   afmt: z.string().max(16000),
   css: z.string().max(16000).default(""),
   isCloze: z.boolean().optional(),
+  options: ZAnkiDeckOptionsSchema.partial().optional(),
 });
 
 export const ZCreateAnkiDeckSchema = z.object({
@@ -29,8 +62,25 @@ export const ZUpdateAnkiTemplateSchema = z.object({
   template: ZAnkiTemplateSchema,
 });
 
+export const ZUpdateAnkiDeckOptionsSchema = z.object({
+  studySetId: z.string().min(1),
+  options: ZAnkiDeckOptionsSchema.partial().optional(),
+  todayOnly: z
+    .object({
+      newCardsPerDay: z.number().int().min(0).max(9999).optional(),
+      maxReviewsPerDay: z.number().int().min(0).max(9999).optional(),
+    })
+    .nullable()
+    .optional(),
+  timezoneOffsetMinutes: z.number().int().min(-840).max(840).optional(),
+  resetToDefaults: z.boolean().default(false),
+});
+
 export type TCreateAnkiDeckSchema = z.infer<typeof ZCreateAnkiDeckSchema>;
 export type TUpdateAnkiDeckSchema = z.infer<typeof ZUpdateAnkiDeckSchema>;
 export type TUpdateAnkiTemplateSchema = z.infer<
   typeof ZUpdateAnkiTemplateSchema
+>;
+export type TUpdateAnkiDeckOptionsSchema = z.infer<
+  typeof ZUpdateAnkiDeckOptionsSchema
 >;

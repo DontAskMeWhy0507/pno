@@ -1,9 +1,12 @@
 import {
   applyAnkiFuzz,
   calculateNextSchedule,
+  formatStepsString,
   getAnkiDayStart,
   getIntervalEstimateLabel,
   isRelearningCard,
+  parseStepsString,
+  resolveDeckOptions,
   type CardScheduleState,
 } from "../packages/lib/src/anki/srs";
 
@@ -182,5 +185,41 @@ describe("Anki V3 / SM-2 SRS Engine", () => {
     expect(getIntervalEstimateLabel(reviewCard, 2, baseNow, tzOpts)).toBe("12d");
     expect(getIntervalEstimateLabel(reviewCard, 3, baseNow, tzOpts)).toBe("25d");
     expect(getIntervalEstimateLabel(reviewCard, 4, baseNow, tzOpts)).toBe("33d");
+  });
+
+  test("parseStepsString and formatStepsString handle minutes, hours, and days", () => {
+    expect(parseStepsString("1m 10m 1d")).toEqual([1, 10, 1440]);
+    expect(parseStepsString("30s 2h")).toEqual([1, 120]);
+    expect(formatStepsString([1, 10, 1440])).toBe("1m 10m 1d");
+  });
+
+  test("intervalModifier scales Review intervals and tag_only prevents leech suspension", () => {
+    const card: CardScheduleState = {
+      queue: "Review",
+      step: 0,
+      interval: 10,
+      easeFactor: 2500,
+      reps: 10,
+      lapses: 7,
+      due: baseNow,
+      lastReviewedAt: baseNow,
+    };
+    const scaled = calculateNextSchedule(card, 3, baseNow, {
+      ...tzOpts,
+      intervalModifier: 1.5,
+    });
+    expect(scaled.interval).toBe(38); // round(10 * 2.5 * 1.5) = 38
+
+    const tagOnly = calculateNextSchedule(card, 1, baseNow, {
+      ...tzOpts,
+      leechAction: "tag_only",
+    });
+    expect(tagOnly.lapses).toBe(8);
+    expect(tagOnly.queue).toBe("Learning");
+
+    const resolved = resolveDeckOptions({ newCardsPerDay: 50, showTimer: true });
+    expect(resolved.newCardsPerDay).toBe(50);
+    expect(resolved.showTimer).toBe(true);
+    expect(resolved.maxReviewsPerDay).toBe(200);
   });
 });

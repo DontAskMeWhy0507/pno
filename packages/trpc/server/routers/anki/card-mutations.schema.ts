@@ -24,6 +24,13 @@ export const ZDeleteAnkiCardSchema = z.object({
   termId: z.string().min(1),
 });
 
+export const ZSetCardSuspendedSchema = z.object({
+  studySetId: z.string().min(1),
+  termId: z.string().min(1),
+  suspended: z.boolean(),
+});
+
 export type TAddAnkiCardSchema = z.infer<typeof ZAddAnkiCardSchema>;
 export type TUpdateAnkiCardSchema = z.infer<typeof ZUpdateAnkiCardSchema>;
 export type TDeleteAnkiCardSchema = z.infer<typeof ZDeleteAnkiCardSchema>;
+export type TSetCardSuspendedSchema = z.infer<typeof ZSetCardSuspendedSchema>;

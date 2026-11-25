@@ -16,8 +16,10 @@ import type { NonNullableUserContext } from "../../lib/types";
 import type {
   TAddAnkiCardSchema,
   TDeleteAnkiCardSchema,
+  TSetCardSuspendedSchema,
   TUpdateAnkiCardSchema,
 } from "./card-mutations.schema";
+import { assertStudySetReadable } from "./access";
 import { assertDeckOwner, safeTruncateHtml } from "./deck-mutations.handler";
 
 function buildCardPayload(
@@ -229,4 +231,61 @@ export const deleteCardHandler = async ({
   });
 
   return { deletedId: input.termId };
+};
+
+export const setCardSuspendedHandler = async ({
+  ctx,
+  input,
+}: {
+  ctx: NonNullableUserContext;
+  input: TSetCardSuspendedSchema;
+}) => {
+  await assertStudySetReadable(ctx, input.studySetId);
+  const userId = ctx.session.user.id;
+  const now = new Date();
+
+  const existing = await ctx.prisma.ankiCardSchedule.findUnique({
+    where: {
+      userId_termId: {
+        userId,
+        termId: input.termId,
+      },
+    },
+  });
+
+  if (input.suspended) {
+    const schedule = await ctx.prisma.ankiCardSchedule.upsert({
+      where: {
+        userId_termId: { userId, termId: input.termId },
+      },
+      create: {
+        userId,
+        termId: input.termId,
+        studySetId: input.studySetId,
+        queue: "Suspended",
+        due: now,
+      },
+      update: {
+        queue: "Suspended",
+      },
+    });
+    return { schedule };
+  }
+
+  if (!existing) {
+    return { schedule: null };
+  }
+
+  const nextQueue = existing.interval >= 1 ? "Review" : existing.reps > 0 ? "Learning" : "New";
+  const schedule = await ctx.prisma.ankiCardSchedule.update({
+    where: {
+      userId_termId: { userId, termId: input.termId },
+    },
+    data: {
+      queue: nextQueue,
+      due: existing.due < now ? now : existing.due,
+    },
+  });
+
+  return { schedule };
 };

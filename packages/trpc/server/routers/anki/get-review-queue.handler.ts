@@ -1,9 +1,12 @@
+import { parseAnkiDeckTemplate } from "@pno/lib/src/anki/presets";
 import {
-  AnkiQueue,
-  CardScheduleState,
-  DEFAULT_SCHEDULE_CONFIG,
+  deckOptionsToScheduleConfig,
+  getAnkiDayKey,
   getAnkiDayStart,
   getIntervalEstimateLabel,
+  resolveDeckOptions,
+  type AnkiQueue,
+  type CardScheduleState,
 } from "@pno/lib/src/anki/srs";
 
 import type { NonNullableUserContext } from "../../lib/types";
@@ -15,20 +18,21 @@ type GetReviewQueueOptions = {
   input: TGetReviewQueueSchema;
 };
 
+function shuffleArray<T>(items: T[]): T[] {
+  const arr = [...items];
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [arr[i], arr[j]] = [arr[j]!, arr[i]!];
+  }
+  return arr;
+}
+
 export const getReviewQueueHandler = async ({
   ctx,
   input,
 }: GetReviewQueueOptions) => {
   const userId = ctx.session.user.id;
   const now = new Date();
-  const dayStart = getAnkiDayStart(
-    now,
-    DEFAULT_SCHEDULE_CONFIG.rolloverHour,
-    input.timezoneOffsetMinutes,
-  );
-  const learnAheadCutoff = new Date(
-    now.getTime() + DEFAULT_SCHEDULE_CONFIG.learnAheadMinutes * 60 * 1000,
-  );
 
   await assertStudySetReadable(ctx, input.studySetId);
 
@@ -42,24 +46,58 @@ export const getReviewQueueHandler = async ({
     },
   });
 
-  // Step 1: Lightweight fetch of term IDs and ranks only
-  const terms = await ctx.prisma.term.findMany({
-    where: { studySetId: input.studySetId, ephemeral: false },
-    orderBy: { rank: "asc" },
-    select: { id: true, rank: true },
-  });
+  const parsedTemplate = parseAnkiDeckTemplate(studySet?.ankiTemplate);
+  const options = resolveDeckOptions(parsedTemplate?.options);
+  const dayKey = getAnkiDayKey(
+    now,
+    options.rolloverHour,
+    input.timezoneOffsetMinutes,
+  );
+  const dayStart = getAnkiDayStart(
+    now,
+    options.rolloverHour,
+    input.timezoneOffsetMinutes,
+  );
+  const learnAheadCutoff = new Date(
+    now.getTime() + options.learnAheadMinutes * 60 * 1000,
+  );
 
-  // Step 2: Fetch existing schedules for this user in this set
-  const existingSchedules = await ctx.prisma.ankiCardSchedule.findMany({
-    where: {
-      userId,
-      studySetId: input.studySetId,
-    },
-  });
+  const effectiveNewLimit =
+    options.todayOverride?.dayKey === dayKey &&
+    typeof options.todayOverride.newCardsPerDay === "number"
+      ? options.todayOverride.newCardsPerDay
+      : options.newCardsPerDay;
+  const effectiveReviewLimit =
+    options.todayOverride?.dayKey === dayKey &&
+    typeof options.todayOverride.maxReviewsPerDay === "number"
+      ? options.todayOverride.maxReviewsPerDay
+      : options.maxReviewsPerDay;
+
+  const [terms, existingSchedules, todayReviewLogs] = await Promise.all([
+    ctx.prisma.term.findMany({
+      where: { studySetId: input.studySetId, ephemeral: false },
+      orderBy: { rank: "asc" },
+      select: { id: true, rank: true },
+    }),
+    ctx.prisma.ankiCardSchedule.findMany({
+      where: {
+        userId,
+        studySetId: input.studySetId,
+      },
+    }),
+    ctx.prisma.ankiReviewLog.findMany({
+      where: {
+        userId,
+        studySetId: input.studySetId,
+        reviewedAt: { gte: dayStart },
+      },
+      select: { termId: true, kind: true },
+    }),
+  ]);
 
   const scheduleMap = new Map<string, (typeof existingSchedules)[0]>();
-  let newStudiedToday = 0;
-  let reviewsStudiedToday = 0;
+  let newByScheduleToday = 0;
+  let reviewsByScheduleToday = 0;
   let suspendedCount = 0;
 
   for (const s of existingSchedules) {
@@ -68,11 +106,21 @@ export const getReviewQueueHandler = async ({
       suspendedCount += 1;
     }
     if (s.createdAt >= dayStart) {
-      newStudiedToday += 1;
+      newByScheduleToday += 1;
     } else if (s.lastReviewedAt && s.lastReviewedAt >= dayStart) {
-      reviewsStudiedToday += 1;
+      reviewsByScheduleToday += 1;
     }
   }
+
+  const reviewedTodayTermIds = new Set<string>();
+  for (const l of todayReviewLogs) {
+    if (l.kind === "Review") reviewedTodayTermIds.add(l.termId);
+  }
+  const newStudiedToday = newByScheduleToday;
+  const reviewsStudiedToday = Math.max(
+    reviewsByScheduleToday,
+    reviewedTodayTermIds.size,
+  );
 
   type LightweightCard = {
     termId: string;
@@ -89,6 +137,7 @@ export const getReviewQueueHandler = async ({
 
   const learnDue: LightweightCard[] = [];
   const learnAhead: LightweightCard[] = [];
+  const dayLearnDue: LightweightCard[] = [];
   const reviewDueAll: LightweightCard[] = [];
   const newCardsAll: LightweightCard[] = [];
 
@@ -107,18 +156,22 @@ export const getReviewQueueHandler = async ({
       queue,
       step: s?.step ?? 0,
       interval: s?.interval ?? 0,
-      easeFactor: s?.easeFactor ?? DEFAULT_SCHEDULE_CONFIG.startingEaseFactor,
+      easeFactor: s?.easeFactor ?? options.startingEaseFactor,
       reps: s?.reps ?? 0,
       lapses: s?.lapses ?? 0,
       due,
       lastReviewedAt: s?.lastReviewedAt ?? null,
     };
 
-    if (queue === "Learning" || queue === "DayLearn") {
+    if (queue === "Learning") {
       if (due <= now) {
         learnDue.push(item);
-      } else if (queue === "Learning" && due <= learnAheadCutoff) {
+      } else if (due <= learnAheadCutoff) {
         learnAhead.push(item);
+      }
+    } else if (queue === "DayLearn") {
+      if (due <= now) {
+        dayLearnDue.push(item);
       }
     } else if (queue === "Review" && due <= now) {
       reviewDueAll.push(item);
@@ -129,30 +182,56 @@ export const getReviewQueueHandler = async ({
 
   learnDue.sort((a, b) => a.due.getTime() - b.due.getTime());
   learnAhead.sort((a, b) => a.due.getTime() - b.due.getTime());
-  reviewDueAll.sort(
-    (a, b) => a.due.getTime() - b.due.getTime() || a.rank - b.rank,
-  );
+  dayLearnDue.sort((a, b) => a.due.getTime() - b.due.getTime());
+
+  let orderedReviews = [...reviewDueAll];
+  if (options.reviewSortOrder === "interval_asc") {
+    orderedReviews.sort((a, b) => a.interval - b.interval || a.due.getTime() - b.due.getTime());
+  } else if (options.reviewSortOrder === "interval_desc") {
+    orderedReviews.sort((a, b) => b.interval - a.interval || a.due.getTime() - b.due.getTime());
+  } else if (options.reviewSortOrder === "random") {
+    orderedReviews = shuffleArray(orderedReviews);
+  } else {
+    orderedReviews.sort((a, b) => a.due.getTime() - b.due.getTime() || a.rank - b.rank);
+  }
+
+  const orderedNew =
+    options.newCardGatherOrder === "random"
+      ? shuffleArray(newCardsAll)
+      : newCardsAll;
 
   const remainingNewQuota = input.ignoreDailyLimit
-    ? newCardsAll.length
-    : Math.max(0, DEFAULT_SCHEDULE_CONFIG.newCardsPerDay - newStudiedToday);
+    ? orderedNew.length
+    : Math.max(0, effectiveNewLimit - newStudiedToday);
   const remainingReviewQuota = input.ignoreDailyLimit
-    ? reviewDueAll.length
-    : Math.max(0, DEFAULT_SCHEDULE_CONFIG.maxReviewsPerDay - reviewsStudiedToday);
+    ? orderedReviews.length
+    : Math.max(0, effectiveReviewLimit - reviewsStudiedToday);
 
-  const reviewDue = reviewDueAll.slice(0, remainingReviewQuota);
-  const newCards = newCardsAll.slice(0, remainingNewQuota);
+  const reviewDue = orderedReviews.slice(0, remainingReviewQuota);
+  const newCards = orderedNew.slice(0, remainingNewQuota);
 
-  // Step 3: Pick only the top N cards for the active queue
-  const targetCards = [
-    ...learnDue,
-    ...reviewDue,
-    ...newCards,
-    ...learnAhead,
-  ].slice(0, input.limit);
+  // Order New / DayLearn / Review according to Display Order options
+  const mainPool: LightweightCard[] = [];
+  if (options.interdayLearnMix === "before_reviews") {
+    mainPool.push(...dayLearnDue);
+  }
+  if (options.newMix === "before_reviews") {
+    mainPool.push(...newCards);
+  }
+  mainPool.push(...reviewDue);
+  if (options.interdayLearnMix !== "before_reviews") {
+    mainPool.push(...dayLearnDue);
+  }
+  if (options.newMix !== "before_reviews") {
+    mainPool.push(...newCards);
+  }
+
+  const targetCards = [...learnDue, ...mainPool, ...learnAhead].slice(
+    0,
+    input.limit,
+  );
   const targetTermIds = targetCards.map((c) => c.termId);
 
-  // Step 4: Fetch HTML definitions ONLY for the target cards (at most input.limit)
   const fullTerms =
     targetTermIds.length > 0
       ? await ctx.prisma.term.findMany({
@@ -168,6 +247,12 @@ export const getReviewQueueHandler = async ({
       : [];
   const termDetailsMap = new Map(fullTerms.map((t) => [t.id, t]));
 
+  const estimateConfig = deckOptionsToScheduleConfig(
+    options,
+    input.timezoneOffsetMinutes,
+    false,
+  );
+
   const queueCards = targetCards.map((c) => {
     const details = termDetailsMap.get(c.termId);
     const state: CardScheduleState = {
@@ -182,18 +267,10 @@ export const getReviewQueueHandler = async ({
     };
 
     const estimates = {
-      again: getIntervalEstimateLabel(state, 1, now, {
-        timezoneOffsetMinutes: input.timezoneOffsetMinutes,
-      }),
-      hard: getIntervalEstimateLabel(state, 2, now, {
-        timezoneOffsetMinutes: input.timezoneOffsetMinutes,
-      }),
-      good: getIntervalEstimateLabel(state, 3, now, {
-        timezoneOffsetMinutes: input.timezoneOffsetMinutes,
-      }),
-      easy: getIntervalEstimateLabel(state, 4, now, {
-        timezoneOffsetMinutes: input.timezoneOffsetMinutes,
-      }),
+      again: getIntervalEstimateLabel(state, 1, now, estimateConfig),
+      hard: getIntervalEstimateLabel(state, 2, now, estimateConfig),
+      good: getIntervalEstimateLabel(state, 3, now, estimateConfig),
+      easy: getIntervalEstimateLabel(state, 4, now, estimateConfig),
     };
 
     return {
@@ -214,7 +291,7 @@ export const getReviewQueueHandler = async ({
     };
   });
 
-  const learnCount = learnDue.length + learnAhead.length;
+  const learnCount = learnDue.length + dayLearnDue.length + learnAhead.length;
 
   return {
     deck: studySet
@@ -224,6 +301,7 @@ export const getReviewQueueHandler = async ({
           userId: studySet.userId,
           isOwner: studySet.userId === userId,
           ankiTemplate: studySet.ankiTemplate ?? null,
+          options,
         }
       : null,
     cards: queueCards,
@@ -234,17 +312,21 @@ export const getReviewQueueHandler = async ({
       totalDue: learnCount + reviewDue.length + newCards.length,
     },
     dailyStats: {
+      dayKey,
       newStudiedToday,
-      newLimit: DEFAULT_SCHEDULE_CONFIG.newCardsPerDay,
+      newLimit: effectiveNewLimit,
+      baseNewLimit: options.newCardsPerDay,
       reviewsStudiedToday,
-      reviewLimit: DEFAULT_SCHEDULE_CONFIG.maxReviewsPerDay,
-      remainingNewAvailable: Math.max(0, newCardsAll.length - newCards.length),
+      reviewLimit: effectiveReviewLimit,
+      baseReviewLimit: options.maxReviewsPerDay,
+      hasTodayOverride: options.todayOverride?.dayKey === dayKey,
+      remainingNewAvailable: Math.max(0, orderedNew.length - newCards.length),
       remainingReviewAvailable: Math.max(
         0,
-        reviewDueAll.length - reviewDue.length,
+        orderedReviews.length - reviewDue.length,
       ),
       suspendedCount,
-      learnAheadMinutes: DEFAULT_SCHEDULE_CONFIG.learnAheadMinutes,
+      learnAheadMinutes: options.learnAheadMinutes,
     },
   };
 };

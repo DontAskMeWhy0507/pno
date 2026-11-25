@@ -4,7 +4,13 @@ import { TRPCError } from "@trpc/server";
 import {
   getAnkiPreset,
   parseAnkiCardFields,
+  parseAnkiDeckTemplate,
 } from "@pno/lib/src/anki/presets";
+import {
+  DEFAULT_DECK_OPTIONS,
+  getAnkiDayKey,
+  resolveDeckOptions,
+} from "@pno/lib/src/anki/srs";
 import {
   renderAnkiCard,
   stripFrontSidePrefix,
@@ -13,6 +19,7 @@ import {
 import type { NonNullableUserContext } from "../../lib/types";
 import type {
   TCreateAnkiDeckSchema,
+  TUpdateAnkiDeckOptionsSchema,
   TUpdateAnkiDeckSchema,
   TUpdateAnkiTemplateSchema,
 } from "./deck-mutations.schema";
@@ -129,8 +136,14 @@ export const updateTemplateHandler = async ({
   ctx: NonNullableUserContext;
   input: TUpdateAnkiTemplateSchema;
 }) => {
-  await assertDeckOwner(ctx, input.studySetId);
-  const tmpl = input.template;
+  const existingDeck = await assertDeckOwner(ctx, input.studySetId);
+  const existingParsed = parseAnkiDeckTemplate(existingDeck.ankiTemplate);
+  const tmpl = {
+    ...input.template,
+    ...(input.template.options ?? existingParsed?.options
+      ? { options: input.template.options ?? existingParsed?.options }
+      : {}),
+  };
 
   await ctx.prisma.studySet.update({
     where: { id: input.studySetId },
@@ -211,5 +224,59 @@ export const updateTemplateHandler = async ({
   return {
     updatedCardsCount: updates.length,
     template: tmpl,
+  };
+};
+
+export const updateDeckOptionsHandler = async ({
+  ctx,
+  input,
+}: {
+  ctx: NonNullableUserContext;
+  input: TUpdateAnkiDeckOptionsSchema;
+}) => {
+  const studySet = await assertDeckOwner(ctx, input.studySetId);
+  const baseTemplate =
+    parseAnkiDeckTemplate(studySet.ankiTemplate) ?? getAnkiPreset("vocab_pro");
+
+  const nextOptions = input.resetToDefaults
+    ? { ...DEFAULT_DECK_OPTIONS }
+    : resolveDeckOptions({
+        ...(baseTemplate.options ?? {}),
+        ...(input.options ?? {}),
+      });
+
+  if (input.todayOnly === null) {
+    nextOptions.todayOverride = null;
+  } else if (input.todayOnly !== undefined) {
+    const dayKey = getAnkiDayKey(
+      new Date(),
+      nextOptions.rolloverHour,
+      input.timezoneOffsetMinutes,
+    );
+    nextOptions.todayOverride = {
+      dayKey,
+      ...(input.todayOnly.newCardsPerDay !== undefined
+        ? { newCardsPerDay: input.todayOnly.newCardsPerDay }
+        : {}),
+      ...(input.todayOnly.maxReviewsPerDay !== undefined
+        ? { maxReviewsPerDay: input.todayOnly.maxReviewsPerDay }
+        : {}),
+    };
+  }
+
+  const nextTemplate = {
+    ...baseTemplate,
+    options: nextOptions,
+  };
+
+  await ctx.prisma.studySet.update({
+    where: { id: input.studySetId },
+    data: {
+      ankiTemplate: nextTemplate as unknown as Prisma.InputJsonValue,
+    },
+  });
+
+  return {
+    options: nextOptions,
   };
 };

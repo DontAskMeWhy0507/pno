@@ -1,3 +1,5 @@
+import type { AnkiDeckOptions } from "./srs";
+
 export type AnkiPresetId = "vocab_pro" | "basic" | "cloze" | "imported" | "custom";
 
 export interface AnkiDeckTemplate {
@@ -7,6 +9,7 @@ export interface AnkiDeckTemplate {
   afmt: string;
   css: string;
   isCloze?: boolean;
+  options?: Partial<AnkiDeckOptions>;
 }
 
 export interface AnkiCardFieldData {
@@ -171,6 +174,9 @@ export function parseAnkiDeckTemplate(raw: unknown): AnkiDeckTemplate | null {
     afmt: obj.afmt,
     css: typeof obj.css === "string" ? obj.css : "",
     isCloze: typeof obj.isCloze === "boolean" ? obj.isCloze : obj.qfmt.includes("{{cloze:"),
+    ...(obj.options && typeof obj.options === "object" && !Array.isArray(obj.options)
+      ? { options: obj.options as Partial<AnkiDeckOptions> }
+      : {}),
   };
 }
 
