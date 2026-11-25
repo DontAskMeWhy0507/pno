@@ -21,6 +21,7 @@ export const getRecentFolders = async (
     take: 16,
   });
   const entityIds = recentContainers.map((e) => e.entityId);
+  if (entityIds.length === 0) return [];
 
   return (
     await prisma.folder.findMany({

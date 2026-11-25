@@ -22,6 +22,7 @@ const InternalSetContent: React.FC<InternalSetProps> = ({ collab }) => {
   const data = useSet();
 
   const isAnki = Array.isArray(data.tags) && data.tags.includes("anki");
+  const isCollab = collab ?? data.type === "Collab";
 
   if (isAnki) {
     return (
@@ -42,7 +43,7 @@ const InternalSetContent: React.FC<InternalSetProps> = ({ collab }) => {
         <Container maxW="7xl" p="4">
           <Stack spacing={10} w="full">
             <FlashcardPreview />
-            {collab ? <CollabDetails /> : <DescriptionArea />}
+            {isCollab ? <CollabDetails /> : <DescriptionArea />}
           </Stack>
         </Container>
       </Container>

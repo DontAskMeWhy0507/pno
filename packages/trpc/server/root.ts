@@ -17,6 +17,7 @@ import { recentRouter } from "./routers/recent";
 import { shareResolverRouter } from "./routers/share-resolver";
 import { studiableTermsRouter } from "./routers/studiable-terms";
 import { studySetsRouter } from "./routers/study-sets/_router";
+import { syncRouter } from "./routers/sync";
 import { termsRouter } from "./routers/terms/_router";
 import { userRouter } from "./routers/user/_router";
 import { createTRPCRouter } from "./trpc";
@@ -47,6 +48,7 @@ export const appRouter = createTRPCRouter({
   disoverable: discoverableRouter,
   shareResolver: shareResolverRouter,
   ielts: ieltsRouter,
+  sync: syncRouter,
   dev: devRouter,
 });
 

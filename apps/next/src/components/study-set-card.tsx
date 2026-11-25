@@ -1,6 +1,8 @@
+import { useSession } from "next-auth/react";
 import React from "react";
 
 import type { StudySet } from "@pno/prisma/client";
+import { api } from "@pno/trpc";
 
 import { HStack, Text, Badge } from "@chakra-ui/react";
 
@@ -38,12 +40,29 @@ export const StudySetCard: React.FC<StudySetCardProps> = ({
   removable = false,
   onRemove,
 }) => {
+  const { status } = useSession();
+  const utils = api.useContext();
+  const prefetchedRef = React.useRef(false);
+
   const isAnki =
     (Array.isArray(studySet.tags) && studySet.tags.includes("anki")) ||
     (typeof studySet.tags === "string" && studySet.tags.includes("anki")) ||
     (studySet.description?.toLowerCase().includes("anki") ?? false);
 
   const cardUrl = draft ? `/${studySet.id}/create` : `/${studySet.id}`;
+
+  const handlePrefetch = React.useCallback(() => {
+    if (draft || status !== "authenticated" || prefetchedRef.current) return;
+    prefetchedRef.current = true;
+    void utils.studySets.byId.prefetch(
+      {
+        studySetId: studySet.id,
+        withDistractors: false,
+        withCollab: false,
+      },
+      { staleTime: 30_000 },
+    );
+  }, [draft, status, studySet.id, utils]);
 
   return (
     <GenericCard
@@ -85,6 +104,7 @@ export const StudySetCard: React.FC<StudySetCardProps> = ({
       verified={verified}
       removable={removable}
       onRemove={onRemove}
+      onPrefetch={handlePrefetch}
     />
   );
 };

@@ -13,6 +13,10 @@ import { Loading } from "../components/loading";
 import { queryEventChannel } from "../events/query";
 import { useFeature } from "../hooks/use-feature";
 import {
+  readStudySetCache,
+  writeStudySetCache,
+} from "../lib/local-query-cache";
+import {
   ContainerContext,
   type ContainerStore,
   type ContainerStoreProps,
@@ -63,10 +67,39 @@ export const HydrateSetData: React.FC<
   const router = useRouter();
   const { data: session, status } = useSession();
   const id = router.query.id as string;
+  const utils = api.useContext();
 
   const [isDirty, setIsDirty] = useSetPropertiesStore((s) => [
     s.isDirty,
     s.setIsDirty,
+  ]);
+
+  React.useEffect(() => {
+    if (
+      status !== "authenticated" ||
+      !session?.user?.id ||
+      !id ||
+      withDistractors ||
+      requireFresh
+    ) {
+      return;
+    }
+    const input = { studySetId: id, withDistractors, withCollab };
+    if (!utils.studySets.byId.getData(input)) {
+      const cached = readStudySetCache<AuthedReturn>(session.user.id, id);
+      if (cached?.data) {
+        utils.studySets.byId.setData(input, cached.data);
+        void utils.studySets.byId.invalidate(input);
+      }
+    }
+  }, [
+    id,
+    requireFresh,
+    session?.user?.id,
+    status,
+    utils,
+    withCollab,
+    withDistractors,
   ]);
 
   const queryKey = status == "authenticated" ? "byId" : "getPublic";
@@ -78,6 +111,13 @@ export const HydrateSetData: React.FC<
       enabled: status !== "loading" && !!id && !isDirty,
       onSuccess: (data) => {
         if (isDirty) setIsDirty(false);
+        if (
+          status === "authenticated" &&
+          session?.user?.id &&
+          !withDistractors
+        ) {
+          writeStudySetCache(session.user.id, id, data);
+        }
         queryEventChannel.emit("setQueryRefetched", createInjectedData(data));
       },
       onError: (err) => {

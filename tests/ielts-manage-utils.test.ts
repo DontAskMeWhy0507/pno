@@ -6,6 +6,8 @@ import {
   detectSkillFromText,
   parseIELTSText,
   parseSpeakingText,
+  parseUnifiedSmartText,
+  UNIFIED_SAMPLE_TEMPLATE,
 } from '../apps/next/src/modules/ielts/utils/textParser';
 import { extractMediaEmbedInfo } from '../apps/next/src/modules/ielts/utils/mediaUploader';
 import {
@@ -371,5 +373,76 @@ describe('ManageHelpers sorting, collection matching, and health checks', () => 
     });
     expect(listeningIssues.some((msg) => /audio/i.test(msg))).toBe(true);
     expect(listeningIssues.some((msg) => /answer/i.test(msg))).toBe(true);
+  });
+});
+
+describe('parseUnifiedSmartText (multi-test & media slot detection)', () => {
+  test('parses UNIFIED_SAMPLE_TEMPLATE into Reading, Listening, Writing with inherited collection and media slots', () => {
+    const res = parseUnifiedSmartText(UNIFIED_SAMPLE_TEMPLATE);
+    expect(res.errors).toEqual([]);
+    expect(res.hasExplicitCollection).toBe(true);
+    expect(res.collection).toBe('Cambridge IELTS 20 - Test 1');
+    expect(res.tests).toHaveLength(3);
+
+    expect(res.tests[0]?.skill).toBe('reading');
+    expect(res.tests[1]?.skill).toBe('listening');
+    expect(res.tests[2]?.skill).toBe('writing');
+
+    // Listening should expose 2 required audio slots + Section 2 map image slot; Writing exposes Task 1 image slot
+    const audioSlots = res.mediaSlots.filter((s) => s.kind === 'audio');
+    expect(audioSlots).toHaveLength(2);
+    expect(audioSlots.every((s) => s.required && !s.currentUrl)).toBe(true);
+
+    const imageSlots = res.mediaSlots.filter((s) => s.kind === 'image');
+    expect(imageSlots.length).toBeGreaterThanOrEqual(2);
+    expect(imageSlots.some((s) => s.hint?.includes('Map of the museum ground floor'))).toBe(true);
+    expect(imageSlots.some((s) => s.hint?.includes('Bar chart comparing renewable energy'))).toBe(true);
+
+    // Placeholder descriptions must NOT leak into actual URL fields
+    const listeningTest = res.tests[1]!;
+    if (listeningTest.skill === 'listening') {
+      expect(listeningTest.exam.parts[0]?.audioUrl).toBe('');
+      expect(listeningTest.exam.parts[1]?.imageUrl).toBeFalsy();
+    }
+    const writingTest = res.tests[2]!;
+    if (writingTest.skill === 'writing') {
+      expect(writingTest.exam.task1.imageUrl).toBeUndefined();
+    }
+  });
+
+  test('supports single test without [TEST] or [SKILL] tags and Speaking without [DESC]', () => {
+    const singleSpeaking = [
+      '[COLLECTION] Vol 99',
+      '[TITLE] Quick Speaking',
+      '[PART 1]',
+      '[TOPIC] Work',
+      'Q: What do you do?',
+      'A: I am a software engineer.',
+      '[PART 2]',
+      '[TOPIC] Gadget',
+      '[CUE_CARD] Describe a useful device.',
+      '[IMAGE: Photo of a smartphone]',
+      '[BULLETS]',
+      '- What it is',
+      '- When you bought it',
+      '- How often you use it',
+      '- Why it is useful',
+      '[SAMPLE_ANSWER]',
+      'My smartphone is indispensable.',
+      '[PART 3]',
+      '[TOPIC] Tech',
+      'Q: How has tech changed work?',
+      'A: Remote work is now common.',
+    ].join('\n');
+
+    const res = parseUnifiedSmartText(singleSpeaking);
+    expect(res.errors).toEqual([]);
+    expect(res.collection).toBe('Vol 99');
+    expect(res.tests).toHaveLength(1);
+    expect(res.tests[0]?.skill).toBe('speaking');
+    expect(res.tests[0]?.errors).toEqual([]);
+    expect(res.mediaSlots.some((s) => s.kind === 'image' && s.hint === 'Photo of a smartphone')).toBe(
+      true
+    );
   });
 });

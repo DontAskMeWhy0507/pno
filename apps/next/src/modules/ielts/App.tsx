@@ -40,6 +40,7 @@ import { Box, useColorMode, useColorModeValue, useToast } from '@chakra-ui/react
 import Navbar from '../../components/navbar';
 import { Footer } from '../../components/footer';
 import { menuEventChannel } from '../../events/menu';
+import { broadcastSync } from '../../lib/sync-bus';
 
 const SubmitConfirmModal = dynamic(
   () => import('./components/exam/SubmitConfirmModal').then((m) => m.SubmitConfirmModal),
@@ -118,7 +119,8 @@ export function App() {
   // Cloud sync state
   const [recentAttempts, setRecentAttempts] = useState<CloudAttemptRow[]>([]);
   const [syncStatus, setSyncStatus] = useState<'synced' | 'saving' | 'offline'>('synced');
-  const cloudHydratedRef = useRef(false);
+  const initialMigrationDoneRef = useRef(false);
+  const lastHydratedAtRef = useRef(0);
 
   // Current Active Exam in Test Mode
   const [currentExam, setCurrentExam] = useState<Exam>(() => (allExams[0] ?? getAllExams()[0])!);
@@ -187,22 +189,26 @@ export function App() {
 
   // tRPC Cloud Sync queries & mutations
   const bootstrapQuery = api.ielts.bootstrap.useQuery(undefined, {
-    staleTime: 60_000,
-    refetchOnWindowFocus: false,
+    staleTime: 10_000,
+    refetchOnWindowFocus: true,
+    refetchOnReconnect: true,
   });
+  const notifyIeltsSynced = useCallback(() => {
+    broadcastSync('ielts');
+  }, []);
   const bulkSyncMutation = api.ielts.bulkSyncLocal.useMutation();
-  const upsertExamMutation = api.ielts.upsertExam.useMutation();
-  const deleteExamMutation = api.ielts.deleteExam.useMutation();
-  const upsertCollectionMutation = api.ielts.upsertCollection.useMutation();
-  const renameCollectionMutation = api.ielts.renameCollection.useMutation();
-  const deleteCollectionMutation = api.ielts.deleteCollection.useMutation();
-  const bulkDeleteExamsMutation = api.ielts.bulkDeleteExams.useMutation();
-  const bulkMoveExamsMutation = api.ielts.bulkMoveExams.useMutation();
-  const restoreDefaultsMutation = api.ielts.restoreDefaults.useMutation();
-  const saveProgressMutation = api.ielts.saveProgress.useMutation();
-  const clearProgressMutation = api.ielts.clearProgress.useMutation();
-  const recordAttemptMutation = api.ielts.recordAttempt.useMutation();
-  const deleteAttemptMutation = api.ielts.deleteAttempt.useMutation();
+  const upsertExamMutation = api.ielts.upsertExam.useMutation({ onSuccess: notifyIeltsSynced });
+  const deleteExamMutation = api.ielts.deleteExam.useMutation({ onSuccess: notifyIeltsSynced });
+  const upsertCollectionMutation = api.ielts.upsertCollection.useMutation({ onSuccess: notifyIeltsSynced });
+  const renameCollectionMutation = api.ielts.renameCollection.useMutation({ onSuccess: notifyIeltsSynced });
+  const deleteCollectionMutation = api.ielts.deleteCollection.useMutation({ onSuccess: notifyIeltsSynced });
+  const bulkDeleteExamsMutation = api.ielts.bulkDeleteExams.useMutation({ onSuccess: notifyIeltsSynced });
+  const bulkMoveExamsMutation = api.ielts.bulkMoveExams.useMutation({ onSuccess: notifyIeltsSynced });
+  const restoreDefaultsMutation = api.ielts.restoreDefaults.useMutation({ onSuccess: notifyIeltsSynced });
+  const saveProgressMutation = api.ielts.saveProgress.useMutation({ onSuccess: notifyIeltsSynced });
+  const clearProgressMutation = api.ielts.clearProgress.useMutation({ onSuccess: notifyIeltsSynced });
+  const recordAttemptMutation = api.ielts.recordAttempt.useMutation({ onSuccess: notifyIeltsSynced });
+  const deleteAttemptMutation = api.ielts.deleteAttempt.useMutation({ onSuccess: notifyIeltsSynced });
 
   const handleRefreshExams = useCallback(() => {
     const fresh = getAllExams();
@@ -215,44 +221,49 @@ export function App() {
     });
   }, []);
 
-  // Hydrate IELTS state from cloud once bootstrap resolves
+  // Hydrate IELTS state from cloud on mount and whenever bootstrap updates
   useEffect(() => {
-    if (!bootstrapQuery.data || cloudHydratedRef.current) return;
-    cloudHydratedRef.current = true;
+    if (!bootstrapQuery.data) return;
+    if (bootstrapQuery.dataUpdatedAt === lastHydratedAtRef.current) return;
+    lastHydratedAtRef.current = bootstrapQuery.dataUpdatedAt;
 
-    const alreadyMigrated =
-      typeof localStorage !== 'undefined' &&
-      localStorage.getItem(CLOUD_MIGRATION_FLAG) === '1';
+    if (!initialMigrationDoneRef.current) {
+      initialMigrationDoneRef.current = true;
+      const alreadyMigrated =
+        typeof localStorage !== 'undefined' &&
+        localStorage.getItem(CLOUD_MIGRATION_FLAG) === '1';
 
-    if (!alreadyMigrated) {
-      const localPayload = buildLocalSyncPayload();
-      const hasLocalData =
-        localPayload.customExams.length > 0 ||
-        localPayload.deletedExams.length > 0 ||
-        localPayload.collections.length > 0 ||
-        localPayload.deletedCollections.length > 0 ||
-        localPayload.progressList.length > 0;
+      if (!alreadyMigrated) {
+        const localPayload = buildLocalSyncPayload();
+        const hasLocalData =
+          localPayload.customExams.length > 0 ||
+          localPayload.deletedExams.length > 0 ||
+          localPayload.collections.length > 0 ||
+          localPayload.deletedCollections.length > 0 ||
+          localPayload.progressList.length > 0;
 
-      if (hasLocalData) {
-        setSyncStatus('saving');
-        bulkSyncMutation.mutate(localPayload, {
-          onSuccess: (merged) => {
-            hydrateFromCloudBootstrap(merged as CloudBootstrapPayload);
-            setRecentAttempts((merged.recentAttempts || []) as CloudAttemptRow[]);
-            localStorage.setItem(CLOUD_MIGRATION_FLAG, '1');
-            handleRefreshExams();
-            setSyncStatus('synced');
-          },
-          onError: () => {
-            hydrateFromCloudBootstrap(bootstrapQuery.data as CloudBootstrapPayload);
-            setRecentAttempts((bootstrapQuery.data.recentAttempts || []) as CloudAttemptRow[]);
-            handleRefreshExams();
-            setSyncStatus('offline');
-          },
-        });
-        return;
+        if (hasLocalData) {
+          setSyncStatus('saving');
+          bulkSyncMutation.mutate(localPayload, {
+            onSuccess: (merged) => {
+              hydrateFromCloudBootstrap(merged as CloudBootstrapPayload);
+              setRecentAttempts((merged.recentAttempts || []) as CloudAttemptRow[]);
+              localStorage.setItem(CLOUD_MIGRATION_FLAG, '1');
+              handleRefreshExams();
+              setSyncStatus('synced');
+              broadcastSync('ielts');
+            },
+            onError: () => {
+              hydrateFromCloudBootstrap(bootstrapQuery.data as CloudBootstrapPayload);
+              setRecentAttempts((bootstrapQuery.data.recentAttempts || []) as CloudAttemptRow[]);
+              handleRefreshExams();
+              setSyncStatus('offline');
+            },
+          });
+          return;
+        }
+        localStorage.setItem(CLOUD_MIGRATION_FLAG, '1');
       }
-      localStorage.setItem(CLOUD_MIGRATION_FLAG, '1');
     }
 
     hydrateFromCloudBootstrap(bootstrapQuery.data as CloudBootstrapPayload);
@@ -260,7 +271,7 @@ export function App() {
     handleRefreshExams();
     setSyncStatus('synced');
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [bootstrapQuery.data]);
+  }, [bootstrapQuery.data, bootstrapQuery.dataUpdatedAt]);
 
   const cloudSyncExam = useCallback(
     (
@@ -1713,6 +1724,39 @@ export function App() {
                 saved as unknown as Record<string, unknown>
               );
             }
+            setIsSmartImportOpen(false);
+            setSmartImportCollection(undefined);
+            setSmartImportSkill(undefined);
+            handleRefreshExams();
+          }}
+          onBatchImportSuccess={({ exams, writingExams, speakingExams }) => {
+            exams.forEach((savedExam) => {
+              cloudSyncExam(
+                getExamSkillLabel(savedExam),
+                savedExam.id,
+                savedExam.title,
+                savedExam.collection || 'My Tests',
+                savedExam as unknown as Record<string, unknown>
+              );
+            });
+            writingExams.forEach((saved) => {
+              cloudSyncExam(
+                'Writing',
+                saved.id,
+                saved.title,
+                saved.collection || 'My Tests',
+                saved as unknown as Record<string, unknown>
+              );
+            });
+            speakingExams.forEach((saved) => {
+              cloudSyncExam(
+                'Speaking',
+                saved.id,
+                saved.title,
+                saved.collection || 'My Tests',
+                saved as unknown as Record<string, unknown>
+              );
+            });
             setIsSmartImportOpen(false);
             setSmartImportCollection(undefined);
             setSmartImportSkill(undefined);

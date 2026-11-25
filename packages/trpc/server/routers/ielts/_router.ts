@@ -25,6 +25,12 @@ const ZProgressInput = z.object({
   state: z.record(z.unknown()),
 });
 
+function extractNumericField(obj: unknown, key: string): number {
+  if (!obj || typeof obj !== "object") return 0;
+  const val = (obj as Record<string, unknown>)[key];
+  return typeof val === "number" && Number.isFinite(val) ? val : 0;
+}
+
 export const ieltsRouter = createTRPCRouter({
   bootstrap: protectedProcedure.query(async ({ ctx }) => {
     const userId = ctx.session.user.id;
@@ -74,6 +80,27 @@ export const ieltsRouter = createTRPCRouter({
     .mutation(async ({ ctx, input }) => {
       const userId = ctx.session.user.id;
       const collectionName = input.collection.trim() || "My Tests";
+      const existing = await ctx.prisma.ieltsCustomExam.findUnique({
+        where: {
+          userId_examId_skill: {
+            userId,
+            examId: input.examId,
+            skill: input.skill,
+          },
+        },
+      });
+      const existingUpdatedAt = extractNumericField(existing?.data, "updatedAt");
+      const incomingUpdatedAt = extractNumericField(input.data, "updatedAt");
+      if (
+        existing &&
+        !existing.deleted &&
+        existingUpdatedAt > 0 &&
+        incomingUpdatedAt > 0 &&
+        existingUpdatedAt > incomingUpdatedAt
+      ) {
+        return existing;
+      }
+
       return ctx.prisma.ieltsCustomExam.upsert({
         where: {
           userId_examId_skill: {
@@ -449,6 +476,26 @@ export const ieltsRouter = createTRPCRouter({
     .input(ZProgressInput)
     .mutation(async ({ ctx, input }) => {
       const userId = ctx.session.user.id;
+      const existing = await ctx.prisma.ieltsProgress.findUnique({
+        where: {
+          userId_examId_skill: {
+            userId,
+            examId: input.examId,
+            skill: input.skill,
+          },
+        },
+      });
+      const existingSavedAt = extractNumericField(existing?.state, "lastSavedAt");
+      const incomingSavedAt = extractNumericField(input.state, "lastSavedAt");
+      if (
+        existing &&
+        existingSavedAt > 0 &&
+        incomingSavedAt > 0 &&
+        existingSavedAt > incomingSavedAt
+      ) {
+        return existing;
+      }
+
       return ctx.prisma.ieltsProgress.upsert({
         where: {
           userId_examId_skill: {

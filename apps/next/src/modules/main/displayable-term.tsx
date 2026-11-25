@@ -33,6 +33,7 @@ import { editorEventChannel } from "../../events/editor";
 import { menuEventChannel } from "../../events/menu";
 import { useOutsideClick } from "../../hooks/use-outside-click";
 import { useSet } from "../../hooks/use-set";
+import { broadcastSync } from "../../lib/sync-bus";
 import { useContainerContext } from "../../stores/use-container-store";
 import {
   AddImageButton,
@@ -90,7 +91,8 @@ export const DisplayableTerm: React.FC<DisplayableTermProps> = ({ term }) => {
   });
 
   const edit = api.terms.edit.useMutation({
-    async onSuccess() {
+    async onSuccess(_data, vars) {
+      broadcastSync("quiz", vars.studySetId);
       await utils.studySets.invalidate();
     },
   });

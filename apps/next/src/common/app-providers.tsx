@@ -35,6 +35,12 @@ const GlobalShortcutLayer = dynamic(
     ssr: false,
   },
 );
+const RealtimeSyncProvider = dynamic(
+  () => import("./realtime-sync-provider"),
+  {
+    ssr: false,
+  },
+);
 
 const TelemetryProvider = dynamic(() =>
   import("../lib/telemetry").then((mod) => mod.TelemetryProvider),
@@ -90,6 +96,7 @@ export const AppProviders = (props: AppPropsWithChildren) => {
               {HIGHLIGHT_ENABLED && <SessionListener />}
               {TELEMETRY_ENABLED && <EventListeners />}
               <GlobalShortcutLayer />
+              <RealtimeSyncProvider />
               <PrivateRouteGuard>{props.children}</PrivateRouteGuard>
             </SessionProvider>
           </TelemetryProvider>

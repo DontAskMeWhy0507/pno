@@ -64,8 +64,9 @@ export const api = createTRPCNext<AppRouter>({
       queryClientConfig: {
         defaultOptions: {
           queries: {
-            staleTime: 30_000,
-            refetchOnWindowFocus: false,
+            staleTime: 10_000,
+            refetchOnWindowFocus: true,
+            refetchOnReconnect: true,
             retry(failureCount, _err) {
               const err = _err as never as Maybe<
                 TRPCClientErrorLike<AppRouter>
@@ -80,6 +81,7 @@ export const api = createTRPCNext<AppRouter>({
                     "UNAUTHORIZED",
                     "NOT_FOUND",
                     "PRECONDITION_FAILED",
+                    "CONFLICT",
                   ] as (typeof code)[]
                 ).includes(code)
               ) {

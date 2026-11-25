@@ -19,6 +19,7 @@ export const editHandler = async ({ ctx, input }: EditOptions) => {
     select: {
       id: true,
       created: true,
+      savedAt: true,
     },
   });
 
@@ -26,6 +27,18 @@ export const editHandler = async ({ ctx, input }: EditOptions) => {
     throw new TRPCError({
       code: "NOT_FOUND",
       message: "Study set not found.",
+    });
+  }
+
+  if (
+    input.expectedSavedAt &&
+    existingSet.savedAt.getTime() >
+      new Date(input.expectedSavedAt).getTime() + 1000
+  ) {
+    throw new TRPCError({
+      code: "CONFLICT",
+      message:
+        "This study set was updated on another device. Refreshing latest changes.",
     });
   }
 

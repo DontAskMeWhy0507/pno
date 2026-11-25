@@ -38,6 +38,13 @@ export const byIdHandler = async ({ ctx, input }: ByIdOptions) => {
         : await get(input.studySetId)
   ) as WidenedReturn;
 
+  if (!input.withDistractors && !input.withCollab && studySet?.type === "Collab") {
+    studySet = (await getWithCollab(
+      input.studySetId,
+      ctx.session.user.id,
+    )) as WidenedReturn;
+  }
+
   if (!studySet) {
     throw new TRPCError({
       code: "NOT_FOUND",

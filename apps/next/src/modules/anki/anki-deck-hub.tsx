@@ -60,6 +60,11 @@ import {
 } from "@tabler/icons-react";
 
 import { ConfirmModal } from "../../components/confirm-modal";
+import {
+  removeStudySetCache,
+  writeRecentCache,
+} from "../../lib/local-query-cache";
+import { broadcastSync } from "../../lib/sync-bus";
 import { SetData } from "../hydrate-set-data";
 import { AnkiAudioPlayer } from "./anki-audio-player";
 import type { EditableAnkiCard } from "./anki-card-editor-modal";
@@ -117,15 +122,73 @@ export const AnkiDeckHub: React.FC<AnkiDeckHubProps> = ({ data }) => {
   );
 
   const updateDeckMutation = api.anki.updateDeck.useMutation({
+    onMutate: async (vars) => {
+      const byIdInput = {
+        studySetId: data.id,
+        withDistractors: false,
+        withCollab: false,
+      };
+      await Promise.all([
+        utils.studySets.byId.cancel(byIdInput),
+        utils.recent.get.cancel(),
+      ]);
+      const prevSet = utils.studySets.byId.getData(byIdInput);
+      const prevRecent = utils.recent.get.getData();
+
+      if (prevSet) {
+        utils.studySets.byId.setData(byIdInput, {
+          ...prevSet,
+          title: vars.title,
+          description: vars.description ?? prevSet.description,
+        });
+      }
+      if (prevRecent) {
+        const nextRecent = {
+          ...prevRecent,
+          sets: prevRecent.sets.map((s) =>
+            s.id === data.id
+              ? {
+                  ...s,
+                  title: vars.title,
+                  description: vars.description ?? s.description,
+                }
+              : s,
+          ),
+          entities: prevRecent.entities.map((e) =>
+            e.id === data.id
+              ? {
+                  ...e,
+                  title: vars.title,
+                }
+              : e,
+          ),
+        };
+        utils.recent.get.setData(undefined, nextRecent);
+        if (session?.user?.id) {
+          writeRecentCache(session.user.id, nextRecent);
+        }
+      }
+      setIsEditDeckOpen(false);
+      return { prevSet, prevRecent, byIdInput };
+    },
     onSuccess: async () => {
+      broadcastSync("quiz", data.id);
       await Promise.all([
         utils.studySets.invalidate(),
         utils.recent.get.invalidate(),
       ]);
-      setIsEditDeckOpen(false);
       toast({ title: "Deck details updated", status: "success", duration: 2000 });
     },
-    onError: (err) => {
+    onError: (err, _vars, ctx) => {
+      if (ctx?.prevSet) {
+        utils.studySets.byId.setData(ctx.byIdInput, ctx.prevSet);
+      }
+      if (ctx?.prevRecent) {
+        utils.recent.get.setData(undefined, ctx.prevRecent);
+        if (session?.user?.id) {
+          writeRecentCache(session.user.id, ctx.prevRecent);
+        }
+      }
       toast({
         title: "Failed to update deck",
         description: err.message,
@@ -136,7 +199,36 @@ export const AnkiDeckHub: React.FC<AnkiDeckHubProps> = ({ data }) => {
   });
 
   const deleteDeckMutation = api.studySets.delete.useMutation({
+    onMutate: async () => {
+      await utils.recent.get.cancel();
+      const prevRecent = utils.recent.get.getData();
+      if (prevRecent) {
+        const nextRecent = {
+          ...prevRecent,
+          sets: prevRecent.sets.filter((s) => s.id !== data.id),
+          drafts: prevRecent.drafts.filter((d) => d.id !== data.id),
+          entities: prevRecent.entities.filter((e) => e.id !== data.id),
+        };
+        utils.recent.get.setData(undefined, nextRecent);
+        if (session?.user?.id) {
+          writeRecentCache(session.user.id, nextRecent);
+        }
+      }
+      if (session?.user?.id) {
+        removeStudySetCache(session.user.id, data.id);
+      }
+      return { prevRecent };
+    },
+    onError: (_err, _vars, ctx) => {
+      if (ctx?.prevRecent) {
+        utils.recent.get.setData(undefined, ctx.prevRecent);
+        if (session?.user?.id) {
+          writeRecentCache(session.user.id, ctx.prevRecent);
+        }
+      }
+    },
     onSuccess: async () => {
+      broadcastSync("quiz", data.id);
       await utils.recent.get.invalidate();
       await router.push("/home");
     },

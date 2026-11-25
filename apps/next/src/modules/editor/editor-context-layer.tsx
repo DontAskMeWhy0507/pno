@@ -5,6 +5,7 @@ import { richTextToHtml } from "@pno/lib/editor";
 import { type RouterOutputs, api } from "@pno/trpc";
 
 import { type Context, editorEventChannel } from "../../events/editor";
+import { broadcastSync } from "../../lib/sync-bus";
 import {
   type ClientTerm,
   type SetEditorStore,
@@ -27,6 +28,7 @@ export const EditorContextLayer: React.FC<
 
   const apiCreate = api.studySets.create.useMutation({
     onSuccess: async (data) => {
+      broadcastSync("quiz", data.id);
       await router.push(`/${data.id}`);
     },
     onError: (e) => {
@@ -39,7 +41,8 @@ export const EditorContextLayer: React.FC<
     },
   });
   const apiEditSet = api.studySets.edit.useMutation({
-    onSuccess: () => {
+    onSuccess: (updated) => {
+      broadcastSync("quiz", updated.id);
       storeRef.current!.getState().setSaveError(undefined);
     },
     onError: (e) => {
@@ -112,9 +115,15 @@ export const EditorContextLayer: React.FC<
     onError: setMutationSaveError,
   });
   const apiEditTerm = api.terms.edit.useMutation({
+    onSuccess: (_data, vars) => {
+      broadcastSync("quiz", vars.studySetId);
+    },
     onError: setMutationSaveError,
   });
   const apiBulkEdit = api.terms.bulkEdit.useMutation({
+    onSuccess: (_data, vars) => {
+      broadcastSync("quiz", vars.studySetId);
+    },
     onError: setMutationSaveError,
   });
   const apiSetImage = api.terms.setImage.useMutation({

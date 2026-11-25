@@ -20,6 +20,7 @@ export const ZEditSchema = z
     wordLanguage: z.enum(LANGUAGE_VALUES),
     definitionLanguage: z.enum(LANGUAGE_VALUES),
     visibility: z.nativeEnum(StudySetVisibility),
+    expectedSavedAt: z.union([z.date(), z.string().datetime()]).optional(),
   })
   .transform((z) => ({
     ...z,

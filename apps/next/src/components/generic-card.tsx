@@ -48,6 +48,7 @@ export interface GenericCardProps {
   verified?: boolean;
   removable?: boolean;
   onRemove?: () => void;
+  onPrefetch?: () => void;
 }
 
 export const GenericCard = ({
@@ -64,6 +65,7 @@ export const GenericCard = ({
   verified = false,
   removable = false,
   onRemove,
+  onPrefetch,
 }: GenericCardProps) => {
   const termsTextColor = useColorModeValue("gray.600", "gray.400");
   const linkBg = useColorModeValue("white", "gray.800");
@@ -84,6 +86,8 @@ export const GenericCard = ({
       shadow="lg"
       transition="all ease-in-out 150ms"
       zIndex={menuOpen ? 30 : 25}
+      onMouseEnter={onPrefetch}
+      onFocus={onPrefetch}
       _hover={{
         transform: "translateY(-2px)",
         borderBottomColor: "blue.300",

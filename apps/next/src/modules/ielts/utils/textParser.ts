@@ -2,9 +2,17 @@ import type { Exam, Part, QuestionGroup, Question, QuestionType, QuestionOption 
 import type { WritingExam } from '../types/writing';
 import type { SpeakingExam, SpeakingQuestion } from '../types/speaking';
 
+export interface ParseMediaHint {
+  partNumber?: number;
+  groupIndex?: number;
+  kind: 'audio' | 'image' | 'video';
+  hint: string;
+}
+
 export interface ParseResult {
   exam: Exam;
   warning?: string;
+  mediaHints?: ParseMediaHint[];
 }
 
 export interface DetectedSkillResult {
@@ -13,15 +21,36 @@ export interface DetectedSkillResult {
   reason: string;
 }
 
+export function isRealMediaUrl(val: string): boolean {
+  const trimmed = (val || '').trim();
+  if (!trimmed) return false;
+  return /^(https?:\/\/|\/|data:(?:image|audio|video)\/)/i.test(trimmed);
+}
+
+export function parseMediaTagValue(rawAfterTag: string): { url: string; hint?: string } {
+  const cleaned = (rawAfterTag || '').replace(/^[:\s]+/, '').trim();
+  if (!cleaned) return { url: '' };
+  if (isRealMediaUrl(cleaned)) return { url: cleaned };
+  return { url: '', hint: cleaned };
+}
+
 export function detectSkillFromText(rawText: string): DetectedSkillResult {
   const text = (rawText || '').trim();
   if (!text) {
     return { skill: 'reading', confidence: 'low', reason: 'Empty input' };
   }
 
+  // 0. Explicit [SKILL] directive in unified format
+  const explicitSkill = text.match(/^\[SKILL\][\s:]*(reading|listening|writing|speaking)\b/im);
+  if (explicitSkill) {
+    const sk = explicitSkill[1]!.toLowerCase() as DetectedSkillResult['skill'];
+    return { skill: sk, confidence: 'high', reason: `Explicit [SKILL] ${sk.toUpperCase()} tag` };
+  }
+
   // 1. Writing signals
   if (
     /^={2,}\s*TASK\s*[12]\s*={2,}/im.test(text) ||
+    /^\[TASK\s*[12]\]/im.test(text) ||
     /^\[CHART_TYPE\]/im.test(text) ||
     /^\[PROMPT\]/im.test(text)
   ) {
@@ -32,8 +61,8 @@ export function detectSkillFromText(rawText: string): DetectedSkillResult {
   if (
     /^\[CUE_CARD\]/im.test(text) ||
     /^\[BULLETS\]/im.test(text) ||
-    (/^===\s*PART\s*1\s*===/im.test(text) &&
-      /^===\s*PART\s*2\s*===/im.test(text) &&
+    (/^(?:={2,}\s*PART\s*1\s*={2,}|\[PART\s*1\])/im.test(text) &&
+      /^(?:={2,}\s*PART\s*2\s*={2,}|\[PART\s*2\])/im.test(text) &&
       /^\[TOPIC\]/im.test(text))
   ) {
     return { skill: 'speaking', confidence: 'high', reason: 'Detected Speaking PART / TOPIC / CUE_CARD tags' };
@@ -42,10 +71,12 @@ export function detectSkillFromText(rawText: string): DetectedSkillResult {
   // 3. Listening signals
   if (
     /^\[AUDIO\]/im.test(text) ||
+    /^\[AUDIO[\s:]/im.test(text) ||
     /^={2,}\s*SECTION\s*[1-4]\s*={2,}/im.test(text) ||
+    /^\[SECTION\s*[1-4]\]/im.test(text) ||
     /^\[SECTION_TITLE\]/im.test(text) ||
-    /^\[CATEGORY\]\s*.*listening/im.test(text) ||
-    /^\[TITLE\]\s*.*\blistening\b/im.test(text)
+    /^\[CATEGORY\][\s:]*.*listening/im.test(text) ||
+    /^\[TITLE\][\s:]*.*\blistening\b/im.test(text)
   ) {
     return { skill: 'listening', confidence: 'high', reason: 'Detected SECTION / AUDIO / Listening headers' };
   }
@@ -53,10 +84,11 @@ export function detectSkillFromText(rawText: string): DetectedSkillResult {
   // 4. Reading signals
   if (
     /^\[PASSAGE\]/im.test(text) ||
+    /^\[PASSAGE\s*[1-4]\]/im.test(text) ||
     /^\[PASSAGE_TITLE\]/im.test(text) ||
     /^={2,}\s*(?:PASSAGE|PART)\s*[1-3]\s*={2,}/im.test(text) ||
-    /^\[CATEGORY\]\s*.*reading/im.test(text) ||
-    /^\[TITLE\]\s*.*\breading\b/im.test(text)
+    /^\[CATEGORY\][\s:]*.*reading/im.test(text) ||
+    /^\[TITLE\][\s:]*.*\breading\b/im.test(text)
   ) {
     return { skill: 'reading', confidence: 'high', reason: 'Detected PASSAGE / Reading tags' };
   }
@@ -94,6 +126,7 @@ export function parseIELTSText(rawText: string): ParseResult {
   let hasExplicitCategory = false;
   let collection = '';
   let description = '';
+  const mediaHints: ParseMediaHint[] = [];
 
   const parts: Part[] = [];
   let currentPart: Part | null = null;
@@ -163,36 +196,37 @@ export function parseIELTSText(rawText: string): ParseResult {
       continue;
     }
 
-    // Metadata Tags
-    if (line.toUpperCase().startsWith('[TITLE]')) {
-      title = line.substring(7).trim();
+    // Metadata Tags (supports both [TAG] val and [TAG: val])
+    if (/^\[TITLE[\s:\]]/i.test(line) && line.toUpperCase().startsWith('[TITLE')) {
+      title = line.replace(/^\[TITLE[\s:]*\]?:?\s*/i, '').trim();
       continue;
     }
-    if (line.toUpperCase().startsWith('[TIME]')) {
-      const parsedTime = parseInt(line.substring(6).trim(), 10);
+    if (/^\[TIME[\s:\]]/i.test(line) && line.toUpperCase().startsWith('[TIME')) {
+      const parsedTime = parseInt(line.replace(/^\[TIME[\s:]*\]?:?\s*/i, '').trim(), 10);
       if (!isNaN(parsedTime) && parsedTime > 0) {
         durationMinutes = parsedTime;
         hasExplicitTime = true;
       }
       continue;
     }
-    if (line.toUpperCase().startsWith('[CATEGORY]')) {
-      category = line.substring(10).trim();
+    if (/^\[CATEGORY[\s:\]]/i.test(line) && line.toUpperCase().startsWith('[CATEGORY')) {
+      category = line.replace(/^\[CATEGORY[\s:]*\]?:?\s*/i, '').trim();
       hasExplicitCategory = true;
       continue;
     }
-    if (line.toUpperCase().startsWith('[COLLECTION]')) {
-      collection = line.substring(12).trim();
+    if (/^\[COLLECTION[\s:\]]/i.test(line) && line.toUpperCase().startsWith('[COLLECTION')) {
+      collection = line.replace(/^\[COLLECTION[\s:]*\]?:?\s*/i, '').trim();
       continue;
     }
-    if (line.toUpperCase().startsWith('[DESC]')) {
-      description = line.substring(6).trim();
+    if (/^\[DESC[\s:\]]/i.test(line) && line.toUpperCase().startsWith('[DESC')) {
+      description = line.replace(/^\[DESC[\s:]*\]?:?\s*/i, '').trim();
       continue;
     }
 
-    // Part / Section Header: e.g. === PART 1 ===, === SECTION 1 ===, or PASSAGE 1
+    // Part / Section Header: e.g. === PART 1 ===, === SECTION 1 ===, [PASSAGE 1], [SECTION 1], or PASSAGE 1
     const partMatch =
       line.match(/^={2,}\s*(?:PART|PASSAGE|SECTION)\s*([1-4])\s*={2,}/i) ||
+      line.match(/^\[(?:PART|PASSAGE|SECTION)\s*([1-4])\]$/i) ||
       line.match(/^(?:PART|PASSAGE|SECTION)\s*([1-4])(?:\s*[:\-–]|$)/i);
     if (partMatch) {
       flushPassage();
@@ -236,24 +270,52 @@ export function parseIELTSText(rawText: string): ParseResult {
       currentPart.title = line.substring(15).trim();
       continue;
     }
-    if (line.toUpperCase().startsWith('[AUDIO]')) {
+    const audioTagMatch = line.match(/^\[AUDIO(?:[\s:]+([^\]]+))?\](.*)$/i);
+    if (audioTagMatch) {
       if (!hasExplicitCategory) {
         category = 'IELTS Listening';
         if (!hasExplicitTime) durationMinutes = 30;
       }
-      currentPart.audioUrl = line.substring(7).trim();
+      const rawVal = (audioTagMatch[1] || audioTagMatch[2] || '').trim();
+      const { url, hint } = parseMediaTagValue(rawVal);
+      if (url) currentPart.audioUrl = url;
+      mediaHints.push({
+        partNumber: currentPart.partNumber,
+        kind: 'audio',
+        hint: hint || `Section ${currentPart.partNumber} Audio`,
+      });
       continue;
     }
-    if (line.toUpperCase().startsWith('[IMAGE]')) {
-      const imgUrl = line.substring(7).trim();
-      if (currentGroup) currentGroup.imageUrl = imgUrl;
-      else currentPart.imageUrl = imgUrl;
+    const imageTagMatch = line.match(/^\[IMAGE(?:[\s:]+([^\]]+))?\](.*)$/i);
+    if (imageTagMatch) {
+      const rawVal = (imageTagMatch[1] || imageTagMatch[2] || '').trim();
+      const { url, hint } = parseMediaTagValue(rawVal);
+      if (url) {
+        if (currentGroup) currentGroup.imageUrl = url;
+        else currentPart.imageUrl = url;
+      }
+      mediaHints.push({
+        partNumber: currentPart.partNumber,
+        groupIndex: currentGroup ? currentPart.questionGroups.length - 1 : undefined,
+        kind: 'image',
+        hint: hint || (currentGroup ? `${currentGroup.title} Image` : `${currentPart.title} Image`),
+      });
       continue;
     }
-    if (line.toUpperCase().startsWith('[VIDEO]')) {
-      const vidUrl = line.substring(7).trim();
-      if (currentGroup) currentGroup.videoUrl = vidUrl;
-      else currentPart.videoUrl = vidUrl;
+    const videoTagMatch = line.match(/^\[VIDEO(?:[\s:]+([^\]]+))?\](.*)$/i);
+    if (videoTagMatch) {
+      const rawVal = (videoTagMatch[1] || videoTagMatch[2] || '').trim();
+      const { url, hint } = parseMediaTagValue(rawVal);
+      if (url) {
+        if (currentGroup) currentGroup.videoUrl = url;
+        else currentPart.videoUrl = url;
+      }
+      mediaHints.push({
+        partNumber: currentPart.partNumber,
+        groupIndex: currentGroup ? currentPart.questionGroups.length - 1 : undefined,
+        kind: 'video',
+        hint: hint || (currentGroup ? `${currentGroup.title} Video` : `${currentPart.title} Video`),
+      });
       continue;
     }
     if (line.toUpperCase().startsWith('[SUBTITLE]')) {
@@ -745,7 +807,7 @@ export function parseIELTSText(rawText: string): ParseResult {
 
   return {
     exam: {
-      id: `exam_${Date.now()}`,
+      id: `exam_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
       title,
       description,
       category,
@@ -756,6 +818,7 @@ export function parseIELTSText(rawText: string): ParseResult {
       updatedAt: Date.now(),
       isBuiltin: false,
     },
+    mediaHints,
   };
 }
 
@@ -1966,7 +2029,11 @@ A: <Band 8.0+ Model Answer>
 /**
  * Parse IELTS Writing raw text into WritingExam structure
  */
-export function parseWritingText(rawText: string): { exam: WritingExam; warning?: string } {
+export function parseWritingText(rawText: string): {
+  exam: WritingExam;
+  warning?: string;
+  task1ImageHint?: string;
+} {
   const sanitized = (rawText || '')
     .replace(/^\uFEFF/, '')
     .replace(/[\u200B-\u200D\uFEFF]/g, '')
@@ -1986,6 +2053,7 @@ export function parseWritingText(rawText: string): { exam: WritingExam; warning?
   const task1SampleLines: string[] = [];
   let task1ChartType: any = 'bar';
   let task1ImageUrl = '';
+  let task1ImageHint: string | undefined;
 
   let task2Title = 'Task 2: Discursive Essay';
   const task2PromptLines: string[] = [];
@@ -1994,57 +2062,71 @@ export function parseWritingText(rawText: string): { exam: WritingExam; warning?
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i]!;
 
-    if (line.startsWith('[TITLE]')) {
-      const val = line.replace('[TITLE]', '').trim();
+    if (/^\[TITLE[\s:\]]/i.test(line) && line.toUpperCase().startsWith('[TITLE')) {
+      const val = line.replace(/^\[TITLE[\s:]*\]?:?\s*/i, '').trim();
       if (currentTask === 1) task1Title = val;
       else if (currentTask === 2) task2Title = val;
       else title = val;
       continue;
     }
 
-    if (line.startsWith('[COLLECTION]')) {
-      collection = line.replace('[COLLECTION]', '').trim();
+    if (/^\[COLLECTION[\s:\]]/i.test(line) && line.toUpperCase().startsWith('[COLLECTION')) {
+      collection = line.replace(/^\[COLLECTION[\s:]*\]?:?\s*/i, '').trim();
       continue;
     }
 
-    if (line.startsWith('[TIME]')) {
-      const t = parseInt(line.replace('[TIME]', '').trim(), 10);
+    if (/^\[TIME[\s:\]]/i.test(line) && line.toUpperCase().startsWith('[TIME')) {
+      const t = parseInt(line.replace(/^\[TIME[\s:]*\]?:?\s*/i, '').trim(), 10);
       if (!isNaN(t) && t > 0) durationMinutes = t;
       continue;
     }
 
-    if (/^===\s*TASK\s*1\s*===/i.test(line)) {
+    if (/^(?:={2,}\s*TASK\s*1\s*={2,}|\[TASK\s*1\])$/i.test(line)) {
       currentTask = 1;
       currentMode = 'none';
       continue;
     }
 
-    if (/^===\s*TASK\s*2\s*===/i.test(line)) {
+    if (/^(?:={2,}\s*TASK\s*2\s*={2,}|\[TASK\s*2\])$/i.test(line)) {
       currentTask = 2;
       currentMode = 'none';
       continue;
     }
 
-    if (line.startsWith('[CHART_TYPE]')) {
-      const ct = line.replace('[CHART_TYPE]', '').trim().toLowerCase();
+    if (/^\[CHART_TYPE[\s:\]]/i.test(line) && line.toUpperCase().startsWith('[CHART_TYPE')) {
+      const ct = line.replace(/^\[CHART_TYPE[\s:]*\]?:?\s*/i, '').trim().toLowerCase();
       if (['bar', 'line', 'pie', 'table', 'map', 'process', 'none'].includes(ct)) {
         task1ChartType = ct;
       }
       continue;
     }
 
-    if (line.startsWith('[IMAGE]')) {
-      task1ImageUrl = line.replace('[IMAGE]', '').trim();
+    const imageMatch = line.match(/^\[IMAGE(?:[\s:]+([^\]]+))?\](.*)$/i);
+    if (imageMatch) {
+      const rawVal = (imageMatch[1] || imageMatch[2] || '').trim();
+      const { url, hint } = parseMediaTagValue(rawVal);
+      if (url) task1ImageUrl = url;
+      if (hint) task1ImageHint = hint;
       continue;
     }
 
-    if (line.startsWith('[PROMPT]')) {
+    if (/^\[PROMPT\]/i.test(line)) {
       currentMode = 'prompt';
+      const rest = line.replace(/^\[PROMPT\]\s*/i, '').trim();
+      if (rest) {
+        if (currentTask === 1) task1PromptLines.push(rest);
+        else if (currentTask === 2) task2PromptLines.push(rest);
+      }
       continue;
     }
 
-    if (line.startsWith('[SAMPLE_ANSWER]')) {
+    if (/^\[SAMPLE_ANSWER\]/i.test(line)) {
       currentMode = 'sample';
+      const rest = line.replace(/^\[SAMPLE_ANSWER\]\s*/i, '').trim();
+      if (rest) {
+        if (currentTask === 1) task1SampleLines.push(rest);
+        else if (currentTask === 2) task2SampleLines.push(rest);
+      }
       continue;
     }
 
@@ -2089,7 +2171,7 @@ export function parseWritingText(rawText: string): { exam: WritingExam; warning?
     },
   };
 
-  return { exam };
+  return { exam, task1ImageHint };
 }
 
 /**
@@ -2101,8 +2183,8 @@ export interface SpeakingParseError {
 }
 
 export type SpeakingParseResult =
-  | { exam: SpeakingExam; errors: [] }
-  | { exam?: never; errors: SpeakingParseError[] };
+  | { exam: SpeakingExam; errors: []; mediaHints?: { imageHint?: string; videoHint?: string } }
+  | { exam?: never; errors: SpeakingParseError[]; mediaHints?: undefined };
 
 export function parseSpeakingText(rawText: string): SpeakingParseResult {
   const sanitized = (rawText || '')
@@ -2127,6 +2209,8 @@ export function parseSpeakingText(rawText: string): SpeakingParseResult {
   let part2CueCard = '';
   let part2ImageUrl = '';
   let part2VideoUrl = '';
+  let part2ImageHint: string | undefined;
+  let part2VideoHint: string | undefined;
   const part2Bullets: string[] = [];
   const part2SampleLines: string[] = [];
   const part3Questions: SpeakingQuestion[] = [];
@@ -2156,10 +2240,10 @@ export function parseSpeakingText(rawText: string): SpeakingParseResult {
     const line = lines[i]!;
     const lineNumber = i + 1;
 
-    const partMatch = line.match(/^===\s*PART\s*([123])\s*===$/i);
+    const partMatch = line.match(/^(?:={2,}\s*PART\s*([123])\s*={2,}|\[PART\s*([123])\])$/i);
     if (partMatch) {
       finishPendingQuestion(lineNumber);
-      const part = Number(partMatch[1]!) as 1 | 2 | 3;
+      const part = Number(partMatch[1] || partMatch[2]) as 1 | 2 | 3;
       if (partLines.has(part)) {
         addError(lineNumber, `PART ${part} is declared more than once.`);
       } else {
@@ -2170,17 +2254,17 @@ export function parseSpeakingText(rawText: string): SpeakingParseResult {
       continue;
     }
 
-    const header = line.match(/^\[(TITLE|COLLECTION|DESC)\](.*)$/i);
-    if (header) {
+    const header = line.match(/^\[(TITLE|COLLECTION|DESC)(?:[\s:]+([^\]]*))?\](.*)$/i);
+    if (header && !/^\[(TOPIC|CUE_CARD|BULLETS|SAMPLE_ANSWER|IMAGE|VIDEO)/i.test(line)) {
       finishPendingQuestion(lineNumber);
       const tag = header[1]!.toUpperCase();
-      const value = (header[2] || '').trim();
+      const value = ((header[2] || '') + ' ' + (header[3] || '')).replace(/^[:\s]+/, '').trim();
       if (currentPart) addError(lineNumber, `[${tag}] must appear before PART 1.`);
       if (headerLines.has(tag)) addError(lineNumber, `[${tag}] is declared more than once.`);
       headerLines.set(tag, lineNumber);
-      if (!value) addError(lineNumber, `[${tag}] cannot be empty.`);
+      if (tag === 'TITLE' && !value) addError(lineNumber, `[TITLE] cannot be empty.`);
       if (tag === 'TITLE') title = value;
-      if (tag === 'COLLECTION') collection = value;
+      if (tag === 'COLLECTION' && value) collection = value;
       if (tag === 'DESC') description = value;
       continue;
     }
@@ -2237,10 +2321,16 @@ export function parseSpeakingText(rawText: string): SpeakingParseResult {
       if (!cueCard) addError(lineNumber, '[CUE_CARD] cannot be empty.');
       part2CueCard = cueCard;
       currentMode = 'none';
-    } else if (line.toUpperCase().startsWith('[IMAGE]')) {
-      part2ImageUrl = line.substring(7).trim();
-    } else if (line.toUpperCase().startsWith('[VIDEO]')) {
-      part2VideoUrl = line.substring(7).trim();
+    } else if (/^\[IMAGE(?:[\s:]+([^\]]+))?\](.*)$/i.test(line)) {
+      const m = line.match(/^\[IMAGE(?:[\s:]+([^\]]+))?\](.*)$/i)!;
+      const { url, hint } = parseMediaTagValue((m[1] || m[2] || '').trim());
+      if (url) part2ImageUrl = url;
+      part2ImageHint = hint || 'Speaking Part 2 Cue Card Image';
+    } else if (/^\[VIDEO(?:[\s:]+([^\]]+))?\](.*)$/i.test(line)) {
+      const m = line.match(/^\[VIDEO(?:[\s:]+([^\]]+))?\](.*)$/i)!;
+      const { url, hint } = parseMediaTagValue((m[1] || m[2] || '').trim());
+      if (url) part2VideoUrl = url;
+      part2VideoHint = hint || 'Speaking Part 2 Video';
     } else if (line === '[BULLETS]') {
       if (currentMode === 'bullets' || part2Bullets.length > 0) addError(lineNumber, 'PART 2 has more than one [BULLETS] tag.');
       currentMode = 'bullets';
@@ -2262,8 +2352,11 @@ export function parseSpeakingText(rawText: string): SpeakingParseResult {
 
   finishPendingQuestion(lines.length + 1);
 
-  for (const tag of ['TITLE', 'COLLECTION', 'DESC']) {
-    if (!headerLines.has(tag)) addError(1, `Missing required [${tag}] header.`);
+  if (!title.trim()) {
+    title = 'Custom IELTS Speaking Test';
+  }
+  if (!collection.trim()) {
+    collection = 'My Tests';
   }
   for (const part of [1, 2, 3] as const) {
     if (!partLines.has(part)) addError(1, `Missing required === PART ${part} === section.`);
@@ -2300,6 +2393,606 @@ export function parseSpeakingText(rawText: string): SpeakingParseResult {
     part3Questions,
   };
 
-  return { exam, errors: [] };
+  return {
+    exam,
+    errors: [],
+    mediaHints:
+      part2ImageHint || part2VideoHint
+        ? { imageHint: part2ImageHint, videoHint: part2VideoHint }
+        : undefined,
+  };
 }
 
+
+export type SmartSkill = 'reading' | 'listening' | 'writing' | 'speaking';
+
+export interface SmartMediaSlot {
+  key: string;
+  testIndex: number;
+  skill: SmartSkill;
+  testTitle: string;
+  kind: 'audio' | 'image' | 'video';
+  target:
+    | { type: 'exam_part'; partIndex: number; partLabel: string }
+    | { type: 'exam_group'; partIndex: number; groupIndex: number; label: string }
+    | { type: 'writing_task1'; label: string }
+    | { type: 'speaking_part2'; label: string };
+  label: string;
+  hint?: string;
+  currentUrl: string;
+  required: boolean;
+}
+
+export type ParsedSmartTestItem =
+  | {
+      index: number;
+      skill: 'reading' | 'listening';
+      title: string;
+      collection: string;
+      exam: Exam;
+      warning?: string;
+      errors: string[];
+      totalQuestions: number;
+      answeredQuestions: number;
+    }
+  | {
+      index: number;
+      skill: 'writing';
+      title: string;
+      collection: string;
+      exam: WritingExam;
+      warning?: string;
+      errors: string[];
+    }
+  | {
+      index: number;
+      skill: 'speaking';
+      title: string;
+      collection: string;
+      exam?: SpeakingExam;
+      warning?: string;
+      errors: string[];
+      speakingErrors?: SpeakingParseError[];
+    };
+
+export interface UnifiedSmartParseResult {
+  collection: string;
+  hasExplicitCollection: boolean;
+  tests: ParsedSmartTestItem[];
+  mediaSlots: SmartMediaSlot[];
+  errors: string[];
+}
+
+export function parseUnifiedSmartText(rawText: string): UnifiedSmartParseResult {
+  const sanitized = (rawText || '')
+    .replace(/^\uFEFF/, '')
+    .replace(/[\u200B-\u200D\uFEFF]/g, '')
+    .replace(/\u00A0/g, ' ');
+
+  if (!sanitized.trim()) {
+    return {
+      collection: '',
+      hasExplicitCollection: false,
+      tests: [],
+      mediaSlots: [],
+      errors: ['Paste exam content or drop a .txt / .json file to begin.'],
+    };
+  }
+
+  const lines = sanitized.split(/\r?\n/);
+
+  // Extract top-level [COLLECTION] before first [TEST] (if any)
+  let globalCollection = '';
+  let hasExplicitGlobalCollection = false;
+  const firstTestLineIdx = lines.findIndex((l) => /^\[TEST(?:[\s:\]]|$)/i.test(l.trim()));
+
+  const headerScanLimit = firstTestLineIdx >= 0 ? firstTestLineIdx : lines.length;
+  for (let i = 0; i < headerScanLimit; i++) {
+    const trimmed = lines[i]!.trim();
+    const colMatch = trimmed.match(/^\[COLLECTION(?:[\s:]+([^\]]*))?\](.*)$/i);
+    if (colMatch && trimmed.toUpperCase().startsWith('[COLLECTION')) {
+      const val = ((colMatch[1] || '') + ' ' + (colMatch[2] || '')).replace(/^[:\s]+/, '').trim();
+      if (val) {
+        globalCollection = val;
+        hasExplicitGlobalCollection = true;
+        break;
+      }
+    }
+  }
+
+  // Split into test blocks by [TEST] directive (or single block if none)
+  interface RawBlock {
+    inlineTitle?: string;
+    lines: string[];
+  }
+  const blocks: RawBlock[] = [];
+  if (firstTestLineIdx === -1) {
+    blocks.push({ lines });
+  } else {
+    let currentBlock: RawBlock | null = null;
+    for (let i = 0; i < lines.length; i++) {
+      const trimmed = lines[i]!.trim();
+      const testMatch = trimmed.match(/^\[TEST(?:[\s:]+([^\]]*))?\](.*)$/i);
+      if (testMatch && trimmed.toUpperCase().startsWith('[TEST')) {
+        if (currentBlock && currentBlock.lines.some((l) => l.trim().length > 0)) {
+          blocks.push(currentBlock);
+        }
+        const inlineTitle = ((testMatch[1] || '') + ' ' + (testMatch[2] || ''))
+          .replace(/^[:\s]+/, '')
+          .trim();
+        currentBlock = {
+          inlineTitle: inlineTitle || undefined,
+          lines: [],
+        };
+      } else if (currentBlock) {
+        // Skip decorative separator lines (==== or ----) right between tests
+        if (/^[=-]{10,}$/.test(trimmed) && currentBlock.lines.length > 0) {
+          // Check if next non-empty line is [TEST]
+          let nextIsTest = false;
+          for (let j = i + 1; j < lines.length; j++) {
+            const nt = lines[j]!.trim();
+            if (!nt) continue;
+            if (/^\[TEST(?:[\s:\]]|$)/i.test(nt)) nextIsTest = true;
+            break;
+          }
+          if (nextIsTest) continue;
+        }
+        currentBlock.lines.push(lines[i]!);
+      }
+    }
+    if (currentBlock && currentBlock.lines.some((l) => l.trim().length > 0)) {
+      blocks.push(currentBlock);
+    }
+  }
+
+  const tests: ParsedSmartTestItem[] = [];
+  const mediaSlots: SmartMediaSlot[] = [];
+  const topErrors: string[] = [];
+  let resolvedCollection = globalCollection;
+  let anyExplicitCollection = hasExplicitGlobalCollection;
+
+  blocks.forEach((block, testIndex) => {
+    const cleanedLines: string[] = [];
+    let explicitSkill: SmartSkill | null = null;
+    let hasTitleTag = false;
+    let hasCollectionTag = false;
+
+    for (const rawLine of block.lines) {
+      const t = rawLine.trim();
+      const skMatch = t.match(/^\[SKILL(?:[\s:]+([^\]]*))?\](.*)$/i);
+      if (skMatch && t.toUpperCase().startsWith('[SKILL')) {
+        const val = ((skMatch[1] || '') + ' ' + (skMatch[2] || ''))
+          .replace(/^[:\s]+/, '')
+          .trim()
+          .toLowerCase();
+        if (val === 'reading' || val === 'listening' || val === 'writing' || val === 'speaking') {
+          explicitSkill = val;
+        }
+        continue;
+      }
+      if (/^\[TITLE[\s:\]]/i.test(t) && t.toUpperCase().startsWith('[TITLE')) {
+        hasTitleTag = true;
+      }
+      if (/^\[COLLECTION[\s:\]]/i.test(t) && t.toUpperCase().startsWith('[COLLECTION')) {
+        hasCollectionTag = true;
+      }
+      cleanedLines.push(rawLine);
+    }
+
+    const prefixLines: string[] = [];
+    if (!hasCollectionTag && globalCollection) {
+      prefixLines.push(`[COLLECTION] ${globalCollection}`);
+    }
+    if (!hasTitleTag && block.inlineTitle) {
+      prefixLines.push(`[TITLE] ${block.inlineTitle}`);
+    }
+
+    const blockText = [...prefixLines, ...cleanedLines].join('\n').trim();
+    const detected = detectSkillFromText(blockText);
+    const skill: SmartSkill = explicitSkill || detected.skill;
+
+    if (skill === 'writing') {
+      const res = parseWritingText(blockText);
+      if (res.exam.collection && res.exam.collection !== 'My Tests') {
+        anyExplicitCollection = true;
+        if (!resolvedCollection) resolvedCollection = res.exam.collection;
+      }
+      tests.push({
+        index: testIndex,
+        skill: 'writing',
+        title: res.exam.title,
+        collection: res.exam.collection || globalCollection || 'My Tests',
+        exam: res.exam,
+        warning: res.warning,
+        errors: [],
+      });
+
+      mediaSlots.push({
+        key: `t${testIndex}-writing-t1-img`,
+        testIndex,
+        skill: 'writing',
+        testTitle: res.exam.title,
+        kind: 'image',
+        target: { type: 'writing_task1', label: 'Task 1 Chart / Diagram' },
+        label: `${res.exam.title} · Task 1 Image`,
+        hint: res.task1ImageHint || 'Chart, graph, table, map, or process diagram (optional)',
+        currentUrl: res.exam.task1.imageUrl || '',
+        required: Boolean(res.task1ImageHint),
+      });
+      return;
+    }
+
+    if (skill === 'speaking') {
+      const res = parseSpeakingText(blockText);
+      if (!res.exam) {
+        const errMessages = res.errors.map((e) => `Line ${e.line}: ${e.message}`);
+        tests.push({
+          index: testIndex,
+          skill: 'speaking',
+          title: block.inlineTitle || `Speaking Test #${testIndex + 1}`,
+          collection: globalCollection || 'My Tests',
+          errors: errMessages,
+          speakingErrors: res.errors,
+        });
+        return;
+      }
+      if (res.exam.collection && res.exam.collection !== 'My Tests') {
+        anyExplicitCollection = true;
+        if (!resolvedCollection) resolvedCollection = res.exam.collection;
+      }
+      tests.push({
+        index: testIndex,
+        skill: 'speaking',
+        title: res.exam.title,
+        collection: res.exam.collection || globalCollection || 'My Tests',
+        exam: res.exam,
+        errors: [],
+      });
+
+      if (res.mediaHints?.imageHint || res.exam.part2Question.imageUrl) {
+        mediaSlots.push({
+          key: `t${testIndex}-speaking-p2-img`,
+          testIndex,
+          skill: 'speaking',
+          testTitle: res.exam.title,
+          kind: 'image',
+          target: { type: 'speaking_part2', label: 'Part 2 Cue Card Image' },
+          label: `${res.exam.title} · Part 2 Image`,
+          hint: res.mediaHints?.imageHint,
+          currentUrl: res.exam.part2Question.imageUrl || '',
+          required: false,
+        });
+      }
+      if (res.mediaHints?.videoHint || res.exam.part2Question.videoUrl) {
+        mediaSlots.push({
+          key: `t${testIndex}-speaking-p2-vid`,
+          testIndex,
+          skill: 'speaking',
+          testTitle: res.exam.title,
+          kind: 'video',
+          target: { type: 'speaking_part2', label: 'Part 2 Cue Card Video' },
+          label: `${res.exam.title} · Part 2 Video`,
+          hint: res.mediaHints?.videoHint,
+          currentUrl: res.exam.part2Question.videoUrl || '',
+          required: false,
+        });
+      }
+      return;
+    }
+
+    // Reading or Listening
+    const parsed = parseIELTSText(blockText);
+    let exam = parsed.exam;
+    // If [SKILL] was explicitly provided, ensure category matches
+    if (explicitSkill === 'listening' && !exam.category?.toLowerCase().includes('listening')) {
+      exam = {
+        ...exam,
+        category: 'IELTS Listening',
+        durationMinutes: exam.durationMinutes === 60 ? 30 : exam.durationMinutes,
+      };
+    } else if (explicitSkill === 'reading' && exam.category?.toLowerCase().includes('listening')) {
+      exam = {
+        ...exam,
+        category: 'IELTS Academic Reading',
+      };
+    }
+
+    const finalSkill: 'reading' | 'listening' =
+      explicitSkill === 'listening' || exam.category?.toLowerCase().includes('listening')
+        ? 'listening'
+        : 'reading';
+
+    if (exam.collection && exam.collection !== 'My Tests') {
+      anyExplicitCollection = true;
+      if (!resolvedCollection) resolvedCollection = exam.collection;
+    }
+
+    const totalQuestions = exam.parts.reduce(
+      (acc, p) => acc + (p.questionGroups || []).reduce((ga, g) => ga + (g.questions || []).length, 0),
+      0
+    );
+    const answeredQuestions = exam.parts.reduce(
+      (acc, p) =>
+        acc +
+        (p.questionGroups || []).reduce(
+          (ga, g) =>
+            ga +
+            (g.questions || []).filter(
+              (q) =>
+                q.correctAnswer &&
+                (Array.isArray(q.correctAnswer)
+                  ? q.correctAnswer.length > 0
+                  : String(q.correctAnswer).trim().length > 0)
+            ).length,
+          0
+        ),
+      0
+    );
+
+    const errors: string[] = [];
+    if (totalQuestions === 0) {
+      errors.push('No questions were parsed. Check question numbering (1., 2., ...) and [TYPE] tags.');
+    }
+
+    tests.push({
+      index: testIndex,
+      skill: finalSkill,
+      title: exam.title,
+      collection: exam.collection || globalCollection || 'My Tests',
+      exam,
+      warning: parsed.warning,
+      errors,
+      totalQuestions,
+      answeredQuestions,
+    });
+
+    const hints = parsed.mediaHints || [];
+    exam.parts.forEach((part, partIndex) => {
+      const partLabel =
+        finalSkill === 'listening'
+          ? `Section ${part.partNumber}`
+          : `Passage ${part.partNumber}`;
+
+      if (finalSkill === 'listening') {
+        const audioHint = hints.find(
+          (h) => h.partNumber === part.partNumber && h.kind === 'audio'
+        )?.hint;
+        mediaSlots.push({
+          key: `t${testIndex}-p${partIndex}-audio`,
+          testIndex,
+          skill: finalSkill,
+          testTitle: exam.title,
+          kind: 'audio',
+          target: { type: 'exam_part', partIndex, partLabel },
+          label: `${exam.title} · ${partLabel} Audio`,
+          hint: audioHint || 'Upload .mp3 / .m4a / .wav audio',
+          currentUrl: part.audioUrl || '',
+          required: true,
+        });
+      }
+
+      const partImgHint = hints.find(
+        (h) => h.partNumber === part.partNumber && h.groupIndex === undefined && h.kind === 'image'
+      )?.hint;
+      if (part.imageUrl || partImgHint) {
+        mediaSlots.push({
+          key: `t${testIndex}-p${partIndex}-img`,
+          testIndex,
+          skill: finalSkill,
+          testTitle: exam.title,
+          kind: 'image',
+          target: { type: 'exam_part', partIndex, partLabel },
+          label: `${exam.title} · ${partLabel} Image`,
+          hint: partImgHint,
+          currentUrl: part.imageUrl || '',
+          required: Boolean(partImgHint && !part.imageUrl),
+        });
+      }
+
+      const partVidHint = hints.find(
+        (h) => h.partNumber === part.partNumber && h.groupIndex === undefined && h.kind === 'video'
+      )?.hint;
+      if (part.videoUrl || partVidHint) {
+        mediaSlots.push({
+          key: `t${testIndex}-p${partIndex}-vid`,
+          testIndex,
+          skill: finalSkill,
+          testTitle: exam.title,
+          kind: 'video',
+          target: { type: 'exam_part', partIndex, partLabel },
+          label: `${exam.title} · ${partLabel} Video`,
+          hint: partVidHint,
+          currentUrl: part.videoUrl || '',
+          required: false,
+        });
+      }
+
+      part.questionGroups.forEach((group, groupIndex) => {
+        const gImgHint = hints.find(
+          (h) =>
+            h.partNumber === part.partNumber &&
+            h.groupIndex === groupIndex &&
+            h.kind === 'image'
+        )?.hint;
+        if (group.imageUrl || gImgHint) {
+          mediaSlots.push({
+            key: `t${testIndex}-p${partIndex}-g${groupIndex}-img`,
+            testIndex,
+            skill: finalSkill,
+            testTitle: exam.title,
+            kind: 'image',
+            target: { type: 'exam_group', partIndex, groupIndex, label: `${partLabel} · ${group.title}` },
+            label: `${exam.title} · ${partLabel} · ${group.title} Image`,
+            hint: gImgHint,
+            currentUrl: group.imageUrl || '',
+            required: Boolean(gImgHint && !group.imageUrl),
+          });
+        }
+      });
+    });
+  });
+
+  if (tests.length === 0) {
+    topErrors.push('Could not detect any valid test blocks in the pasted text.');
+  }
+
+  return {
+    collection: resolvedCollection,
+    hasExplicitCollection: anyExplicitCollection,
+    tests,
+    mediaSlots,
+    errors: topErrors,
+  };
+}
+
+export const UNIFIED_SAMPLE_TEMPLATE = `[COLLECTION] Cambridge IELTS 20 - Test 1
+
+[TEST]
+[SKILL] READING
+[TITLE] Cambridge 20 - Test 1 Reading
+[TIME] 60
+
+=== PASSAGE 1 ===
+[PASSAGE_TITLE] The History of Urban Farming
+[PASSAGE]
+Paragraph A
+Urban farming has evolved from small backyard gardens into high-tech vertical greenhouses across major cities.
+
+Paragraph B
+Studies show rooftop farms can lower summer building temperatures by up to 3 degrees Celsius.
+
+--- GROUP: Questions 1-2 ---
+[TYPE] TRUE_FALSE_NOT_GIVEN
+[INSTRUCTIONS] Do the following statements agree with the information in Reading Passage 1?
+1. Urban farming only exists in rural areas.
+ANSWER: FALSE
+EXPLAIN: Paragraph A states it exists across major cities.
+2. Rooftop farms can reduce summer building temperatures.
+ANSWER: TRUE
+EXPLAIN: Paragraph B mentions lowering temperatures by up to 3 degrees Celsius.
+
+[TEST]
+[SKILL] LISTENING
+[TITLE] Cambridge 20 - Test 1 Listening
+[TIME] 30
+
+=== SECTION 1 ===
+[SECTION_TITLE] Museum Membership Enquiry
+[AUDIO: Section 1 audio file]
+--- GROUP: Questions 1-2 ---
+[TYPE] FILL_IN_BLANK
+[INSTRUCTIONS] Write ONE WORD AND/OR A NUMBER for each answer.
+1. Applicant surname: ________
+ANSWER: Henderson
+2. Annual fee: £________
+ANSWER: 45
+
+=== SECTION 2 ===
+[SECTION_TITLE] Museum Floor Plan
+[AUDIO: Section 2 audio file]
+[IMAGE: Map of the museum ground floor]
+--- GROUP: Questions 11-12 ---
+[TYPE] MATCHING
+[INSTRUCTIONS] Label the map below. Write the correct letter, A-D.
+11. Gift Shop
+ANSWER: B
+12. Main Auditorium
+ANSWER: D
+
+[TEST]
+[SKILL] WRITING
+[TITLE] Cambridge 20 - Test 1 Writing
+[TIME] 60
+
+=== TASK 1 ===
+[CHART_TYPE] bar
+[IMAGE: Bar chart comparing renewable energy usage 2010-2025]
+[PROMPT]
+The chart below shows the percentage of electricity generated from renewable sources in four countries between 2010 and 2025.
+Summarise the information by selecting and reporting the main features.
+
+=== TASK 2 ===
+[PROMPT]
+Some people think cities should invest more in public parks, while others prefer spending on public transport. Discuss both views and give your opinion.`;
+
+export const UNIFIED_AI_PROMPT = `Convert the IELTS test material below into the exact Unified Smart Add Test format.
+Rules:
+1. Start with [COLLECTION] <Book / Folder Name> once at the top.
+2. Wrap each test with [TEST], [SKILL] (READING | LISTENING | WRITING | SPEAKING), [TITLE], and [TIME]. You can output 1 test or multiple tests (Full Test) in one block.
+3. Put all answers and explanations inline directly after each question using ANSWER: ... and EXPLAIN: ... (or === ANSWERS === block at the end).
+4. For audio or images that cannot be represented in text, leave clean placeholders like [AUDIO: Section 1 audio] or [IMAGE: Bar chart description] so the user can upload the files right after pasting.
+5. Reading/Listening question [TYPE] values: TRUE_FALSE_NOT_GIVEN, YES_NO_NOT_GIVEN, MULTIPLE_CHOICE_SINGLE, MULTIPLE_CHOICE_MULTI, FILL_IN_BLANK, MATCHING, SUMMARY_COMPLETION, LIST_HEADINGS.
+6. Writing uses === TASK 1 === ([CHART_TYPE], [IMAGE], [PROMPT], optional [SAMPLE_ANSWER]) and === TASK 2 === ([PROMPT], optional [SAMPLE_ANSWER]).
+7. Speaking uses === PART 1 ===, === PART 2 === ([TOPIC], [CUE_CARD], [BULLETS] with 4 '-' items, [SAMPLE_ANSWER]), and === PART 3 ===, with [TOPIC] and Q: / A: pairs.
+
+Material to convert:
+<PASTE RAW EXAM HERE>`;
+
+export const UNIFIED_FORMAT_GUIDE = `UNIFIED FORMAT SPECIFICATION (Single Test or Full Test)
+=================================================================
+
+1) GLOBAL & TEST HEADERS
+   [COLLECTION] Cambridge IELTS 20        <- Auto-selects or creates folder
+   [TEST]                                 <- Starts a test (repeat for Full Test)
+   [SKILL] READING | LISTENING | WRITING | SPEAKING
+   [TITLE] Test Title
+   [TIME] 60                              <- Duration in minutes
+
+2) READING & LISTENING STRUCTURE
+   === PASSAGE 1 ===   (or === SECTION 1 === for Listening)
+   [PASSAGE_TITLE] ... (or [SECTION_TITLE] ...)
+   [AUDIO: optional hint]                 <- Creates Audio upload slot
+   [IMAGE: optional description]          <- Creates Image upload slot
+   [PASSAGE]
+   ...passage paragraphs...
+
+   --- GROUP: Questions 1-5 ---
+   [TYPE] TRUE_FALSE_NOT_GIVEN            <- Also: YES_NO_NOT_GIVEN,
+          MULTIPLE_CHOICE_SINGLE, MULTIPLE_CHOICE_MULTI,
+          FILL_IN_BLANK, MATCHING, SUMMARY_COMPLETION, LIST_HEADINGS
+   [INSTRUCTIONS] ...
+   1. Question text...
+   A. Option A
+   B. Option B
+   ANSWER: A
+   EXPLAIN: Reason from passage/transcript...
+
+   Note for SUMMARY_COMPLETION:
+   [SUMMARY]
+   Text with {{27}} or 27. ________ blanks.
+   [WORD_BANK] A: word1 | B: word2       (optional)
+
+3) WRITING STRUCTURE
+   === TASK 1 ===
+   [CHART_TYPE] bar | line | pie | table | map | process | none
+   [IMAGE: Bar chart description]         <- Creates Chart upload slot
+   [PROMPT]
+   Task 1 question text...
+   [SAMPLE_ANSWER]                        <- Optional
+
+   === TASK 2 ===
+   [PROMPT]
+   Task 2 essay question...
+
+4) SPEAKING STRUCTURE
+   === PART 1 ===
+   [TOPIC] Hometown
+   Q: Question...
+   A: Model answer...
+
+   === PART 2 ===
+   [TOPIC] Travel
+   [CUE_CARD] Describe a memorable trip.
+   [IMAGE: optional cue card image]
+   [BULLETS]
+   - Bullet 1
+   - Bullet 2
+   - Bullet 3
+   - Bullet 4
+   [SAMPLE_ANSWER]
+   Model talk...
+
+   === PART 3 ===
+   [TOPIC] Tourism
+   Q: Discussion question...
+   A: Model answer...`;

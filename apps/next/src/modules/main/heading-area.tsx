@@ -1,3 +1,4 @@
+import { useSession } from "next-auth/react";
 import { useRouter } from "next/router";
 import React from "react";
 
@@ -36,16 +37,53 @@ import { ConfirmModal } from "../../components/confirm-modal";
 import { MenuOption } from "../../components/menu-option";
 import { SetCreatorOnly } from "../../components/set-creator-only";
 import { useSet } from "../../hooks/use-set";
+import {
+  removeStudySetCache,
+  writeRecentCache,
+} from "../../lib/local-query-cache";
+import { broadcastSync } from "../../lib/sync-bus";
 
 export const HeadingArea = () => {
   const { id, title, type, tags, terms, visibility } = useSet();
+  const { data: session } = useSession();
   const router = useRouter();
+  const utils = api.useUtils();
   const text = useColorModeValue("gray.600", "gray.400");
   const tagBg = useColorModeValue("gray.200", "gray.750");
   const menuBg = useColorModeValue("white", "gray.800");
 
   const deleteSet = api.studySets.delete.useMutation({
+    onMutate: async () => {
+      await utils.recent.get.cancel();
+      const prevRecent = utils.recent.get.getData();
+      if (prevRecent) {
+        const nextRecent = {
+          ...prevRecent,
+          sets: prevRecent.sets.filter((s) => s.id !== id),
+          drafts: prevRecent.drafts.filter((d) => d.id !== id),
+          entities: prevRecent.entities.filter((e) => e.id !== id),
+        };
+        utils.recent.get.setData(undefined, nextRecent);
+        if (session?.user?.id) {
+          writeRecentCache(session.user.id, nextRecent);
+        }
+      }
+      if (session?.user?.id) {
+        removeStudySetCache(session.user.id, id);
+      }
+      return { prevRecent };
+    },
+    onError: (_err, _vars, ctx) => {
+      if (ctx?.prevRecent) {
+        utils.recent.get.setData(undefined, ctx.prevRecent);
+        if (session?.user?.id) {
+          writeRecentCache(session.user.id, ctx.prevRecent);
+        }
+      }
+    },
     onSuccess: async () => {
+      broadcastSync("quiz", id);
+      await utils.recent.get.invalidate();
       await router.push("/home");
     },
   });

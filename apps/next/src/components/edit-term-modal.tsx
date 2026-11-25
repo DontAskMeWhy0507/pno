@@ -17,6 +17,7 @@ import { Box, Button, ButtonGroup, Stack } from "@chakra-ui/react";
 import { resize } from "../common/cdn-loaders";
 import { editorEventChannel } from "../events/editor";
 import { useSetFolderUnison } from "../hooks/use-set-folder-unison";
+import { broadcastSync } from "../lib/sync-bus";
 import {
   AddImageButton,
   RemoveImageButton,
@@ -89,8 +90,60 @@ export const EditTermModal: React.FC<EditTermModalProps> = ({
   }, [isOpen]);
 
   const edit = api.terms.edit.useMutation({
-    async onSuccess() {
+    onMutate: async (vars) => {
       onClose();
+      if (entityType !== "set") return {};
+
+      const keys = [
+        { studySetId: vars.studySetId, withDistractors: false, withCollab: false },
+        { studySetId: vars.studySetId, withDistractors: false, withCollab: true },
+      ];
+      await Promise.all(keys.map((k) => utils.studySets.byId.cancel(k)));
+
+      const snapshots = keys.map((k) => ({
+        key: k,
+        data: utils.studySets.byId.getData(k),
+      }));
+
+      const nextWordRichText = vars.wordRichText
+        ? (wordEditor?.getJSON() ?? null)
+        : null;
+      const nextDefinitionRichText = vars.definitionRichText
+        ? (definitionEditor?.getJSON() ?? null)
+        : null;
+
+      for (const snap of snapshots) {
+        if (!snap.data) continue;
+        utils.studySets.byId.setData(snap.key, {
+          ...snap.data,
+          terms: snap.data.terms.map((t) =>
+            t.id === vars.id
+              ? {
+                  ...t,
+                  word: vars.word,
+                  definition: vars.definition,
+                  wordRichText: nextWordRichText as typeof t.wordRichText,
+                  definitionRichText:
+                    nextDefinitionRichText as typeof t.definitionRichText,
+                }
+              : t,
+          ),
+        });
+      }
+
+      return { snapshots };
+    },
+    onError: (_err, _vars, ctx) => {
+      if (ctx?.snapshots) {
+        for (const snap of ctx.snapshots) {
+          if (snap.data) {
+            utils.studySets.byId.setData(snap.key, snap.data);
+          }
+        }
+      }
+    },
+    async onSuccess(_data, vars) {
+      broadcastSync("quiz", vars.studySetId);
       if (entityType == "set") {
         await utils.studySets.invalidate();
       } else {
