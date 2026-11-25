@@ -1271,9 +1271,21 @@ export const SmartImportModal: FC<SmartImportModalProps> = ({
                             )}
                           </div>
 
-                          {activeUrl && (
-                            <MediaEmbed url={activeUrl} kindHint={slot.kind} compact />
-                          )}
+                          {activeUrl &&
+                            (slot.kind === 'audio' ? (
+                              <audio
+                                src={activeUrl}
+                                controls
+                                preload="metadata"
+                                className="w-full h-9"
+                              />
+                            ) : (
+                              <MediaEmbed
+                                imageUrl={slot.kind === 'image' ? activeUrl : undefined}
+                                videoUrl={slot.kind === 'video' ? activeUrl : undefined}
+                                className="max-w-sm"
+                              />
+                            ))}
                         </div>
                       );
                     })}
