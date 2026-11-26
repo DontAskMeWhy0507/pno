@@ -31,8 +31,8 @@ All-in-one learning workspace built on a Turborepo monorepo: Flashcards & Study 
 1. Clone the repository and enter the project directory:
 
    ```sh
-   git clone https://github.com/DontAskMeWhy0507/quenti.git
-   cd quenti
+   git clone https://github.com/DontAskMeWhy0507/pno.git
+   cd pno
    ```
 
 2. Install dependencies:
