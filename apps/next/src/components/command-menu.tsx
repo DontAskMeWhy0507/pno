@@ -126,7 +126,8 @@ export const CommandMenu: React.FC<CommandMenuProps> = ({
   const dismiss = router.pathname == "/onboarding/command-menu";
   const isPortal = router.pathname === "/";
   const isIelts = router.pathname.startsWith("/ielts");
-  const isQuiz = !isPortal && !isIelts;
+  const isCourses = router.pathname.startsWith("/courses");
+  const isQuiz = !isPortal && !isIelts && !isCourses;
 
   const onSet = router.pathname == "/sets/[id]";
   const onSetSubpage = router.pathname.startsWith("/sets/[id]");
@@ -173,10 +174,10 @@ export const CommandMenu: React.FC<CommandMenuProps> = ({
   );
 
   const recentQuery = api.recent.get.useQuery(undefined, {
-    enabled: isOpen && !isIelts,
+    enabled: isOpen && !isIelts && !isCourses,
     refetchOnWindowFocus: false,
   });
-  const isLoadingRecent = !isIelts && recentQuery.isInitialLoading;
+  const isLoadingRecent = !isIelts && !isCourses && recentQuery.isInitialLoading;
 
   const openLink = React.useCallback(
     (link: string, ctrl: boolean) => {
@@ -536,11 +537,27 @@ export const CommandMenu: React.FC<CommandMenuProps> = ({
           : true,
     };
 
+    const coursesNavOption: MenuOption = {
+      id: "nav:courses",
+      icon: <IconDatabase />,
+      name: isCourses ? "Data Courses Catalog" : "Data Courses (XómData)",
+      label: isCourses
+        ? "Browse all 16 interactive Python, SQL, R, Git, JS & Excel courses"
+        : "Switch workspace to interactive Data Courses",
+      searchableName:
+        "Data Courses XomData Python SQL R Git JavaScript Excel Interactive",
+      action: (ctrl) => openLink(`/courses`, ctrl),
+      shouldShow: () =>
+        typeof window !== "undefined"
+          ? window.location.pathname !== "/courses"
+          : true,
+    };
+
     const portalNavOption: MenuOption = {
       id: "nav:portal",
       icon: <IconHome />,
       name: "PNO Portal",
-      label: "Switch between Quiz and IELTS",
+      label: "Switch between Quiz, IELTS and Data Courses",
       searchableName: "PNO Portal Home Switch Workspace",
       action: (ctrl) => openLink(`/`, ctrl),
       shouldShow: () =>
@@ -664,7 +681,10 @@ export const CommandMenu: React.FC<CommandMenuProps> = ({
     if (isIelts) {
       total.push(...buildIeltsOptions());
       total.push(...ieltsActions);
-      total.push(ieltsNavOption, quizNavOption, portalNavOption);
+      total.push(ieltsNavOption, coursesNavOption, quizNavOption, portalNavOption);
+      total.push(...accountOptions);
+    } else if (isCourses) {
+      total.push(coursesNavOption, quizNavOption, ieltsNavOption, portalNavOption);
       total.push(...accountOptions);
     } else if (isQuiz) {
       total.push(...setModeOptions);
@@ -684,11 +704,11 @@ export const CommandMenu: React.FC<CommandMenuProps> = ({
       }
       total.push(...buildEntityOptions());
       total.push(...quizActions);
-      total.push(quizNavOption, ieltsNavOption, portalNavOption);
+      total.push(quizNavOption, ieltsNavOption, coursesNavOption, portalNavOption);
       total.push(...accountOptions);
     } else {
-      // Portal (/): both workspaces + recent sets + IELTS tests + quick actions
-      total.push(quizNavOption, ieltsNavOption);
+      // Portal (/): all workspaces + recent sets + IELTS tests + quick actions
+      total.push(quizNavOption, ieltsNavOption, coursesNavOption);
       total.push(...buildEntityOptions());
       total.push(...buildIeltsOptions());
       total.push(...quizActions, ...ieltsActions);
@@ -703,6 +723,7 @@ export const CommandMenu: React.FC<CommandMenuProps> = ({
     isOpen,
     isPortal,
     isIelts,
+    isCourses,
     isQuiz,
     recentQuery.data,
     currentSetId,

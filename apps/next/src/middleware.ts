@@ -11,6 +11,7 @@ const PUBLIC_PREFIXES = [
   "/_next",
   "/audio",
   "/ielts-data",
+  "/courses-data",
   "/assets",
   "/avatars",
 ];
@@ -65,6 +66,6 @@ export function middleware(req: NextRequest) {
 export const config = {
   matcher: [
     "/",
-    "/((?!_next/static|_next/image|favicon.ico|robots.txt|site.webmanifest|browserconfig.xml|audio/|ielts-data/|assets/|avatars/|.*\\.(?:png|jpg|jpeg|webp|gif|svg|ico|mp3|mp4|wav|woff2)$).*)",
+    "/((?!_next/static|_next/image|favicon.ico|robots.txt|site.webmanifest|browserconfig.xml|audio/|ielts-data/|courses-data/|assets/|avatars/|.*\\.(?:png|jpg|jpeg|webp|gif|svg|ico|mp3|mp4|wav|woff2)$).*)",
   ],
 };

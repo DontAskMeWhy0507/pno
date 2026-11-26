@@ -127,15 +127,20 @@ export const MobileMenu: React.FC<MobileMenuProps> = ({
 
   const isPortal = router.pathname === "/";
   const isIelts = router.pathname.startsWith("/ielts");
-  const isQuiz = !isPortal && !isIelts;
+  const isCourses = router.pathname.startsWith("/courses");
+  const isQuiz = !isPortal && !isIelts && !isCourses;
 
   const [ieltsSearch, setIeltsSearch] = React.useState("");
+  const [coursesSearch, setCoursesSearch] = React.useState("");
 
   React.useEffect(() => {
     const syncSearch = (q: string) => setIeltsSearch(q);
+    const syncCoursesSearch = (q: string) => setCoursesSearch(q);
     menuEventChannel.on("ieltsSearchChange", syncSearch);
+    menuEventChannel.on("coursesSearchChange", syncCoursesSearch);
     return () => {
       menuEventChannel.off("ieltsSearchChange", syncSearch);
+      menuEventChannel.off("coursesSearchChange", syncCoursesSearch);
     };
   }, []);
 
@@ -179,7 +184,7 @@ export const MobileMenu: React.FC<MobileMenuProps> = ({
           >
             Workspace
           </Text>
-          <SimpleGrid columns={3} spacing={2}>
+          <SimpleGrid columns={2} spacing={2}>
             <Button
               size="sm"
               h="40px"
@@ -222,10 +227,24 @@ export const MobileMenu: React.FC<MobileMenuProps> = ({
             >
               IELTS
             </Button>
+            <Button
+              size="sm"
+              h="40px"
+              rounded="xl"
+              variant={isCourses ? "solid" : "outline"}
+              colorScheme={isCourses ? "teal" : "gray"}
+              leftIcon={<IconDatabase size={16} />}
+              onClick={async () => {
+                onClose();
+                await router.push("/courses");
+              }}
+            >
+              Courses
+            </Button>
           </SimpleGrid>
         </Stack>
 
-        {/* Quick Search / IELTS Filter */}
+        {/* Quick Search / IELTS & Courses Filter */}
         {isIelts && (
           <InputGroup size="md">
             <InputLeftElement pointerEvents="none" color="gray.400">
@@ -238,6 +257,27 @@ export const MobileMenu: React.FC<MobileMenuProps> = ({
                 menuEventChannel.emit("ieltsSearchChange", e.target.value);
               }}
               placeholder="Search IELTS tests..."
+              rounded="xl"
+              fontSize="md"
+              bg={searchBg}
+              borderWidth="2px"
+              borderColor={searchBorder}
+            />
+          </InputGroup>
+        )}
+
+        {isCourses && (
+          <InputGroup size="md">
+            <InputLeftElement pointerEvents="none" color="gray.400">
+              <IconSearch size={16} />
+            </InputLeftElement>
+            <Input
+              value={coursesSearch}
+              onChange={(e) => {
+                setCoursesSearch(e.target.value);
+                menuEventChannel.emit("coursesSearchChange", e.target.value);
+              }}
+              placeholder="Search Data Courses..."
               rounded="xl"
               fontSize="md"
               bg={searchBg}

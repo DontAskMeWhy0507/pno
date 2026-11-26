@@ -1,96 +1,85 @@
-[![og:image](./apps/next/public/og-image.png)](https://quenti.io)
+# PNO
 
-The open-source Quizlet alternative.
+All-in-one learning workspace built on a Turborepo monorepo: Flashcards & Study Sets, Anki V3 Spaced Repetition, IELTS Practice, and Interactive Data Courses.
+
+## Features
+
+- **Flashcards & Study Sets** — Create, organize, and study sets with folders, classes, share links, and Cortex-assisted grading.
+- **Anki SRS (V3)** — Full Anki V3 scheduler (4 AM day cutoff, Relearning, Leech detection, Days Late, Fuzz, daily limits), Deck Options, `AnkiReviewLog`, 10-chart Statistics, and `.apkg` deck import.
+- **IELTS & Quiz** — Cambridge 15–21 practice tests across Listening, Reading, Writing, and Speaking, with Manage CRUD studio, Smart Add Test, local cache, optimistic UI, and cross-device sync.
+- **Interactive Data Courses (`/courses`)** — 16 built-in courses across 6 tracks (**Python**, **SQL**, **R**, **Git**, **JavaScript**, **Excel**) with theory, interactive practice workbench (including in-browser SQLite via `sql.js`), quizzes, custom course editor, Smart Import, and cloud progress sync.
 
 ## The Stack
 
-- [Next.js](https://nextjs.org)
-- [tRPC](https://trpc.io)
-- [NextAuth](https://next-auth.js.org)
-- [Prisma](https://prisma.io)
-- [Chakra UI](https://chakra-ui.com)
-- [MySQL](http://mysql.org/)
-- [Zustand](https://github.com/pmndrs/zustand)
-- [ClickHouse](https://clickhouse.tech/)
+- [Next.js 14](https://nextjs.org) (Pages Router) & [React 18](https://react.dev)
+- [tRPC](https://trpc.io) & [TanStack Query](https://tanstack.com/query)
+- [NextAuth.js](https://next-auth.js.org) (Google OAuth)
+- [Prisma](https://prisma.io) & [MySQL](https://www.mysql.com/)
+- [Chakra UI](https://chakra-ui.com) & [Zustand](https://github.com/pmndrs/zustand)
+- [Turborepo](https://turbo.build/repo) & [Bun](https://bun.sh)
 
 ## Running Locally
 
-Get up and running by following these steps.
-
 ### Prerequisites
 
-- Node.js 18.x
-- MySQL
+- Node.js 18+ (see `.nvmrc`)
 - Bun
-- Docker and docker-compose _(recommended)_
+- MySQL (or Docker / `docker-compose`)
 
 ### Setup
 
-1. Clone the repo
+1. Clone the repository and enter the project directory:
 
    ```sh
-   git clone https://github.com/quenti-io/quenti
-   ```
-
-2. Go to the project folder
-
-   ```sh
+   git clone https://github.com/DontAskMeWhy0507/quenti.git
    cd quenti
    ```
 
-3. Install dependencies with bun
+2. Install dependencies:
 
    ```sh
    bun i
    ```
 
-4. Set up the `.env` file
+3. Configure environment variables:
 
-   - Copy `.env.example` to `.env`
-   - Use `openssl rand -base64 32` to generate a key for `NEXTAUTH_SECRET` and set it as the value in `.env`
-   - Use `openssl rand -base64 24` to generate a key for `PNO_ENCRYPTION_KEY` and set it as the value in `.env`
-   - You'll need to create a Google OAuth client ID from the [Google API Console](https://console.developers.google.com/). There are plenty of guides for this, like [this one from LogRocket](https://blog.logrocket.com/nextauth-js-for-next-js-client-side-authentication/#create-a-google-oauth-app) embedded:
+   - Copy `.env.example` to `.env`.
+   - Set `DATABASE_URL` (matches `docker-compose.mysql.yml` by default: `mysql://user:password@localhost:3306/db`).
+   - Generate secrets for `NEXTAUTH_SECRET` and `PNO_ENCRYPTION_KEY`:
+     ```sh
+     openssl rand -base64 32
+     openssl rand -base64 24
+     ```
+   - Create a Google OAuth Web Application client in Google Cloud Console with:
+     - Authorized JavaScript origin: `http://localhost:3000`
+     - Authorized redirect URI: `http://localhost:3000/api/auth/callback/google`
+   - Fill in `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` in `.env` (plus any optional keys such as `RESEND_API_KEY` or `MEDIA_S3_*` if needed).
 
-     > ![Google OAuth Client Screenshot](https://files.readme.io/eca93af-GCPStep2OAuth.png)
-     >
-     > Navigate to Credentials and click on Create credentials, and then OAuth client ID. You will be asked to fill in the following:
-     >
-     > **Choose an Application Type**: Select Web Application
-     >
-     > **Name**: This is the name of your application
-     >
-     > **Authorized JavaScript origins**: This is the full URL to the homepage of our app. Since we are still in development mode, we are going to fill in the full URL our development server is running on. In this case, it is `http://localhost:3000`
-     >
-     > **Authorized redirect URIs**: Users will be redirected to this path after they have authenticated with Google: `http://localhost:3000/api/auth/callback/google`
-
-     Copy your client ID and secret created and fill in the `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` values in `.env`
-
-     ![ID and Secret Screenshot](https://files.readme.io/a136be9-GCPOAuthstep5.png)
-
-5. Start up a local MySQL database with
+4. Start local MySQL (optional, via Docker):
 
    ```sh
-   docker-compose -f docker-compose.mysql.yml up
+   docker-compose -f docker-compose.mysql.yml up -d
    ```
 
-6. Push schema changes and generate the Prisma client
+5. Push the Prisma schema and generate the client:
+
    ```sh
-   bun prisma db:push
+   bun run db:push
    ```
 
 ### Running
 
-Start a development server with
+Start the development server:
 
 ```sh
 bun dev
 ```
 
-or create and start a production build with
+Or build and run in production mode:
 
-```
+```sh
 bun run build
 bun start
 ```
 
-Navigate to http://localhost:3000 and Quenti should be up and running!
+Open [http://localhost:3000](http://localhost:3000) to use PNO.

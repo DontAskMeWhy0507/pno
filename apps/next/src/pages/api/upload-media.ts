@@ -12,7 +12,13 @@ export const config = {
   },
 };
 
-const ALLOWED_SKILLS = new Set(["listening", "reading", "writing", "speaking"]);
+const ALLOWED_SKILLS = new Set([
+  "listening",
+  "reading",
+  "writing",
+  "speaking",
+  "courses",
+]);
 const ALLOWED_AUDIO_EXTS = new Set([
   ".mp3",
   ".wav",
@@ -22,7 +28,14 @@ const ALLOWED_AUDIO_EXTS = new Set([
   ".mp4",
 ]);
 const ALLOWED_VIDEO_EXTS = new Set([".mp4", ".webm", ".mov"]);
-const ALLOWED_IMAGE_EXTS = new Set([".png", ".jpg", ".jpeg", ".webp", ".gif", ".svg"]);
+const ALLOWED_IMAGE_EXTS = new Set([
+  ".png",
+  ".jpg",
+  ".jpeg",
+  ".webp",
+  ".gif",
+  ".svg",
+]);
 const MAX_UPLOAD_BYTES = 25 * 1024 * 1024; // 25 MB
 
 const UPLOAD_WINDOW_MS = 10 * 60 * 1000;
@@ -99,7 +112,12 @@ export default async function handler(
 
   // Unique prefix prevents overwriting built-in or other users' assets
   const filename = `${Date.now()}_${baseFilename}`;
-  const subFolder = isImage || skill === "writing" ? "pic" : isVideo && skill !== "listening" ? "video" : "audio";
+  const subFolder =
+    isImage || skill === "writing"
+      ? "pic"
+      : isVideo && skill !== "listening"
+        ? "video"
+        : "audio";
 
   const contentLength = Number(req.headers["content-length"] || 0);
   if (contentLength > MAX_UPLOAD_BYTES) {
@@ -131,7 +149,8 @@ export default async function handler(
   const relPath = `tests/${ownerPrefix}/${skill}/${testId}/${subFolder}/${filename}`;
 
   // 1. Try Primary S3 (Tigris / Cloudflare R2 with Hard Quota Guard) -> Backup GitHub quenti-media
-  const cloudKey = `ielts/${relPath}`;
+  const cloudKey =
+    skill === "courses" ? `courses/${relPath}` : `ielts/${relPath}`;
   const uploadedCloud = await uploadSingleMediaWithFailover(
     { name: filename, content: buffer },
     cloudKey,

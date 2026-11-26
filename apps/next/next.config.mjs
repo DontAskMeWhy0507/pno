@@ -76,6 +76,10 @@ let config = {
       "/api/**/*": [
         "../../node_modules/sql.js/dist/sql-wasm.wasm",
         "./node_modules/sql.js/dist/sql-wasm.wasm",
+        "../../node_modules/sql.js/dist/sql-wasm-browser.wasm",
+        "./node_modules/sql.js/dist/sql-wasm-browser.wasm",
+        "../../node_modules/sql.js/dist/sql-wasm-browser.js",
+        "./node_modules/sql.js/dist/sql-wasm-browser.js",
       ],
     },
     outputFileTracingExcludes: {
@@ -83,16 +87,19 @@ let config = {
         "./public/audio/**/*",
         "./public/ielts-app/**/*",
         "./public/ielts-data/**/*",
+        "./public/courses-data/**/*",
         "./public/tests/**/*",
         "./public/uploads/**/*",
         "public/audio/**/*",
         "public/ielts-app/**/*",
         "public/ielts-data/**/*",
+        "public/courses-data/**/*",
         "public/tests/**/*",
         "public/uploads/**/*",
         "../../apps/next/public/audio/**/*",
         "../../apps/next/public/ielts-app/**/*",
         "../../apps/next/public/ielts-data/**/*",
+        "../../apps/next/public/courses-data/**/*",
         "../../apps/next/public/tests/**/*",
         "../../apps/next/public/uploads/**/*",
       ],
@@ -203,6 +210,15 @@ let config = {
       ],
     },
     {
+      source: "/courses-data/:path*",
+      headers: [
+        {
+          key: "Cache-Control",
+          value: "public, max-age=31536000, immutable",
+        },
+      ],
+    },
+    {
       source: "/assets/:path*",
       headers: [
         {
@@ -254,6 +270,10 @@ let config = {
     {
       source: "/ielts/:path*",
       destination: "/ielts",
+    },
+    {
+      source: "/courses/:path*",
+      destination: "/courses",
     },
     {
       source: "/:id(_[a-zA-Z0-9]{10})",

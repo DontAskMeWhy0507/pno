@@ -51,18 +51,23 @@ export const LeftNav: React.FC<LeftNavProps> = ({
   const router = useRouter();
   const [menuOpen, setMenuOpen] = React.useState(false);
   const [ieltsSearch, setIeltsSearch] = React.useState("");
+  const [coursesSearch, setCoursesSearch] = React.useState("");
   const searchBg = useColorModeValue("white", "gray.800");
   const searchBorder = useColorModeValue("gray.200", "gray.700");
 
   const isPortal = router.pathname === "/";
   const isIelts = router.pathname.startsWith("/ielts");
-  const isQuiz = !isPortal && !isIelts;
+  const isCourses = router.pathname.startsWith("/courses");
+  const isQuiz = !isPortal && !isIelts && !isCourses;
 
   React.useEffect(() => {
     const syncSearch = (q: string) => setIeltsSearch(q);
+    const syncCoursesSearch = (q: string) => setCoursesSearch(q);
     menuEventChannel.on("ieltsSearchChange", syncSearch);
+    menuEventChannel.on("coursesSearchChange", syncCoursesSearch);
     return () => {
       menuEventChannel.off("ieltsSearchChange", syncSearch);
+      menuEventChannel.off("coursesSearchChange", syncCoursesSearch);
     };
   }, []);
 
@@ -184,6 +189,42 @@ export const LeftNav: React.FC<LeftNavProps> = ({
               fontWeight={500}
               _focus={{
                 borderColor: "blue.400",
+                boxShadow: "none",
+              }}
+            />
+          </InputGroup>
+        </HStack>
+      )}
+
+      {isCourses && (
+        <HStack display={["none", "none", "flex"]} spacing="3">
+          <Button
+            fontWeight={700}
+            fontSize="sm"
+            leftIcon={<IconBooks size={17} />}
+            onClick={() => menuEventChannel.emit("coursesNavigate", "/courses")}
+          >
+            Courses
+          </Button>
+
+          <InputGroup size="sm" w={{ md: "220px", lg: "260px" }}>
+            <InputLeftElement pointerEvents="none" color="gray.400">
+              <IconSearch size={15} />
+            </InputLeftElement>
+            <Input
+              value={coursesSearch}
+              onChange={(e) => {
+                setCoursesSearch(e.target.value);
+                menuEventChannel.emit("coursesSearchChange", e.target.value);
+              }}
+              placeholder="Search Data Courses..."
+              rounded="xl"
+              bg={searchBg}
+              borderWidth="2px"
+              borderColor={searchBorder}
+              fontWeight={500}
+              _focus={{
+                borderColor: "teal.400",
                 boxShadow: "none",
               }}
             />

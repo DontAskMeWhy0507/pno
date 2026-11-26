@@ -26,13 +26,16 @@ import {
   IconBook,
   IconBrain,
   IconCards,
+  IconCode,
   IconCube,
+  IconDatabase,
   IconDeviceGamepad2,
   IconHeadphones,
   IconMicrophone,
   IconPencil,
   IconSchool,
   IconSparkles,
+  IconTerminal2,
 } from "@tabler/icons-react";
 
 import { PageWrapper } from "../common/page-wrapper";
@@ -62,7 +65,7 @@ const PnoPortalPage = () => {
           pt={{ base: 2, md: 3 }}
           pb={{ base: 8, md: 10 }}
         >
-          <Container maxW="6xl" px={{ base: 4, sm: 6 }}>
+          <Container maxW="7xl" px={{ base: 4, sm: 6 }}>
             <VStack spacing={{ base: 6, md: 8 }}>
               {/* Header */}
               <VStack spacing={3} textAlign="center" maxW="4xl">
@@ -108,16 +111,16 @@ const PnoPortalPage = () => {
                   fontWeight={500}
                   maxW="2xl"
                 >
-                  Master vocabulary with smart Flashcards, Anki SRS, and Blocks
-                  Game, or step into the 4-skill Computer-Delivered IELTS Exam
-                  Room.
+                  Master vocabulary with Flashcards &amp; Anki SRS, practice
+                  4-skill IELTS, or learn Python, SQL, R, Git, JS &amp; Excel
+                  interactively.
                 </Text>
               </VStack>
 
-              {/* 2 Big Choice Cards: QUIZ vs IELTS */}
+              {/* 3 Big Choice Cards: QUIZ vs IELTS vs DATA COURSES */}
               <SimpleGrid
-                columns={{ base: 1, md: 2 }}
-                spacing={{ base: 5, md: 7 }}
+                columns={{ base: 1, lg: 3 }}
+                spacing={{ base: 5, md: 6 }}
                 w="full"
               >
                 {/* Card 1: QUIZ */}
@@ -353,6 +356,125 @@ const PnoPortalPage = () => {
                     transition="all 0.15s ease"
                   >
                     <span>Open IELTS</span>
+                    <IconArrowRight size={18} />
+                  </Flex>
+                </LinkBox>
+
+                {/* Card 3: DATA COURSES (XómData) */}
+                <LinkBox
+                  as="article"
+                  role="group"
+                  bg={cardBg}
+                  borderWidth="2px"
+                  borderColor={cardBorder}
+                  _hover={{
+                    borderColor: "teal.400",
+                    transform: "translateY(-4px)",
+                    shadow: "xl",
+                  }}
+                  _focusWithin={{
+                    borderColor: "teal.400",
+                    shadow: "xl",
+                  }}
+                  transition="all 0.2s cubic-bezier(0.16, 1, 0.3, 1)"
+                  rounded={{ base: "2xl", sm: "3xl" }}
+                  p={{ base: 5, sm: 7 }}
+                  shadow="md"
+                  display="flex"
+                  flexDirection="column"
+                  justifyContent="space-between"
+                >
+                  <Stack spacing={5}>
+                    <Flex justify="space-between" align="center" flexWrap="wrap" gap={2}>
+                      <Flex
+                        w={14}
+                        h={14}
+                        rounded="2xl"
+                        bgGradient="linear(to-br, teal.400, blue.500)"
+                        color="white"
+                        align="center"
+                        justify="center"
+                        shadow="md"
+                      >
+                        <Icon as={IconCode} boxSize={7} />
+                      </Flex>
+                      <Badge
+                        colorScheme="teal"
+                        px={3}
+                        py={1}
+                        rounded="lg"
+                        fontSize="xs"
+                        fontWeight={700}
+                      >
+                        16 Courses • Interactive
+                      </Badge>
+                    </Flex>
+
+                    <Stack spacing={1.5}>
+                      <Heading
+                        as="h2"
+                        fontFamily={outfit.style.fontFamily}
+                        fontSize={{ base: "2xl", sm: "3xl" }}
+                        fontWeight={800}
+                      >
+                        <LinkOverlay as={Link} href="/courses">
+                          Data Courses
+                        </LinkOverlay>
+                      </Heading>
+                      <Text color={subTextColor} fontSize="sm" lineHeight="tall">
+                        Interactive XómData tracks covering Python, SQL, R,
+                        Git, JavaScript &amp; Excel with live SQL/JS/Python
+                        sandboxes and instant quizzes.
+                      </Text>
+                    </Stack>
+
+                    <SimpleGrid columns={{ base: 1, sm: 2 }} spacing={2.5}>
+                      {[
+                        { icon: IconCode, label: "Python, R & JS" },
+                        { icon: IconDatabase, label: "Live SQL Sandbox" },
+                        { icon: IconTerminal2, label: "Git & Excel" },
+                        { icon: IconBook, label: "Interactive Quizzes" },
+                      ].map((item) => (
+                        <HStack
+                          key={item.label}
+                          bg={pillBg}
+                          px={3}
+                          py={2}
+                          rounded="xl"
+                          spacing={2}
+                        >
+                          <Icon
+                            as={item.icon}
+                            boxSize={4}
+                            color="teal.400"
+                            flexShrink={0}
+                          />
+                          <Text fontSize="xs" fontWeight={600} noOfLines={1}>
+                            {item.label}
+                          </Text>
+                        </HStack>
+                      ))}
+                    </SimpleGrid>
+                  </Stack>
+
+                  <Flex
+                    mt={6}
+                    h={12}
+                    w="full"
+                    bgGradient="linear(to-r, teal.500, blue.500)"
+                    _groupHover={{
+                      bgGradient: "linear(to-r, teal.600, blue.600)",
+                    }}
+                    color="white"
+                    rounded="2xl"
+                    fontWeight={700}
+                    fontSize="md"
+                    align="center"
+                    justify="center"
+                    gap={2}
+                    transition="all 0.15s ease"
+                  >
+                    <span>Open Data Courses</span>
                     <IconArrowRight size={18} />
                   </Flex>
                 </LinkBox>

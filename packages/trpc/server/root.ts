@@ -4,6 +4,7 @@ import { classesRouter } from "./routers/classes/_router";
 import { collabRouter } from "./routers/collab/_router";
 import { containerRouter } from "./routers/container/_router";
 import { cortexRouter } from "./routers/cortex/_router";
+import { coursesRouter } from "./routers/courses/_router";
 import { devRouter } from "./routers/dev";
 import { discoverableRouter } from "./routers/discoverable";
 import { foldersRouter } from "./routers/folders/_router";
@@ -48,6 +49,7 @@ export const appRouter = createTRPCRouter({
   disoverable: discoverableRouter,
   shareResolver: shareResolverRouter,
   ielts: ieltsRouter,
+  courses: coursesRouter,
   sync: syncRouter,
   dev: devRouter,
 });

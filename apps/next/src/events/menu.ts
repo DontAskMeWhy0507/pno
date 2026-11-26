@@ -18,4 +18,6 @@ export const menuEventChannel = eventBus<{
   openIeltsTestBank: () => void;
   openIeltsNewCollection: () => void;
   ieltsSearchChange: (query: string) => void;
+  coursesNavigate: (path: string) => void;
+  coursesSearchChange: (query: string) => void;
 }>();
